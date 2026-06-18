@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define NEO_HEADER_SIZE 0x1000u
+
 static int read_whole_file(const char *path, uint8_t **out_data, uint32_t *out_size) {
     FILE *f = fopen(path, "rb");
     if (!f) {
@@ -42,6 +44,21 @@ static int read_whole_file(const char *path, uint8_t **out_data, uint32_t *out_s
     return 1;
 }
 
+static uint32_t read_le32(const uint8_t *data) {
+    return ((uint32_t)data[0]) |
+           ((uint32_t)data[1] << 8) |
+           ((uint32_t)data[2] << 16) |
+           ((uint32_t)data[3] << 24);
+}
+
+static void byteswap_words(uint8_t *data, uint32_t size) {
+    for (uint32_t i = 0; i + 1 < size; i += 2) {
+        uint8_t tmp = data[i];
+        data[i] = data[i + 1];
+        data[i + 1] = tmp;
+    }
+}
+
 int ng_program_rom_load(NgProgramRom *rom, const char *p1_path, const char *p2_path) {
     uint8_t *p1 = NULL;
     uint8_t *p2 = NULL;
@@ -74,6 +91,43 @@ int ng_program_rom_load(NgProgramRom *rom, const char *p1_path, const char *p2_p
 
     rom->data = image;
     rom->size = total;
+    return 1;
+}
+
+int ng_program_rom_load_neo(NgProgramRom *rom, const char *neo_path) {
+    uint8_t *file_data = NULL;
+    uint32_t file_size = 0;
+    if (!read_whole_file(neo_path, &file_data, &file_size)) {
+        return 0;
+    }
+
+    if (file_size < NEO_HEADER_SIZE ||
+        file_data[0] != 'N' || file_data[1] != 'E' ||
+        file_data[2] != 'O' || file_data[3] != 1) {
+        fprintf(stderr, "%s is not a supported .neo image\n", neo_path);
+        free(file_data);
+        return 0;
+    }
+
+    uint32_t p_size = read_le32(file_data + 4);
+    if (p_size == 0 || p_size > file_size - NEO_HEADER_SIZE) {
+        fprintf(stderr, "%s has an invalid P-region size: %u\n", neo_path, p_size);
+        free(file_data);
+        return 0;
+    }
+
+    uint8_t *program = (uint8_t *)malloc(p_size);
+    if (!program) {
+        free(file_data);
+        return 0;
+    }
+
+    memcpy(program, file_data + NEO_HEADER_SIZE, p_size);
+    byteswap_words(program, p_size);
+    free(file_data);
+
+    rom->data = program;
+    rom->size = p_size;
     return 1;
 }
 
@@ -113,4 +167,26 @@ int ng_program_rom_addr_is_mapped(const NgProgramRom *rom, uint32_t addr) {
 
 int ng_program_rom_initial_pc_is_mapped(const NgProgramRom *rom) {
     return ng_program_rom_addr_is_mapped(rom, ng_program_rom_initial_pc(rom));
+}
+
+int ng_program_rom_has_cart_header(const NgProgramRom *rom) {
+    return ng_program_rom_read8(rom, 0x100) == 'N' &&
+           ng_program_rom_read8(rom, 0x101) == 'E' &&
+           ng_program_rom_read8(rom, 0x102) == 'O' &&
+           ng_program_rom_read8(rom, 0x103) == '-' &&
+           ng_program_rom_read8(rom, 0x104) == 'G' &&
+           ng_program_rom_read8(rom, 0x105) == 'E' &&
+           ng_program_rom_read8(rom, 0x106) == 'O' &&
+           ng_program_rom_read8(rom, 0x107) == 0;
+}
+
+int ng_program_rom_cart_entry(const NgProgramRom *rom, uint32_t *out_addr) {
+    if (!ng_program_rom_has_cart_header(rom)) {
+        return 0;
+    }
+    if (ng_program_rom_read16(rom, 0x122) != 0x4EF9u) {
+        return 0;
+    }
+    *out_addr = ng_program_rom_read32(rom, 0x124);
+    return 1;
 }

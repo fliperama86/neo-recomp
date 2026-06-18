@@ -1,0 +1,16 @@
+[game]
+name = "Metal Slug - Super Vehicle-001"
+short_name = "mslug"
+year = 1996
+
+[program]
+address_space = "m68k"
+fixed_base = 0x000000
+fixed_size = 0x100000
+bank_window_base = 0x200000
+bank_window_size = 0x100000
+
+[functions]
+entry = []
+extra = []
+

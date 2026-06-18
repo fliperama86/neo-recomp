@@ -38,9 +38,18 @@ recompiler code.
 
 ```powershell
 .\build\Debug\neo-recomp.exe --game .\games\nam1975.toml --p1 path\to\p1.rom
+.\build\Debug\neo-recomp.exe --game .\games\mslug.toml --neo G:\Mister\NEOGEO\mslug.neo
 ```
 
-For now this only loads the P-ROM and prints scaffold diagnostics.
+For now this loads the P-ROM, prints reset vectors, classifies vector target
+regions, and extracts the standard `NEO-GEO` cartridge header entry jump.
+
+Example real `.neo` smoke output:
+
+```text
+vector initial_ssp=$0010F300 (work_ram) initial_pc=$00C00402 (bios)
+cartridge header: NEO-GEO, entry=$000007CC (p_rom_fixed)
+```
 
 ## Development Style
 
@@ -79,3 +88,10 @@ Expected behavior:
 
 After that passes, add tests one at a time for MAME-style P-ROM file layout,
 word swapping if needed, and bank-window mapping.
+
+Current M1 status:
+
+- Raw P-ROM vector parsing is covered by a synthetic unit test.
+- MiSTer `.neo` P-region extraction and word normalization are covered by a
+  synthetic unit test.
+- Real local smoke has been verified with `G:\Mister\NEOGEO\mslug.neo`.

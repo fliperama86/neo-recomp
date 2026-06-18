@@ -16,6 +16,7 @@ target_include_directories(neo_runtime PUBLIC
 
 add_library(neo_recompiler_core
     recompiler/src/m68k_stub.c
+    recompiler/src/neogeo_map.c
     recompiler/src/p_rom.c
 )
 target_include_directories(neo_recompiler_core PUBLIC
