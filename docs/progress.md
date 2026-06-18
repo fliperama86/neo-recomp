@@ -105,10 +105,12 @@ Covered by executable generated-C validation:
 - arithmetic/logical:
   - `ADD.W Dn,Dn`
   - generic `ADD.B/W/L <ea>,Dn` paths covered so far by Dn reads
+  - generic `ADDQ.B/W/L #imm,<ea>` paths covered so far by Dn destinations
   - generic `SUB.B/W/L <ea>,Dn` paths covered so far by Dn reads
+  - generic `SUBQ.B/W/L #imm,<ea>` paths covered so far by Dn and
+    postincrement memory destinations
   - generic `CMP.B/W/L <ea>,Dn` paths covered so far by Dn and abs reads
   - `ADDX.B Dn,Dn`
-  - `SUBQ.B #imm,Dn`
   - `ANDI.B #imm,(d16,An)`
   - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
     displacement, and postincrement destinations
@@ -131,6 +133,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized `ADDQ/SUBQ #imm,<ea>` decode/emission with shared
+  read-modify-write EA handling and generated-exec coverage for Dn and
+  postincrement memory destinations.
 - local: Added a reusable read-modify-write EA address helper and generalized
   `ANDI #imm,<ea>` without double-applying postincrement/predecrement effects.
 - local: Generalized `CMPI #imm,<ea>` decode/emission with compare flag logic

@@ -406,6 +406,7 @@ int main(void) {
 
     {
         const unsigned char bytes[] = { 0x59, 0x04 };
+        char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_SUBQ);
         CHECK(instr.byte_length == 2);
@@ -413,6 +414,40 @@ int main(void) {
         CHECK(instr.form == NG_M68K_FORM_DREG);
         CHECK(instr.reg == 4);
         CHECK(instr.immediate == 4);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 4);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "SUBQ.B #4,D4") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x54, 0x42 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ADDQ);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.form == NG_M68K_FORM_DREG);
+        CHECK(instr.reg == 2);
+        CHECK(instr.immediate == 2);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ADDQ.W #2,D2") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x51, 0x98 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_SUBQ);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.immediate == 8);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "SUBQ.L #8,(A0)+") == 0);
     }
 
     {

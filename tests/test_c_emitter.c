@@ -176,7 +176,9 @@ int main(void) {
         write16(&rom, 0x92u, 0x0F0Fu);
         write16(&rom, 0x94u, 0x0218u); /* ANDI.B #$0F,(A0)+ */
         write16(&rom, 0x96u, 0x000Fu);
-        write16(&rom, 0x98u, 0x4E75u);
+        write16(&rom, 0x98u, 0x5442u); /* ADDQ.W #2,D2 */
+        write16(&rom, 0x9Au, 0x5318u); /* SUBQ.B #1,(A0)+ */
+        write16(&rom, 0x9Cu, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -202,7 +204,7 @@ int main(void) {
         CHECK(strstr(text, "ng68k_write8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962), (uint8_t)(ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962)) & 0x0Fu));") != NULL);
         CHECK(strstr(text, "ng_set_nz8(ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962)));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[4] = (g_ng_m68k.d[4] & 0xFFFFFF00u) | ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962));") != NULL);
-        CHECK(strstr(text, "uint8_t ng_result = (uint8_t)(ng_old - 4u);") != NULL);
+        CHECK(strstr(text, "uint8_t ng_src = (uint8_t)(4u); uint8_t ng_dst = (uint8_t)((uint8_t)(g_ng_m68k.d[4] & 0xFFu)); uint8_t ng_result = (uint8_t)(ng_dst - ng_src);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | ng_addx8((uint8_t)(g_ng_m68k.d[1] & 0x00FFu), (uint8_t)(g_ng_m68k.d[0] & 0x00FFu));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[5] = (g_ng_m68k.d[5] & 0xFFFF0000u)") != NULL);
         CHECK(strstr(text, "ng68k_write16(g_ng_m68k.a[0], (uint16_t)((uint16_t)(g_ng_m68k.d[5] & 0xFFFFu)));") != NULL);
@@ -255,6 +257,13 @@ int main(void) {
         CHECK(strstr(text, "uint32_t ng_addr_000094 = g_ng_m68k.a[0];") != NULL);
         CHECK(strstr(text, "uint8_t ng_value = ng68k_read8(ng_addr_000094); uint8_t ng_result = (uint8_t)(ng_value & 0x0Fu);") != NULL);
         CHECK(strstr(text, "ng68k_write8(ng_addr_000094, ng_result);") != NULL);
+        CHECK(strstr(text, "/* $000098: ADDQ.W #2,D2 */") != NULL);
+        CHECK(strstr(text, "{ uint16_t ng_src = (uint16_t)(2u); uint16_t ng_dst = (uint16_t)((uint16_t)(g_ng_m68k.d[2] & 0xFFFFu)); uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src; uint16_t ng_result = (uint16_t)ng_full;") != NULL);
+        CHECK(strstr(text, "if (ng_full > 0x0000FFFFu) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);
+        CHECK(strstr(text, "/* $00009A: SUBQ.B #1,(A0)+ */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_addr_00009A = g_ng_m68k.a[0];") != NULL);
+        CHECK(strstr(text, "{ uint8_t ng_src = (uint8_t)(1u); uint8_t ng_dst = ng68k_read8(ng_addr_00009A); uint8_t ng_result = (uint8_t)(ng_dst - ng_src);") != NULL);
+        CHECK(strstr(text, "ng68k_write8(ng_addr_00009A, ng_result);") != NULL);
 
         ng_program_rom_free(&rom);
     }
