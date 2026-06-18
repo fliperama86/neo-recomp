@@ -1,0 +1,9 @@
+build/
+out/
+*.user
+*.suo
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+compile_commands.json
+

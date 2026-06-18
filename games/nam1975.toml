@@ -1,0 +1,21 @@
+# Example metadata for an early Neo Geo MVS title.
+# Values here are placeholders until tied to a verified ROM set.
+
+[game]
+name = "NAM-1975"
+short_name = "nam1975"
+year = 1990
+
+[program]
+address_space = "m68k"
+fixed_base = 0x000000
+fixed_size = 0x100000
+bank_window_base = 0x200000
+bank_window_size = 0x100000
+
+[functions]
+entry = [
+    0x000000, # vector table base, not executable
+]
+extra = []
+
