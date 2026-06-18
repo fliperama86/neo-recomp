@@ -544,6 +544,34 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x0Au);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x0188u); /* MOVEP.W D0,($10,A0) */
+        write16(&rom, 0x02u, 0x0010u);
+        write16(&rom, 0x04u, 0x0349u); /* MOVEP.L ($FFFC,A1),D1 */
+        write16(&rom, 0x06u, 0xFFFCu);
+        write16(&rom, 0x08u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: MOVEP.W D0,($10,A0) */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_addr = (uint32_t)(g_ng_m68k.a[0] + (int32_t)16); uint32_t ng_value = g_ng_m68k.d[0];") != NULL);
+        CHECK(strstr(text, "ng68k_write8(ng_addr, (uint8_t)(ng_value >> 8)); ng68k_write8(ng_addr + 2u, (uint8_t)ng_value);") != NULL);
+        CHECK(strstr(text, "/* $000004: MOVEP.L ($FFFC,A1),D1 */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_addr = (uint32_t)(g_ng_m68k.a[1] + (int32_t)-4);") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.d[1] = ((uint32_t)ng68k_read8(ng_addr) << 24)") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x30u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x08B9u); /* BCLR #7,$0010FD80 */

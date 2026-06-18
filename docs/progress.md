@@ -110,6 +110,7 @@ Covered by executable generated-C validation:
     and displacement sources
   - `MOVEM.W/L` register-list transfers covered so far by long Dn masks to/from
     address-indirect memory
+  - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
     source and absolute SR destination forms
   - `MOVE An,USP` and `MOVE USP,An` user-stack-pointer transfers
@@ -179,6 +180,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `MOVEP.W/L` decode/emission for staggered `(d16,An)` peripheral
+  transfers in both directions, with decode and emitter coverage.
 - local: Added `MOVE USP` transfers in both directions, including generated
   state coverage for USP and address-register updates.
 - local: Added `CMPM (Ay)+,(Ax)+` decode/emission with postincrement compare

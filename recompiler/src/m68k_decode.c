@@ -938,6 +938,30 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
     if (decode_immediate_to_sr_ccr(rom, addr, op, out)) {
         return 1;
     }
+    if ((op & 0xF138u) == 0x0108u) {
+        uint8_t data_reg = (uint8_t)((op >> 9) & 7u);
+        uint8_t addr_reg = (uint8_t)(op & 7u);
+        uint8_t dreg_to_mem = (uint8_t)((op >> 7) & 1u);
+        out->mnemonic = NG_M68K_MOVEP;
+        out->size = (op & 0x0040u) ? NG_M68K_SIZE_LONG : NG_M68K_SIZE_WORD;
+        out->byte_length = 4;
+        out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
+        out->reg = data_reg;
+        if (dreg_to_mem) {
+            out->src.mode = NG_M68K_EA_DREG;
+            out->src.reg = data_reg;
+            out->dst.mode = NG_M68K_EA_ADISP;
+            out->dst.reg = addr_reg;
+            out->dst.displacement = out->displacement;
+        } else {
+            out->src.mode = NG_M68K_EA_ADISP;
+            out->src.reg = addr_reg;
+            out->src.displacement = out->displacement;
+            out->dst.mode = NG_M68K_EA_DREG;
+            out->dst.reg = data_reg;
+        }
+        return 1;
+    }
     if ((op & 0xFFC0u) == 0x40C0u ||
         (op & 0xFFC0u) == 0x42C0u) {
         uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
@@ -1668,6 +1692,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_MOVEQ: return "MOVEQ";
     case NG_M68K_MOVE: return "MOVE";
     case NG_M68K_MOVEM: return "MOVEM";
+    case NG_M68K_MOVEP: return "MOVEP";
     case NG_M68K_MOVE_SR: return "MOVE_SR";
     case NG_M68K_MOVE_CCR: return "MOVE_CCR";
     case NG_M68K_MOVE_USP: return "MOVE_USP";
@@ -1905,6 +1930,21 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
             snprintf(out, out_size, "MOVEM.%c #$%04X,?",
                      instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W',
                      (unsigned)(instr->immediate & 0xFFFFu));
+        }
+        break;
+    case NG_M68K_MOVEP:
+        if (instr->src.mode == NG_M68K_EA_DREG) {
+            snprintf(out, out_size, "MOVEP.%c D%u,($%X,A%u)",
+                     instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W',
+                     instr->src.reg,
+                     (unsigned)(uint16_t)instr->dst.displacement,
+                     instr->dst.reg);
+        } else {
+            snprintf(out, out_size, "MOVEP.%c ($%X,A%u),D%u",
+                     instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W',
+                     (unsigned)(uint16_t)instr->src.displacement,
+                     instr->src.reg,
+                     instr->dst.reg);
         }
         break;
     case NG_M68K_MOVE_SR:

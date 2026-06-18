@@ -546,6 +546,49 @@ static int emit_movem(FILE *out, const NgM68kInstr *instr) {
     return 0;
 }
 
+static int emit_movep(FILE *out, const NgM68kInstr *instr) {
+    const NgM68kEa *mem;
+    uint8_t reg;
+
+    if (instr->mnemonic != NG_M68K_MOVEP) {
+        return 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_DREG &&
+        instr->dst.mode == NG_M68K_EA_ADISP) {
+        mem = &instr->dst;
+        reg = instr->src.reg;
+        fprintf(out, "    { uint32_t ng_addr = (uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d); uint32_t ng_value = g_ng_m68k.d[%u];\n",
+                mem->reg, mem->displacement, reg);
+        if (instr->size == 4u) {
+            fprintf(out, "      ng68k_write8(ng_addr, (uint8_t)(ng_value >> 24)); ng68k_write8(ng_addr + 2u, (uint8_t)(ng_value >> 16)); ng68k_write8(ng_addr + 4u, (uint8_t)(ng_value >> 8)); ng68k_write8(ng_addr + 6u, (uint8_t)ng_value);\n");
+        } else {
+            fprintf(out, "      ng68k_write8(ng_addr, (uint8_t)(ng_value >> 8)); ng68k_write8(ng_addr + 2u, (uint8_t)ng_value);\n");
+        }
+        fprintf(out, "    }\n");
+        return 1;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_ADISP &&
+        instr->dst.mode == NG_M68K_EA_DREG) {
+        mem = &instr->src;
+        reg = instr->dst.reg;
+        fprintf(out, "    { uint32_t ng_addr = (uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d);\n",
+                mem->reg, mem->displacement);
+        if (instr->size == 4u) {
+            fprintf(out, "      g_ng_m68k.d[%u] = ((uint32_t)ng68k_read8(ng_addr) << 24) | ((uint32_t)ng68k_read8(ng_addr + 2u) << 16) | ((uint32_t)ng68k_read8(ng_addr + 4u) << 8) | (uint32_t)ng68k_read8(ng_addr + 6u);\n",
+                    reg);
+        } else {
+            fprintf(out, "      g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFF0000u) | ((uint32_t)ng68k_read8(ng_addr) << 8) | (uint32_t)ng68k_read8(ng_addr + 2u);\n",
+                    reg, reg);
+        }
+        fprintf(out, "    }\n");
+        return 1;
+    }
+
+    return 0;
+}
+
 static int emit_move_sr_ccr(FILE *out, const NgM68kInstr *instr) {
     char expr[256];
 
@@ -1684,6 +1727,11 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         break;
     case NG_M68K_MOVEM:
         if (emit_movem(out, instr)) {
+            return 1;
+        }
+        break;
+    case NG_M68K_MOVEP:
+        if (emit_movep(out, instr)) {
             return 1;
         }
         break;
