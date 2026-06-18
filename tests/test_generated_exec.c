@@ -192,6 +192,22 @@ static int oracle_exec(const uint8_t *program,
             pc += 6u;
             continue;
         }
+        if ((op & 0xFF38u) == 0x4200u) {
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+            if (size_code == 2u) {
+                state->d[reg] = 0;
+                oracle_set_nz32(state, 0);
+            } else if (size_code == 1u) {
+                state->d[reg] &= 0xFFFF0000u;
+                oracle_set_nz16(state, 0);
+            } else {
+                state->d[reg] &= 0xFFFFFF00u;
+                oracle_set_nz8(state, 0);
+            }
+            pc += 2u;
+            continue;
+        }
         if (op == 0x42B9u) {
             uint32_t addr = program_read32(program, size, pc + 2u);
             bus_write32(bus, addr, 0);
@@ -290,6 +306,7 @@ int main(void) {
     CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
     CHECK(g_ng_m68k.d[0] == 10u);
     CHECK((g_ng_m68k.d[2] & 0xFFu) == 0x7Fu);
+    CHECK((g_ng_m68k.d[3] & 0xFFu) == 0x00u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

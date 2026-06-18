@@ -195,6 +195,19 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             }
             return 1;
         }
+        if (instr->form == NG_M68K_FORM_DREG) {
+            if (instr->size == 4u) {
+                fprintf(out, "    g_ng_m68k.d[%u] = 0;\n", instr->reg);
+                fprintf(out, "    ng_set_nz32(0);\n");
+            } else if (instr->size == 1u) {
+                fprintf(out, "    g_ng_m68k.d[%u] &= 0xFFFFFF00u;\n", instr->reg);
+                fprintf(out, "    ng_set_nz8(0);\n");
+            } else {
+                fprintf(out, "    g_ng_m68k.d[%u] &= 0xFFFF0000u;\n", instr->reg);
+                fprintf(out, "    ng_set_nz16(0);\n");
+            }
+            return 1;
+        }
         break;
     case NG_M68K_TST:
         if (instr->form == NG_M68K_FORM_ABS) {
