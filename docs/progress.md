@@ -88,6 +88,8 @@ Covered by executable generated-C validation:
 
 - control flow: direct `JSR`, direct tail `JMP`, local `BRA`, selected `Bcc`
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
+- conditional branches: all 68000 `Bcc` condition predicates are emitted;
+  generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
 - flags: `N`/`Z` for covered operations; `C`/`X` for tested byte subtract/extend-add paths
 - data movement:
   - `MOVEQ`
@@ -156,6 +158,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized `Bcc` emission/oracle predicates to all 16 condition
+  codes and added generated-exec coverage for an `N`-flag branch (`BMI`).
 - local: Added stack-frame setup/teardown (`LINK`/`UNLK`) with generated-exec
   stack and frame-register validation.
 - local: Added `PEA <ea>` decode/format/emission on control addressing modes,

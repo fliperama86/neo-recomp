@@ -56,6 +56,33 @@ static void oracle_set_nz32(NgM68kState *state, uint32_t value) {
     }
 }
 
+static int oracle_condition_true(uint16_t sr, uint8_t condition) {
+    int c = (sr & CCR_C) != 0;
+    int v = (sr & CCR_V) != 0;
+    int z = (sr & CCR_Z) != 0;
+    int n = (sr & CCR_N) != 0;
+
+    switch (condition) {
+    case 0: return 1;
+    case 1: return 0;
+    case 2: return !c && !z;
+    case 3: return c || z;
+    case 4: return !c;
+    case 5: return c;
+    case 6: return !z;
+    case 7: return z;
+    case 8: return !v;
+    case 9: return v;
+    case 10: return !n;
+    case 11: return n;
+    case 12: return n == v;
+    case 13: return n != v;
+    case 14: return !z && (n == v);
+    case 15: return z || (n != v);
+    default: return 0;
+    }
+}
+
 static uint8_t bus_read8(const uint8_t *bus, uint32_t addr) {
     return addr < BUS_SIZE ? bus[addr] : 0xFFu;
 }
@@ -959,18 +986,7 @@ static int oracle_exec(const uint8_t *program,
             uint8_t condition = (uint8_t)((op >> 8) & 0xFu);
             int8_t displacement = (int8_t)(op & 0xFFu);
             uint32_t next_pc = pc + 2u;
-            int take;
-            if (condition == 4u) {
-                take = (state->sr & CCR_C) == 0;
-            } else if (condition == 5u) {
-                take = (state->sr & CCR_C) != 0;
-            } else if (condition == 6u) {
-                take = (state->sr & CCR_Z) == 0;
-            } else if (condition == 7u) {
-                take = (state->sr & CCR_Z) != 0;
-            } else {
-                return 0;
-            }
+            int take = oracle_condition_true(state->sr, condition);
             pc = take ? (uint32_t)((int32_t)next_pc + (int32_t)displacement) : next_pc;
             continue;
         }
@@ -1382,6 +1398,7 @@ int main(void) {
     CHECK(ng68k_read8(0x101Bu) == 0x00u);
     CHECK(ng68k_read8(0x101Cu) == 0x00u);
     CHECK(ng68k_read8(0x101Du) == 0x05u);
+    CHECK(ng68k_read8(0x101Eu) == 0x00u);
     CHECK((g_ng_m68k.sr & CCR_X) != 0);
     CHECK((g_ng_m68k.sr & CCR_N) != 0);
 

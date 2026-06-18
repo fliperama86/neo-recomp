@@ -1139,6 +1139,15 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x6B, 0x08 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0x000100u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_BCC);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.condition == 11u);
+        CHECK(instr.target == 0x00010Au);
+    }
+
+    {
         const unsigned char bytes[] = { 0x4E, 0x55, 0xFF, 0xFC };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

@@ -110,7 +110,7 @@ int main(void) {
     }
 
     {
-        NgProgramRom rom = make_rom(0x108u);
+        NgProgramRom rom = make_rom(0x112u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x41FAu); /* LEA $000008,A0 */
         write16(&rom, 0x02u, 0x0004u);
@@ -226,7 +226,11 @@ int main(void) {
         write16(&rom, 0x100u, 0x4E55u); /* LINK A5,#-4 */
         write16(&rom, 0x102u, 0xFFFCu);
         write16(&rom, 0x104u, 0x4E5Du); /* UNLK A5 */
-        write16(&rom, 0x106u, 0x4E75u);
+        write16(&rom, 0x106u, 0x6B08u); /* BMI $000110 */
+        write16(&rom, 0x108u, 0x13FCu); /* skipped */
+        write16(&rom, 0x10Au, 0x0077u);
+        write32(&rom, 0x10Cu, 0x0000101Eu);
+        write16(&rom, 0x110u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -377,6 +381,8 @@ int main(void) {
         CHECK(strstr(text, "g_ng_m68k.a[7] = (uint32_t)((int32_t)g_ng_m68k.a[7] + (int32_t)-4);") != NULL);
         CHECK(strstr(text, "/* $000104: UNLK A5 */") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[5] = ng68k_read32(g_ng_m68k.a[7]);") != NULL);
+        CHECK(strstr(text, "/* $000106: Bcc.B $000110 */") != NULL);
+        CHECK(strstr(text, "if (((g_ng_m68k.sr & NG_CCR_N) != 0)) goto ng_label_000110;") != NULL);
 
         ng_program_rom_free(&rom);
     }

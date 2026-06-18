@@ -83,24 +83,66 @@ static void emit_dispatch(FILE *out, const NgFunctionDiscovery *discovery) {
 static int emit_branch_condition(FILE *out,
                                  const NgM68kInstr *instr,
                                  const char *target_label) {
-    if (instr->condition == 6u) {
-        fprintf(out, "    if ((g_ng_m68k.sr & NG_CCR_Z) == 0) goto %s;\n",
-                target_label);
+    const char *expr = NULL;
+
+    if (instr->condition == 0u) {
+        fprintf(out, "    goto %s;\n", target_label);
         return 1;
     }
-    if (instr->condition == 4u) {
-        fprintf(out, "    if ((g_ng_m68k.sr & NG_CCR_C) == 0) goto %s;\n",
-                target_label);
+    if (instr->condition == 1u) {
+        fprintf(out, "    /* BF never branches. */\n");
         return 1;
     }
-    if (instr->condition == 5u) {
-        fprintf(out, "    if ((g_ng_m68k.sr & NG_CCR_C) != 0) goto %s;\n",
-                target_label);
-        return 1;
+
+    switch (instr->condition) {
+    case 2u:
+        expr = "((g_ng_m68k.sr & (NG_CCR_C | NG_CCR_Z)) == 0)";
+        break;
+    case 3u:
+        expr = "((g_ng_m68k.sr & (NG_CCR_C | NG_CCR_Z)) != 0)";
+        break;
+    case 4u:
+        expr = "((g_ng_m68k.sr & NG_CCR_C) == 0)";
+        break;
+    case 5u:
+        expr = "((g_ng_m68k.sr & NG_CCR_C) != 0)";
+        break;
+    case 6u:
+        expr = "((g_ng_m68k.sr & NG_CCR_Z) == 0)";
+        break;
+    case 7u:
+        expr = "((g_ng_m68k.sr & NG_CCR_Z) != 0)";
+        break;
+    case 8u:
+        expr = "((g_ng_m68k.sr & NG_CCR_V) == 0)";
+        break;
+    case 9u:
+        expr = "((g_ng_m68k.sr & NG_CCR_V) != 0)";
+        break;
+    case 10u:
+        expr = "((g_ng_m68k.sr & NG_CCR_N) == 0)";
+        break;
+    case 11u:
+        expr = "((g_ng_m68k.sr & NG_CCR_N) != 0)";
+        break;
+    case 12u:
+        expr = "(((g_ng_m68k.sr & NG_CCR_N) != 0) == ((g_ng_m68k.sr & NG_CCR_V) != 0))";
+        break;
+    case 13u:
+        expr = "(((g_ng_m68k.sr & NG_CCR_N) != 0) != ((g_ng_m68k.sr & NG_CCR_V) != 0))";
+        break;
+    case 14u:
+        expr = "((g_ng_m68k.sr & NG_CCR_Z) == 0 && (((g_ng_m68k.sr & NG_CCR_N) != 0) == ((g_ng_m68k.sr & NG_CCR_V) != 0)))";
+        break;
+    case 15u:
+        expr = "((g_ng_m68k.sr & NG_CCR_Z) != 0 || (((g_ng_m68k.sr & NG_CCR_N) != 0) != ((g_ng_m68k.sr & NG_CCR_V) != 0)))";
+        break;
+    default:
+        break;
     }
-    if (instr->condition == 7u) {
-        fprintf(out, "    if ((g_ng_m68k.sr & NG_CCR_Z) != 0) goto %s;\n",
-                target_label);
+
+    if (expr) {
+        fprintf(out, "    if (%s) goto %s;\n", expr, target_label);
         return 1;
     }
 
