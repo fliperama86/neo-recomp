@@ -177,6 +177,20 @@ static int oracle_exec(const uint8_t *program,
             pc += 8u;
             continue;
         }
+        if (op == 0x4239u) {
+            uint32_t addr = program_read32(program, size, pc + 2u);
+            bus_write8(bus, addr, 0);
+            oracle_set_nz8(state, 0);
+            pc += 6u;
+            continue;
+        }
+        if (op == 0x42B9u) {
+            uint32_t addr = program_read32(program, size, pc + 2u);
+            bus_write32(bus, addr, 0);
+            oracle_set_nz32(state, 0);
+            pc += 6u;
+            continue;
+        }
         if ((op & 0xF1FFu) == 0x41FAu) {
             uint8_t reg = (uint8_t)((op >> 9) & 7u);
             int16_t disp = (int16_t)program_read16(program, size, pc + 2u);
@@ -241,10 +255,14 @@ int main(void) {
     ng_exec_fixture_fill(program, (uint32_t)sizeof(program));
     memset(&expected_state, 0, sizeof(expected_state));
     memset(expected_bus, 0, sizeof(expected_bus));
+    bus_write8(expected_bus, 0x100Cu, 0xAAu);
+    bus_write32(expected_bus, 0x1010u, 0x12345678u);
     CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0, &expected_state, expected_bus, 0));
 
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
     memset(g_bus, 0, sizeof(g_bus));
+    ng68k_write8(0x100Cu, 0xAAu);
+    ng68k_write32(0x1010u, 0x12345678u);
     g_dispatch_miss_count = 0;
     g_last_dispatch_miss = 0;
 
@@ -260,7 +278,9 @@ int main(void) {
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);
     CHECK(ng68k_read16(0x100Au) == 0x0000u);
-    CHECK(ng68k_read8(0x100Cu) == 0x80u);
+    CHECK(ng68k_read8(0x100Cu) == 0x00u);
+    CHECK(ng68k_read8(0x100Eu) == 0x80u);
+    CHECK(ng68k_read32(0x1010u) == 0x00000000u);
     CHECK((g_ng_m68k.sr & CCR_N) != 0);
 
     ng_generated_call(0x00DEADu);

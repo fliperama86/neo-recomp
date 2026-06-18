@@ -120,7 +120,11 @@ int main(void) {
         write16(&rom, 0x12u, 0x13FCu); /* MOVE.B #$0080,$0010FD80 */
         write16(&rom, 0x14u, 0x0080u);
         write32(&rom, 0x16u, 0x0010FD80u);
-        write16(&rom, 0x1Au, 0x4E75u);
+        write16(&rom, 0x1Au, 0x4239u); /* CLR.B $0010FD81 */
+        write32(&rom, 0x1Cu, 0x0010FD81u);
+        write16(&rom, 0x20u, 0x42B9u); /* CLR.L $0010FD84 */
+        write32(&rom, 0x22u, 0x0010FD84u);
+        write16(&rom, 0x26u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -136,6 +140,8 @@ int main(void) {
         CHECK(strstr(text, "ng68k_write16(0x003C000Cu, 0x0007u);") != NULL);
         CHECK(strstr(text, "ng68k_write8(0x0010FD80u, 0x80u);") != NULL);
         CHECK(strstr(text, "ng_set_nz8(0x80u);") != NULL);
+        CHECK(strstr(text, "ng68k_write8(0x0010FD81u, 0x00u);") != NULL);
+        CHECK(strstr(text, "ng68k_write32(0x0010FD84u, 0x00000000u);") != NULL);
 
         ng_program_rom_free(&rom);
     }

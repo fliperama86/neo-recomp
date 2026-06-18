@@ -258,6 +258,7 @@ This is a stronger check than compiling generated C back to 68k and comparing
 machine code. A C compiler will not reproduce the original binary instruction
 stream; the useful invariant is behavior. The current behavior check covers
 `MOVEQ`, `ADD.W`, direct `JSR`, tail `JMP`, `MOVE.W #imm,abs`,
-`MOVE.B #imm,abs`, `LEA`, and `MOVE.L A0,abs` through the same generated
-dispatch shape used by real ROMs. It also covers both a not-taken and a taken
-`BNE`, comparing generated C behavior against the tiny interpreter oracle.
+`MOVE.B #imm,abs`, `CLR.B/W/L abs`, `LEA`, and `MOVE.L A0,abs` through the
+same generated dispatch shape used by real ROMs. It also covers both a
+not-taken and a taken `BNE`, comparing generated C behavior against the tiny
+interpreter oracle.

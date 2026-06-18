@@ -203,10 +203,16 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->reg = 0;
         return 1;
     }
-    if (op == 0x4279u) {
+    if (op == 0x4239u || op == 0x4279u || op == 0x42B9u) {
         out->mnemonic = NG_M68K_CLR;
         out->byte_length = 6;
-        out->size = NG_M68K_SIZE_WORD;
+        if (op == 0x4239u) {
+            out->size = NG_M68K_SIZE_BYTE;
+        } else if (op == 0x42B9u) {
+            out->size = NG_M68K_SIZE_LONG;
+        } else {
+            out->size = NG_M68K_SIZE_WORD;
+        }
         out->form = NG_M68K_FORM_ABS;
         out->absolute_addr = ng_program_rom_read32(rom, addr + 2u);
         return 1;
