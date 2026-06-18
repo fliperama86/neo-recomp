@@ -214,7 +214,9 @@ The first generated-code sanity check is now executable:
 - `ng_emit_c` generates C from that fixture into the build directory
 - CMake compiles the generated C into `test_generated_exec`
 - the test provides a fake Neo Geo runtime bus and `g_ng_m68k`
-- the test runs `ng_generated_call(0)` and checks register and memory effects
+- a tiny interpreter runs the same original 68k bytes as an oracle
+- the test runs `ng_generated_call(0)` and compares registers and bus contents
+  against the interpreter result
 
 This is a stronger check than compiling generated C back to 68k and comparing
 machine code. A C compiler will not reproduce the original binary instruction
