@@ -130,8 +130,8 @@ Covered by executable generated-C validation:
   - `CLR.B/W/L abs`
   - `CLR.B/W/L Dn`
   - generic `CLR.B/W/L <ea>` paths covered so far by `(d16,An)` and `(An)+`
-  - generic `BTST/BCHG/BCLR/BSET #imm,<ea>` paths covered so far by abs,
-    Dn, and postincrement memory destinations
+  - generic `BTST/BCHG/BCLR/BSET #imm,<ea>` and `BTST/BCHG/BCLR/BSET Dn,<ea>`
+    paths covered so far by abs, Dn, and postincrement memory destinations
   - `ANDI #imm,SR`
 
 Important caveat: this is not a complete 68000 condition-code model. `V` is only
@@ -140,6 +140,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added dynamic bit operations (`BTST/BCHG/BCLR/BSET Dn,<ea>`) on the
+  same generic bit-op EA path, with generated-exec Dn and postincrement coverage.
 - local: Generalized immediate bit operations (`BTST/BCHG/BCLR/BSET #imm,<ea>`)
   with correct Z flag behavior and shared EA/RMW handling.
 - local: Generalized `ADDI/SUBI #imm,<ea>` using the shared arithmetic RMW

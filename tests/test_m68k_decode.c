@@ -108,6 +108,22 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x01, 0xC2 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_BSET);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.form == NG_M68K_FORM_DREG_TO_DREG);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "BSET D0,D2") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x08, 0xD8, 0x00, 0x00 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
@@ -119,6 +135,21 @@ int main(void) {
         CHECK(instr.dst.reg == 0);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "BSET #0,(A0)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x03, 0xD8 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_BSET);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "BSET D1,(A0)+") == 0);
     }
 
     {

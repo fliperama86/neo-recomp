@@ -190,7 +190,9 @@ int main(void) {
         write16(&rom, 0xAEu, 0x0000u);
         write16(&rom, 0xB0u, 0x0842u); /* BCHG #1,D2 */
         write16(&rom, 0xB2u, 0x0001u);
-        write16(&rom, 0xB4u, 0x4E75u);
+        write16(&rom, 0xB4u, 0x01C2u); /* BSET D0,D2 */
+        write16(&rom, 0xB6u, 0x03D8u); /* BSET D1,(A0)+ */
+        write16(&rom, 0xB8u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -290,11 +292,17 @@ int main(void) {
         CHECK(strstr(text, "ng68k_write8(ng_addr_0000A8, ng_result);") != NULL);
         CHECK(strstr(text, "/* $0000AC: BSET #0,(A0)+ */") != NULL);
         CHECK(strstr(text, "uint32_t ng_addr_0000AC = g_ng_m68k.a[0];") != NULL);
-        CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << 0u); uint8_t ng_value = ng68k_read8(ng_addr_0000AC);") != NULL);
+        CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << (0u)); uint8_t ng_value = ng68k_read8(ng_addr_0000AC);") != NULL);
         CHECK(strstr(text, "ng68k_write8(ng_addr_0000AC, (uint8_t)(ng_value | ng_mask));") != NULL);
         CHECK(strstr(text, "/* $0000B0: BCHG #1,D2 */") != NULL);
-        CHECK(strstr(text, "{ uint32_t ng_mask = (uint32_t)(1u << 1u); uint32_t ng_value = g_ng_m68k.d[2];") != NULL);
+        CHECK(strstr(text, "{ uint32_t ng_mask = (uint32_t)(1u << (1u)); uint32_t ng_value = g_ng_m68k.d[2];") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[2] = ng_value ^ ng_mask;") != NULL);
+        CHECK(strstr(text, "/* $0000B4: BSET D0,D2 */") != NULL);
+        CHECK(strstr(text, "{ uint32_t ng_mask = (uint32_t)(1u << (g_ng_m68k.d[0] & 31u)); uint32_t ng_value = g_ng_m68k.d[2];") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.d[2] = ng_value | ng_mask;") != NULL);
+        CHECK(strstr(text, "/* $0000B6: BSET D1,(A0)+ */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_addr_0000B6 = g_ng_m68k.a[0];") != NULL);
+        CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << (g_ng_m68k.d[1] & 7u)); uint8_t ng_value = ng68k_read8(ng_addr_0000B6);") != NULL);
 
         ng_program_rom_free(&rom);
     }
@@ -323,7 +331,7 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: BCLR #7,$10FD80 */") != NULL);
-        CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << 7u); uint8_t ng_value = ng68k_read8(0x0010FD80u);") != NULL);
+        CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << (7u)); uint8_t ng_value = ng68k_read8(0x0010FD80u);") != NULL);
         CHECK(strstr(text, "ng68k_write8(0x0010FD80u, (uint8_t)(ng_value & (uint8_t)~ng_mask));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.sr &= 0xF8FFu;") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | ng68k_read8(0x0010FDAEu);") != NULL);
