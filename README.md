@@ -205,3 +205,19 @@ instruction-level C emission to grow one decoded operation at a time with tests
 against small register and memory fixtures.
 
 Unknown opcodes are still printed as `DC.W`; they are not executable support.
+
+## Validation Slice
+
+The first generated-code sanity check is now executable:
+
+- a build-time helper creates a synthetic 68k ROM fixture
+- `ng_emit_c` generates C from that fixture into the build directory
+- CMake compiles the generated C into `test_generated_exec`
+- the test provides a fake Neo Geo runtime bus and `g_ng_m68k`
+- the test runs `ng_generated_call(0)` and checks register and memory effects
+
+This is a stronger check than compiling generated C back to 68k and comparing
+machine code. A C compiler will not reproduce the original binary instruction
+stream; the useful invariant is behavior. The current behavior check covers
+`MOVEQ`, `ADD.W`, direct `JSR`, tail `JMP`, `MOVE.W #imm,abs`, `LEA`, and
+`MOVE.L A0,abs` through the same generated dispatch shape used by real ROMs.
