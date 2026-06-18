@@ -630,6 +630,29 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x06u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x41BCu); /* CHK #$000A,D0 */
+        write16(&rom, 0x02u, 0x000Au);
+        write16(&rom, 0x04u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: CHK.W #$A,D0 */") != NULL);
+        CHECK(strstr(text, "int16_t ng_bound = (int16_t)(0x000Au); int16_t ng_value = (int16_t)(g_ng_m68k.d[0] & 0xFFFFu);") != NULL);
+        CHECK(strstr(text, "if (ng_value < 0 || ng_value > ng_bound)") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x30u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x08B9u); /* BCLR #7,$0010FD80 */

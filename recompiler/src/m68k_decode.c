@@ -891,6 +891,25 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->target = addr + 4u + (int32_t)sign16(ng_program_rom_read16(rom, addr + 2u));
         return 1;
     }
+    if ((op & 0xF1C0u) == 0x4180u) {
+        uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
+        uint8_t ea_reg = (uint8_t)(op & 7u);
+        if (ea_mode != 1u) {
+            out->mnemonic = NG_M68K_CHK;
+            out->size = NG_M68K_SIZE_WORD;
+            out->reg = (uint8_t)((op >> 9) & 7u);
+            out->dst.mode = NG_M68K_EA_DREG;
+            out->dst.reg = out->reg;
+            out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
+                                                        ea_mode, ea_reg,
+                                                        out->size, &out->src));
+            if (out->src.mode == NG_M68K_EA_NONE) {
+                out->mnemonic = NG_M68K_UNKNOWN;
+                out->byte_length = 2;
+            }
+            return 1;
+        }
+    }
     if ((op & 0xF1C0u) == 0x41C0u) {
         uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
         uint8_t ea_reg = (uint8_t)(op & 7u);
@@ -1742,6 +1761,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_BCC: return "BCC";
     case NG_M68K_SCC: return "SCC";
     case NG_M68K_DBCC: return "DBCC";
+    case NG_M68K_CHK: return "CHK";
     case NG_M68K_LEA: return "LEA";
     case NG_M68K_MOVEA: return "MOVEA";
     case NG_M68K_MOVEQ: return "MOVEQ";
@@ -1945,6 +1965,15 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
     case NG_M68K_DBCC:
         snprintf(out, out_size, "DBcc.%X D%u,$%06X",
                  instr->condition, instr->reg, instr->target & 0xFFFFFFu);
+        break;
+    case NG_M68K_CHK:
+        if (instr->src.mode != NG_M68K_EA_NONE) {
+            char src[64];
+            format_ea_operand(&instr->src, instr->size, src, (unsigned)sizeof(src));
+            snprintf(out, out_size, "CHK.W %s,D%u", src, instr->reg);
+        } else {
+            snprintf(out, out_size, "CHK.W ?,D%u", instr->reg);
+        }
         break;
     case NG_M68K_LEA:
         if (instr->src.mode != NG_M68K_EA_NONE) {

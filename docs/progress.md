@@ -134,6 +134,7 @@ Covered by executable generated-C validation:
     `CMPA.W/L <ea>,An` paths covered so far by immediate sources
   - `CMPM.B/W/L (Ay)+,(Ax)+` covered so far by word postincrement memory
     comparisons
+  - `CHK.W <ea>,Dn` covered so far by immediate in-range checks
   - `ADDX/SUBX.B/W/L` register and predecrement-memory forms, covered so far
     by generated-exec byte add-extend and word subtract-extend paths
   - `ABCD/SBCD` register and predecrement-memory BCD extend forms, covered so
@@ -183,6 +184,8 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `CHK.W <ea>,Dn` decode/emission with in-range generated-exec
+  coverage and a dispatch miss path for trap cases.
 - local: Added `ABCD`/`SBCD` decode/emission for register and predecrement
   memory forms, including generated-exec BCD arithmetic coverage.
 - local: Added `NBCD <ea>` decode/emission with BCD negate and extend-aware

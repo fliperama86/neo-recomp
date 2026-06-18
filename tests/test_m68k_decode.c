@@ -1330,6 +1330,21 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x41, 0xBC, 0x00, 0x0A };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_CHK);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_IMM);
+        CHECK(instr.src.immediate == 0x000Au);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "CHK.W #$A,D0") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x4A, 0xF9, 0x00, 0x00, 0x01, 0x8D };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

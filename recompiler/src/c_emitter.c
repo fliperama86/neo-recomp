@@ -932,6 +932,28 @@ static int emit_abcd_sbcd(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_chk(FILE *out, const NgM68kInstr *instr) {
+    char src_expr[256];
+
+    if (instr->mnemonic != NG_M68K_CHK ||
+        instr->src.mode == NG_M68K_EA_NONE ||
+        instr->dst.mode != NG_M68K_EA_DREG ||
+        instr->size != 2u) {
+        return 0;
+    }
+    if (!emit_ea_read(out, instr, &instr->src, 2u,
+                      src_expr, (unsigned)sizeof(src_expr))) {
+        return 0;
+    }
+
+    fprintf(out, "    { int16_t ng_bound = (int16_t)(%s); int16_t ng_value = (int16_t)(g_ng_m68k.d[%u] & 0xFFFFu);\n",
+            src_expr, instr->dst.reg);
+    fprintf(out, "      if (ng_value < 0 || ng_value > ng_bound) { if (ng_value < 0) g_ng_m68k.sr |= NG_CCR_N; else g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & (uint16_t)~NG_CCR_N); ng_log_dispatch_miss(0x%08Xu); return; }\n",
+            instr->addr & 0x00FFFFFFu);
+    fprintf(out, "    }\n");
+    return 1;
+}
+
 static int emit_logical_imm_generic(FILE *out, const NgM68kInstr *instr) {
     const char *ctype = ng_ctype_for_size(instr->size);
     const char *read_fn = ng_read_fn_for_size(instr->size);
@@ -2210,6 +2232,11 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         fprintf(out, "    }\n");
         return 1;
     }
+    case NG_M68K_CHK:
+        if (emit_chk(out, instr)) {
+            return 1;
+        }
+        break;
     case NG_M68K_JSR:
         if (instr->src.mode != NG_M68K_EA_NONE &&
             instr->form != NG_M68K_FORM_ABS &&

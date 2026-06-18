@@ -1533,6 +1533,23 @@ static int oracle_exec(const uint8_t *program,
             pc += 4u;
             continue;
         }
+        if ((op & 0xF1C0u) == 0x4180u) {
+            uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint32_t next_pc = pc + 2u;
+            uint32_t bound;
+            int16_t value = (int16_t)(state->d[dst_reg] & 0xFFFFu);
+            if (!oracle_read_ea(program, size, state, bus, mode, reg,
+                                2u, &next_pc, &bound)) {
+                return 0;
+            }
+            if (value < 0 || value > (int16_t)bound) {
+                return 0;
+            }
+            pc = next_pc;
+            continue;
+        }
         if ((op & 0xF1C0u) == 0x41C0u) {
             uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
             uint8_t mode = (uint8_t)((op >> 3) & 7u);
