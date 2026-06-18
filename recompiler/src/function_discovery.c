@@ -57,11 +57,16 @@ static void add_jump_table_targets(const NgProgramRom *rom,
 }
 
 static int is_direct_function_target(const NgM68kInstr *instr) {
-    if (instr->mnemonic == NG_M68K_JSR || instr->mnemonic == NG_M68K_BSR) {
+    if (instr->mnemonic == NG_M68K_BSR) {
         return 1;
     }
-    return instr->mnemonic == NG_M68K_JMP &&
-           instr->form != NG_M68K_FORM_AREG_INDIRECT;
+    if (instr->mnemonic != NG_M68K_JSR && instr->mnemonic != NG_M68K_JMP) {
+        return 0;
+    }
+    return instr->src.mode == NG_M68K_EA_ABS_W ||
+           instr->src.mode == NG_M68K_EA_ABS_L ||
+           instr->src.mode == NG_M68K_EA_PC_DISP ||
+           instr->src.mode == NG_M68K_EA_PC_INDEX;
 }
 
 static void scan_function_candidate(const NgProgramRom *rom,

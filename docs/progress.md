@@ -86,7 +86,8 @@ with the next set of generated-code misses.
 
 Covered by executable generated-C validation:
 
-- control flow: direct `JSR`, direct tail `JMP`, local `BRA`, selected `Bcc`
+- control flow: direct and control-EA `JSR`/tail `JMP`, local `BRA`,
+  selected `Bcc`
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
 - conditional branches: all 68000 `Bcc` condition predicates are emitted;
   generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
@@ -172,6 +173,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized `JSR`/`JMP` decode/emission over control effective
+  addresses, while keeping static target discovery constrained to absolute and
+  PC-relative forms.
 - local: Added memory word shift/rotate decode/emission for
   `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR <ea>`, sharing the generated flag logic
   shape with data-register shifts and adding generated-exec absolute-memory

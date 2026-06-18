@@ -1891,15 +1891,32 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         return 1;
     }
     case NG_M68K_JSR:
+        if (instr->src.mode != NG_M68K_EA_NONE &&
+            instr->form != NG_M68K_FORM_ABS &&
+            instr->form != NG_M68K_FORM_PC_RELATIVE) {
+            char addr_expr[256];
+            if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
+                fprintf(out, "    ng_generated_call(%s);\n", addr_expr);
+                return 1;
+            }
+        }
+        fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
+        return 1;
     case NG_M68K_BSR:
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
         return 1;
     case NG_M68K_JMP:
-        if (instr->form == NG_M68K_FORM_AREG_INDIRECT) {
-            fprintf(out, "    ng_generated_call(g_ng_m68k.a[%u]);\n", instr->reg);
-        } else {
-            fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
+        if (instr->src.mode != NG_M68K_EA_NONE &&
+            instr->form != NG_M68K_FORM_ABS &&
+            instr->form != NG_M68K_FORM_PC_RELATIVE) {
+            char addr_expr[256];
+            if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
+                fprintf(out, "    ng_generated_call(%s);\n", addr_expr);
+                fprintf(out, "    return;\n");
+                return 0;
+            }
         }
+        fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
         fprintf(out, "    return;\n");
         return 0;
     default:

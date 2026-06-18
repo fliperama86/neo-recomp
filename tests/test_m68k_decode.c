@@ -1020,11 +1020,43 @@ int main(void) {
 
     {
         const unsigned char bytes[] = { 0x4E, 0xD0 };
+        char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_JMP);
         CHECK(instr.byte_length == 2);
         CHECK(instr.form == NG_M68K_FORM_AREG_INDIRECT);
         CHECK(instr.reg == 0);
+        CHECK(instr.src.mode == NG_M68K_EA_AIND);
+        CHECK(instr.src.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "JMP (A0)") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0x90 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_JSR);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.form == NG_M68K_FORM_AREG_INDIRECT);
+        CHECK(instr.reg == 0);
+        CHECK(instr.src.mode == NG_M68K_EA_AIND);
+        CHECK(instr.src.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "JSR (A0)") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0xEA, 0x00, 0x10 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_JMP);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_ADISP);
+        CHECK(instr.src.reg == 2);
+        CHECK(instr.src.displacement == 0x10);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "JMP ($10,A2)") == 0);
     }
 
     {

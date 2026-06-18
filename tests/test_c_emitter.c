@@ -481,6 +481,30 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x08u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x4E90u); /* JSR (A0) */
+        write16(&rom, 0x02u, 0x4EE8u); /* JMP ($4,A0) */
+        write16(&rom, 0x04u, 0x0004u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: JSR (A0) */") != NULL);
+        CHECK(strstr(text, "ng_generated_call(g_ng_m68k.a[0]);") != NULL);
+        CHECK(strstr(text, "/* $000002: JMP ($4,A0) */") != NULL);
+        CHECK(strstr(text, "ng_generated_call((uint32_t)(g_ng_m68k.a[0] + (int32_t)4));") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x30u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x08B9u); /* BCLR #7,$0010FD80 */

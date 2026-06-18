@@ -760,6 +760,9 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->mnemonic = (op == 0x4EF9u) ? NG_M68K_JMP : NG_M68K_JSR;
         out->byte_length = 6;
         out->target = ng_program_rom_read32(rom, addr + 2u);
+        out->form = NG_M68K_FORM_ABS;
+        out->src.mode = NG_M68K_EA_ABS_L;
+        out->src.absolute_addr = out->target;
         return 1;
     }
     if (op == 0x4EFAu || op == 0x4EBAu) {
@@ -768,6 +771,9 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->form = NG_M68K_FORM_PC_RELATIVE;
         out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
         out->target = (uint32_t)((int32_t)(addr + 2u) + (int32_t)out->displacement);
+        out->src.mode = NG_M68K_EA_PC_DISP;
+        out->src.displacement = out->displacement;
+        out->src.absolute_addr = out->target;
         return 1;
     }
     if ((op & 0xFFF8u) == 0x4ED0u) {
@@ -775,7 +781,39 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->byte_length = 2;
         out->form = NG_M68K_FORM_AREG_INDIRECT;
         out->reg = (uint8_t)(op & 7u);
+        out->src.mode = NG_M68K_EA_AIND;
+        out->src.reg = out->reg;
         return 1;
+    }
+    if ((op & 0xFFC0u) == 0x4E80u ||
+        (op & 0xFFC0u) == 0x4EC0u) {
+        uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
+        uint8_t ea_reg = (uint8_t)(op & 7u);
+        if (is_control_ea(ea_mode, ea_reg)) {
+            out->mnemonic = ((op & 0xFFC0u) == 0x4E80u) ?
+                NG_M68K_JSR : NG_M68K_JMP;
+            out->size = NG_M68K_SIZE_LONG;
+            out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
+                                                        ea_mode, ea_reg,
+                                                        out->size, &out->src));
+            if (out->src.mode == NG_M68K_EA_AIND) {
+                out->form = NG_M68K_FORM_AREG_INDIRECT;
+                out->reg = out->src.reg;
+            } else if (out->src.mode == NG_M68K_EA_PC_DISP ||
+                       out->src.mode == NG_M68K_EA_PC_INDEX) {
+                out->form = NG_M68K_FORM_PC_RELATIVE;
+                out->target = out->src.absolute_addr;
+            } else if (out->src.mode == NG_M68K_EA_ABS_W ||
+                       out->src.mode == NG_M68K_EA_ABS_L) {
+                out->form = NG_M68K_FORM_ABS;
+                out->target = out->src.absolute_addr;
+            }
+            if (out->src.mode == NG_M68K_EA_NONE) {
+                out->mnemonic = NG_M68K_UNKNOWN;
+                out->byte_length = 2;
+            }
+            return 1;
+        }
     }
     if ((op & 0xFF00u) == 0x6000u) {
         out->mnemonic = NG_M68K_BRA;
@@ -1726,9 +1764,13 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         break;
     case NG_M68K_JMP:
     case NG_M68K_JSR:
-        if (instr->form == NG_M68K_FORM_AREG_INDIRECT) {
-            snprintf(out, out_size, "%s (A%u)",
-                     ng_m68k_mnemonic_name(instr->mnemonic), instr->reg);
+        if (instr->src.mode != NG_M68K_EA_NONE &&
+            instr->form != NG_M68K_FORM_ABS &&
+            instr->form != NG_M68K_FORM_PC_RELATIVE) {
+            char src[64];
+            format_ea_operand(&instr->src, instr->size, src, (unsigned)sizeof(src));
+            snprintf(out, out_size, "%s %s",
+                     ng_m68k_mnemonic_name(instr->mnemonic), src);
             break;
         }
         snprintf(out, out_size, "%s $%06X",
