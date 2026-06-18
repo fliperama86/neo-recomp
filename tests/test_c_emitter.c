@@ -52,7 +52,7 @@ int main(void) {
     char symbol[32];
     NgFunctionDiscovery discovery;
     FILE *out;
-    char text[4096];
+    char text[32768];
 
     ng_c_symbol_for_addr(0x000007CCu, symbol, (unsigned)sizeof(symbol));
     CHECK(strcmp(symbol, "ng_func_0007CC") == 0);
@@ -99,7 +99,9 @@ int main(void) {
 
         CHECK(strstr(text, "/* $000000: MOVEQ #5,D0 */") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = 0x00000005u;") != NULL);
-        CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFF0000u) | ((g_ng_m68k.d[0] + g_ng_m68k.d[0]) & 0x0000FFFFu);") != NULL);
+        CHECK(strstr(text, "/* $000002: ADD.W D0,D0 */") != NULL);
+        CHECK(strstr(text, "uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src;") != NULL);
+        CHECK(strstr(text, "if (ng_full > 0x0000FFFFu) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);
         CHECK(strstr(text, "ng_generated_call(0x00000020u);") != NULL);
         CHECK(strstr(text, "ng_generated_call(0x00000030u);") != NULL);
         CHECK(strstr(text, "return;") != NULL);
@@ -108,7 +110,7 @@ int main(void) {
     }
 
     {
-        NgProgramRom rom = make_rom(0x60u);
+        NgProgramRom rom = make_rom(0x70u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x41FAu); /* LEA $000008,A0 */
         write16(&rom, 0x02u, 0x0004u);
@@ -142,7 +144,15 @@ int main(void) {
         write16(&rom, 0x4Au, 0x182Eu); /* MOVE.B ($0F7A,A6),D4 */
         write16(&rom, 0x4Cu, 0x0F7Au);
         write16(&rom, 0x4Eu, 0x5904u); /* SUBQ.B #4,D4 */
-        write16(&rom, 0x50u, 0x4E75u);
+        write16(&rom, 0x50u, 0xD101u); /* ADDX.B D1,D0 */
+        write16(&rom, 0x52u, 0x3A00u); /* MOVE.W D0,D5 */
+        write16(&rom, 0x54u, 0x3085u); /* MOVE.W D5,(A0) */
+        write16(&rom, 0x56u, 0xD001u); /* ADD.B D1,D0 */
+        write16(&rom, 0x58u, 0x9401u); /* SUB.B D1,D2 */
+        write16(&rom, 0x5Au, 0xB001u); /* CMP.B D1,D0 */
+        write16(&rom, 0x5Cu, 0xB039u); /* CMP.B $0010FE80,D0 */
+        write32(&rom, 0x5Eu, 0x0010FE80u);
+        write16(&rom, 0x62u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -169,6 +179,17 @@ int main(void) {
         CHECK(strstr(text, "ng_set_nz8(ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962)));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[4] = (g_ng_m68k.d[4] & 0xFFFFFF00u) | ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962));") != NULL);
         CHECK(strstr(text, "uint8_t ng_result = (uint8_t)(ng_old - 4u);") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | ng_addx8((uint8_t)(g_ng_m68k.d[1] & 0x00FFu), (uint8_t)(g_ng_m68k.d[0] & 0x00FFu));") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.d[5] = (g_ng_m68k.d[5] & 0xFFFF0000u)") != NULL);
+        CHECK(strstr(text, "ng68k_write16(g_ng_m68k.a[0], (uint16_t)((uint16_t)(g_ng_m68k.d[5] & 0xFFFFu)));") != NULL);
+        CHECK(strstr(text, "/* $000056: ADD.B D1,D0 */") != NULL);
+        CHECK(strstr(text, "uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src;") != NULL);
+        CHECK(strstr(text, "/* $000058: SUB.B D1,D2 */") != NULL);
+        CHECK(strstr(text, "if (ng_src > ng_dst) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);
+        CHECK(strstr(text, "/* $00005A: CMP.B D1,D0 */") != NULL);
+        CHECK(strstr(text, "if (ng_src > ng_dst) g_ng_m68k.sr |= NG_CCR_C;") != NULL);
+        CHECK(strstr(text, "/* $00005C: CMP.B $10FE80,D0 */") != NULL);
+        CHECK(strstr(text, "uint8_t ng_ea_00005C = ng68k_read8(0x0010FE80u);") != NULL);
 
         ng_program_rom_free(&rom);
     }

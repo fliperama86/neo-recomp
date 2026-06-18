@@ -9,7 +9,7 @@ project orientation; update this file after each meaningful green slice.
 
 - Repository: `https://github.com/fliperama86/neo-recomp.git`
 - Branch: `main`
-- Latest pushed commit: `50bb51f Emit byte SUBQ data-register ops`
+- Latest pushed commit: `9455d09 Add live progress tracker`
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
 - Current test status: 5/5 passing
 - Real smoke input: `G:\Mister\NEOGEO\mslug.neo`
@@ -46,7 +46,7 @@ expecting byte-identical machine code is not a useful invariant.
 
 ## Real ROM Frontier
 
-Current Metal Slug generated C reaches this point in candidate `$000656`:
+The last checked Metal Slug generated C reached this point in candidate `$000656`:
 
 ```text
 $000656: LEA $100080,A6
@@ -61,7 +61,9 @@ $00067C: SUBQ.B #1,D0
 $00067E: DC.W $D101
 ```
 
-Next opcode frontier: `$D101`, likely `ADD.B D1,D0`.
+`$D101` has since been confirmed as `ADDX.B D1,D0` and is now decoded/emitted
+locally with generated-exec coverage. The real `.neo` smoke needs to be rerun to
+find the next Metal Slug frontier.
 
 Other visible real-output frontiers include:
 
@@ -82,7 +84,7 @@ Covered by executable generated-C validation:
 
 - control flow: direct `JSR`, direct tail `JMP`, local `BRA`, selected `Bcc`
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
-- flags: `N`/`Z` for covered operations; `C` for tested byte compare/subtract paths
+- flags: `N`/`Z` for covered operations; `C`/`X` for tested byte subtract/extend-add paths
 - data movement:
   - `MOVEQ`
   - `MOVE.B/W #imm,Dn`
@@ -94,6 +96,10 @@ Covered by executable generated-C validation:
   - `LEA`
 - arithmetic/logical:
   - `ADD.W Dn,Dn`
+  - generic `ADD.B/W/L <ea>,Dn` paths covered so far by Dn reads
+  - generic `SUB.B/W/L <ea>,Dn` paths covered so far by Dn reads
+  - generic `CMP.B/W/L <ea>,Dn` paths covered so far by Dn and abs reads
+  - `ADDX.B Dn,Dn`
   - `SUBQ.B #imm,Dn`
   - `ANDI.B #imm,(d16,An)`
   - `CMPI.B #imm,Dn`
@@ -104,11 +110,15 @@ Covered by executable generated-C validation:
   - `BCLR #imm,abs`
   - `ANDI #imm,SR`
 
-Important caveat: this is not a complete 68000 condition-code model. `V` is not
-implemented, and `C` is only trusted where tests cover it.
+Important caveat: this is not a complete 68000 condition-code model. `V` is only
+covered for the tested `ADDX.B` helper path, and `C`/`X` are only trusted where
+tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a generic 68k effective-address model and generic MOVE emission fallback.
+- local: Added generic EA-to-data-register `ADD`, `SUB`, and `CMP` decode/emission.
+- local: Decode/emit byte `ADDX` data-register ops; verified `$D101` is `ADDX.B D1,D0`.
 - `50bb51f` Emit byte `SUBQ` data-register ops.
 - `8b0d1d5` Emit byte address-register loads.
 - `d3c022a` Emit byte `TST` address-register reads.
@@ -140,12 +150,14 @@ Use this loop:
 
 Immediate next slice:
 
-- Decode/emit `$D101`, likely `ADD.B D1,D0`.
-- Add generated-exec coverage for byte register-to-register add.
-- Verify `$00067E` moves forward in Metal Slug generated C.
+- Rerun the Metal Slug `.neo` smoke with the new `$D101` support.
+- Confirm `$00067E` moves forward in generated C.
+- Pick the next `DC.W` frontier from the regenerated `build\mslug_recomp.c`.
 
 Near follow-ups:
 
+- Migrate more instruction families onto the generic EA helpers instead of adding bespoke forms.
+- Add a decode/codegen legality layer so invalid source/destination EA combinations fail loudly.
 - Add byte/word/long helpers for arithmetic flags instead of ad hoc emitted flag code.
 - Replace narrow condition handling with a tested condition-code helper table.
 - Start separating instruction semantics into reusable generated helper functions when repeated emitted C becomes noisy.

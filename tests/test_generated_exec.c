@@ -13,8 +13,10 @@
 
 #define BUS_SIZE 0x2000u
 #define CCR_C 0x0001u
+#define CCR_V 0x0002u
 #define CCR_Z 0x0004u
 #define CCR_N 0x0008u
+#define CCR_X 0x0010u
 
 NgM68kState g_ng_m68k;
 
@@ -169,10 +171,97 @@ static int oracle_exec(const uint8_t *program,
             pc += 6u;
             continue;
         }
+        if (((op & 0xF000u) == 0xD000u ||
+             (op & 0xF000u) == 0x9000u ||
+             (op & 0xF000u) == 0xB000u) &&
+            ((op >> 8) & 1u) == 0u) {
+            uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+            uint8_t src_mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t src_reg = (uint8_t)(op & 7u);
+            uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
+            uint32_t value_mask;
+            uint32_t sign_mask;
+            uint32_t src;
+            uint32_t dst;
+            uint32_t result;
+            uint8_t is_add = (uint8_t)((op & 0xF000u) == 0xD000u);
+            uint8_t is_sub = (uint8_t)((op & 0xF000u) == 0x9000u);
+
+            if (size_code == 3u || src_mode != 0u) {
+                return 0;
+            }
+            if (size_code == 2u) {
+                value_mask = 0xFFFFFFFFu;
+                sign_mask = 0x80000000u;
+            } else if (size_code == 1u) {
+                value_mask = 0x0000FFFFu;
+                sign_mask = 0x00008000u;
+            } else {
+                value_mask = 0x000000FFu;
+                sign_mask = 0x00000080u;
+            }
+
+            src = state->d[src_reg] & value_mask;
+            dst = state->d[dst_reg] & value_mask;
+            if (is_add) {
+                uint64_t full = (uint64_t)dst + (uint64_t)src;
+                result = (uint32_t)full & value_mask;
+                state->d[dst_reg] = (state->d[dst_reg] & ~value_mask) | result;
+                state->sr = (uint16_t)(state->sr & 0xFFE0u);
+                if (result == 0) state->sr |= CCR_Z;
+                if (result & sign_mask) state->sr |= CCR_N;
+                if (full > value_mask) state->sr |= CCR_C | CCR_X;
+                if (((~(dst ^ src) & (dst ^ result)) & sign_mask) != 0) state->sr |= CCR_V;
+            } else {
+                result = (dst - src) & value_mask;
+                if (is_sub) {
+                    state->d[dst_reg] = (state->d[dst_reg] & ~value_mask) | result;
+                    state->sr = (uint16_t)(state->sr & 0xFFE0u);
+                } else {
+                    state->sr = (uint16_t)(state->sr & 0xFFF0u);
+                }
+                if (result == 0) state->sr |= CCR_Z;
+                if (result & sign_mask) state->sr |= CCR_N;
+                if (src > dst) state->sr |= (uint16_t)(CCR_C | (is_sub ? CCR_X : 0u));
+                if (((dst ^ src) & (dst ^ result) & sign_mask) != 0) state->sr |= CCR_V;
+            }
+            pc += 2u;
+            continue;
+        }
         if (op == 0xD040u) {
             uint16_t result = (uint16_t)(state->d[0] + state->d[0]);
             state->d[0] = (state->d[0] & 0xFFFF0000u) | result;
             oracle_set_nz16(state, result);
+            pc += 2u;
+            continue;
+        }
+        if ((op & 0xF138u) == 0xD100u) {
+            uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+            uint8_t src_reg = (uint8_t)(op & 7u);
+            uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
+            uint8_t src = (uint8_t)(state->d[src_reg] & 0xFFu);
+            uint8_t dst = (uint8_t)(state->d[dst_reg] & 0xFFu);
+            uint8_t x = (state->sr & CCR_X) ? 1u : 0u;
+            uint16_t sum = (uint16_t)dst + (uint16_t)src + (uint16_t)x;
+            uint8_t result = (uint8_t)sum;
+            uint16_t sr = (uint16_t)(state->sr & 0xFFE4u);
+            if (size_code != 0) {
+                return 0;
+            }
+            state->d[dst_reg] = (state->d[dst_reg] & 0xFFFFFF00u) | result;
+            if (result != 0) {
+                sr = (uint16_t)(sr & (uint16_t)~CCR_Z);
+            }
+            if (result & 0x80u) {
+                sr |= CCR_N;
+            }
+            if (sum & 0x0100u) {
+                sr |= CCR_C | CCR_X;
+            }
+            if (((~(dst ^ src) & (dst ^ result)) & 0x80u) != 0) {
+                sr |= CCR_V;
+            }
+            state->sr = sr;
             pc += 2u;
             continue;
         }
@@ -191,7 +280,9 @@ static int oracle_exec(const uint8_t *program,
             state->d[reg] = (state->d[reg] & 0xFFFFFF00u) | result;
             oracle_set_nz8(state, result);
             if (old_value < immediate) {
-                state->sr |= CCR_C;
+                state->sr |= CCR_C | CCR_X;
+            } else {
+                state->sr = (uint16_t)(state->sr & (uint16_t)~CCR_X);
             }
             pc += 2u;
             continue;
@@ -312,6 +403,66 @@ static int oracle_exec(const uint8_t *program,
             pc += 6u;
             continue;
         }
+        if ((op & 0xF000u) == 0x1000u ||
+            (op & 0xF000u) == 0x2000u ||
+            (op & 0xF000u) == 0x3000u) {
+            uint8_t op_class = (uint8_t)((op >> 12) & 0xFu);
+            uint8_t move_size = op_class == 1u ? 1u : (op_class == 2u ? 4u : 2u);
+            uint8_t src_mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t src_reg = (uint8_t)(op & 7u);
+            uint8_t dst_mode = (uint8_t)((op >> 6) & 7u);
+            uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
+            uint32_t next_pc = pc + 2u;
+            uint32_t value = 0;
+
+            if (src_mode == 0u) {
+                value = state->d[src_reg];
+            } else if (src_mode == 7u && src_reg == 4u) {
+                if (move_size == 4u) {
+                    value = program_read32(program, size, next_pc);
+                    next_pc += 4u;
+                } else {
+                    value = program_read16(program, size, next_pc);
+                    next_pc += 2u;
+                }
+            } else {
+                return 0;
+            }
+
+            if (move_size == 1u) {
+                value &= 0xFFu;
+            } else if (move_size == 2u) {
+                value &= 0xFFFFu;
+            }
+
+            if (dst_mode == 0u) {
+                if (move_size == 4u) {
+                    state->d[dst_reg] = value;
+                    oracle_set_nz32(state, value);
+                } else if (move_size == 1u) {
+                    state->d[dst_reg] = (state->d[dst_reg] & 0xFFFFFF00u) | value;
+                    oracle_set_nz8(state, (uint8_t)value);
+                } else {
+                    state->d[dst_reg] = (state->d[dst_reg] & 0xFFFF0000u) | value;
+                    oracle_set_nz16(state, (uint16_t)value);
+                }
+            } else if (dst_mode == 2u) {
+                if (move_size == 4u) {
+                    bus_write32(bus, state->a[dst_reg], value);
+                    oracle_set_nz32(state, value);
+                } else if (move_size == 1u) {
+                    bus_write8(bus, state->a[dst_reg], (uint8_t)value);
+                    oracle_set_nz8(state, (uint8_t)value);
+                } else {
+                    bus_write16(bus, state->a[dst_reg], (uint16_t)value);
+                    oracle_set_nz16(state, (uint16_t)value);
+                }
+            } else {
+                return 0;
+            }
+            pc = next_pc;
+            continue;
+        }
 
         return 0;
     }
@@ -382,10 +533,13 @@ int main(void) {
     CHECK(memcmp(g_ng_m68k.a, expected_state.a, sizeof(g_ng_m68k.a)) == 0);
     CHECK(g_ng_m68k.sr == expected_state.sr);
     CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
-    CHECK(g_ng_m68k.d[0] == 10u);
+    CHECK(g_ng_m68k.d[0] == 0u);
     CHECK((g_ng_m68k.d[2] & 0xFFu) == 0x7Fu);
     CHECK((g_ng_m68k.d[3] & 0xFFu) == 0x00u);
     CHECK((g_ng_m68k.d[4] & 0xFFu) == 0x0Eu);
+    CHECK((g_ng_m68k.d[5] & 0xFFFFu) == 0x1357u);
+    CHECK((g_ng_m68k.d[6] & 0xFFFFu) == 0x1357u);
+    CHECK(ng68k_read16(0x0068u) == 0x1357u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);
@@ -399,6 +553,9 @@ int main(void) {
     CHECK(ng68k_read8(0x1019u) == 0x00u);
     CHECK(ng68k_read8(0x101Au) == 0x0Fu);
     CHECK(ng68k_read8(0x101Bu) == 0x00u);
+    CHECK(ng68k_read8(0x101Cu) == 0x00u);
+    CHECK(ng68k_read8(0x101Du) == 0x05u);
+    CHECK((g_ng_m68k.sr & CCR_X) != 0);
     CHECK((g_ng_m68k.sr & CCR_N) != 0);
 
     ng_generated_call(0x00DEADu);
