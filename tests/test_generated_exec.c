@@ -12,6 +12,8 @@
 } while (0)
 
 #define BUS_SIZE 0x2000u
+#define CCR_Z 0x0004u
+#define CCR_N 0x0008u
 
 NgM68kState g_ng_m68k;
 
@@ -20,6 +22,26 @@ static uint32_t g_dispatch_miss_count;
 static uint32_t g_last_dispatch_miss;
 
 void ng_generated_call(uint32_t addr);
+
+static void oracle_set_nz16(NgM68kState *state, uint16_t value) {
+    state->sr = (uint16_t)(state->sr & 0xFFF0u);
+    if (value == 0) {
+        state->sr |= CCR_Z;
+    }
+    if (value & 0x8000u) {
+        state->sr |= CCR_N;
+    }
+}
+
+static void oracle_set_nz32(NgM68kState *state, uint32_t value) {
+    state->sr = (uint16_t)(state->sr & 0xFFF0u);
+    if (value == 0) {
+        state->sr |= CCR_Z;
+    }
+    if (value & 0x80000000u) {
+        state->sr |= CCR_N;
+    }
+}
 
 static uint8_t bus_read8(const uint8_t *bus, uint32_t addr) {
     return addr < BUS_SIZE ? bus[addr] : 0xFFu;
@@ -90,13 +112,31 @@ static int oracle_exec(const uint8_t *program,
         if ((op & 0xF100u) == 0x7000u) {
             uint8_t reg = (uint8_t)((op >> 9) & 7u);
             state->d[reg] = (uint32_t)(int32_t)(int8_t)(op & 0xFFu);
+            oracle_set_nz32(state, state->d[reg]);
             pc += 2u;
             continue;
         }
         if (op == 0xD040u) {
             uint16_t result = (uint16_t)(state->d[0] + state->d[0]);
             state->d[0] = (state->d[0] & 0xFFFF0000u) | result;
+            oracle_set_nz16(state, result);
             pc += 2u;
+            continue;
+        }
+        if ((op & 0xF000u) == 0x6000u && (op & 0xFF00u) != 0x6000u &&
+            (op & 0xFF00u) != 0x6100u) {
+            uint8_t condition = (uint8_t)((op >> 8) & 0xFu);
+            int8_t displacement = (int8_t)(op & 0xFFu);
+            uint32_t next_pc = pc + 2u;
+            int take;
+            if (condition == 6u) {
+                take = (state->sr & CCR_Z) == 0;
+            } else if (condition == 7u) {
+                take = (state->sr & CCR_Z) != 0;
+            } else {
+                return 0;
+            }
+            pc = take ? (uint32_t)((int32_t)next_pc + (int32_t)displacement) : next_pc;
             continue;
         }
         if (op == 0x4EB9u) {
@@ -115,6 +155,7 @@ static int oracle_exec(const uint8_t *program,
             uint16_t value = program_read16(program, size, pc + 2u);
             uint32_t addr = program_read32(program, size, pc + 4u);
             bus_write16(bus, addr, value);
+            oracle_set_nz16(state, value);
             pc += 8u;
             continue;
         }
@@ -128,6 +169,7 @@ static int oracle_exec(const uint8_t *program,
         if (op == 0x23C8u) {
             uint32_t addr = program_read32(program, size, pc + 2u);
             bus_write32(bus, addr, state->a[0]);
+            oracle_set_nz32(state, state->a[0]);
             pc += 6u;
             continue;
         }
@@ -197,7 +239,9 @@ int main(void) {
     CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
     CHECK(g_ng_m68k.d[0] == 10u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
-    CHECK(ng68k_read32(0x1004u) == 0x00000038u);
+    CHECK(ng68k_read32(0x1004u) == 0x00000068u);
+    CHECK(ng68k_read16(0x1008u) == 0x2222u);
+    CHECK(ng68k_read16(0x100Au) == 0x0000u);
 
     ng_generated_call(0x00DEADu);
     CHECK(g_dispatch_miss_count == 1);

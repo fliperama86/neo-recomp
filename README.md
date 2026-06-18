@@ -84,6 +84,8 @@ function preview $00080C:
   $000812: MOVE.L $10FE80,D0        ; MOVE
   $000818: Bcc.6 $000826            ; BCC
   $00081C: CLR.W $100000            ; CLR
+  $000822: BRA $00082E              ; BRA
+  $000826: MOVE.W #$0,$100000       ; MOVE
 generated C: .\build\mslug_recomp.c
 ```
 
@@ -186,6 +188,35 @@ void ng_generated_call(uint32_t addr) {
 }
 ```
 
+It also emits local C labels for decoded `BRA` and Z-flag `BNE` / `BEQ` paths.
+That is enough for the Metal Slug `$00080C` candidate to compile through the
+first conditional branch instead of stopping at `$000818`:
+
+```c
+static void ng_func_00080C(void) {
+    /* $00080C: JSR $024E38 */
+    ng_generated_call(0x00024E38u);
+    /* $000812: MOVE.L $10FE80,D0 */
+    g_ng_m68k.d[0] = ng68k_read32(0x0010FE80u);
+    ng_set_nz32(g_ng_m68k.d[0]);
+    /* $000818: Bcc.6 $000826 */
+    if ((g_ng_m68k.sr & NG_CCR_Z) == 0) goto ng_label_000826;
+    /* $00081C: CLR.W $100000 */
+    ng68k_write16(0x00100000u, 0x0000u);
+    ng_set_nz16(0);
+    /* $000822: BRA $00082E */
+    goto ng_label_00082E;
+ng_label_000826:
+    /* $000826: MOVE.W #$0,$100000 */
+    ng68k_write16(0x00100000u, 0x0000u);
+    ng_set_nz16(0x0000u);
+ng_label_00082E:
+    /* $00082E: JMP $00085E */
+    ng_generated_call(0x0000085Eu);
+    return;
+}
+```
+
 For the Metal Slug entry, the generated body now starts like this:
 
 ```c
@@ -203,6 +234,11 @@ Unsupported instructions stop the generated function with
 `ng_log_dispatch_miss`. This keeps unsupported behavior visible while allowing
 instruction-level C emission to grow one decoded operation at a time with tests
 against small register and memory fixtures.
+
+Condition-code support is still intentionally partial. The emitter updates
+`N`/`Z` for the operations covered by tests and supports only `BNE`/`BEQ`
+branch decisions today. `V`/`C` and the rest of the 68k branch condition table
+still need explicit tests before they are trusted.
 
 Unknown opcodes are still printed as `DC.W`; they are not executable support.
 
@@ -222,4 +258,6 @@ This is a stronger check than compiling generated C back to 68k and comparing
 machine code. A C compiler will not reproduce the original binary instruction
 stream; the useful invariant is behavior. The current behavior check covers
 `MOVEQ`, `ADD.W`, direct `JSR`, tail `JMP`, `MOVE.W #imm,abs`, `LEA`, and
-`MOVE.L A0,abs` through the same generated dispatch shape used by real ROMs.
+`MOVE.L A0,abs` through the same generated dispatch shape used by real ROMs. It
+also covers both a not-taken and a taken `BNE`, comparing generated C behavior
+against the tiny interpreter oracle.
