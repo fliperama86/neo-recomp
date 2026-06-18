@@ -73,6 +73,17 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x13, 0xFC, 0x00, 0x80, 0x00, 0x10, 0xFD, 0x80 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE);
+        CHECK(instr.byte_length == 8);
+        CHECK(instr.size == 1);
+        CHECK(instr.form == NG_M68K_FORM_IMM_TO_ABS);
+        CHECK(instr.immediate == 0x80u);
+        CHECK(instr.absolute_addr == 0x0010FD80u);
+    }
+
+    {
         const unsigned char bytes[] = { 0x02, 0x7C, 0xF8, 0xFF };
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_ANDI_TO_SR);

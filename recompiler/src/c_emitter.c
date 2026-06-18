@@ -27,6 +27,11 @@ static void emit_header(FILE *out) {
     fprintf(out, "    if (value == 0) g_ng_m68k.sr |= NG_CCR_Z;\n");
     fprintf(out, "    if (value & 0x8000u) g_ng_m68k.sr |= NG_CCR_N;\n");
     fprintf(out, "}\n\n");
+    fprintf(out, "static void ng_set_nz8(uint8_t value) {\n");
+    fprintf(out, "    g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
+    fprintf(out, "    if (value == 0) g_ng_m68k.sr |= NG_CCR_Z;\n");
+    fprintf(out, "    if (value & 0x80u) g_ng_m68k.sr |= NG_CCR_N;\n");
+    fprintf(out, "}\n\n");
     fprintf(out, "static void ng_set_nz32(uint32_t value) {\n");
     fprintf(out, "    g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
     fprintf(out, "    if (value == 0) g_ng_m68k.sr |= NG_CCR_Z;\n");
@@ -115,6 +120,10 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
                 fprintf(out, "    ng68k_write32(0x%08Xu, 0x%08Xu);\n",
                         instr->absolute_addr & 0x00FFFFFFu, instr->immediate);
                 fprintf(out, "    ng_set_nz32(0x%08Xu);\n", instr->immediate);
+            } else if (instr->size == 1u) {
+                fprintf(out, "    ng68k_write8(0x%08Xu, 0x%02Xu);\n",
+                        instr->absolute_addr & 0x00FFFFFFu, instr->immediate & 0xFFu);
+                fprintf(out, "    ng_set_nz8(0x%02Xu);\n", instr->immediate & 0xFFu);
             } else {
                 fprintf(out, "    ng68k_write16(0x%08Xu, 0x%04Xu);\n",
                         instr->absolute_addr & 0x00FFFFFFu, instr->immediate & 0xFFFFu);
@@ -127,7 +136,7 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
                 fprintf(out,
                         "    g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFFFF00u) | ng68k_read8(0x%08Xu);\n",
                         instr->reg, instr->reg, instr->absolute_addr & 0x00FFFFFFu);
-                fprintf(out, "    ng_set_nz16((uint16_t)(g_ng_m68k.d[%u] & 0x00FFu));\n",
+                fprintf(out, "    ng_set_nz8((uint8_t)(g_ng_m68k.d[%u] & 0x00FFu));\n",
                         instr->reg);
             } else if (instr->size == 4u) {
                 fprintf(out, "    g_ng_m68k.d[%u] = ng68k_read32(0x%08Xu);\n",
