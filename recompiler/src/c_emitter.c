@@ -507,6 +507,58 @@ static int emit_logical_imm_generic(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_bit_imm_generic(FILE *out, const NgM68kInstr *instr) {
+    char addr_expr[256];
+    uint8_t bit = (uint8_t)(instr->immediate &
+        (instr->dst.mode == NG_M68K_EA_DREG ? 31u : 7u));
+
+    if (instr->dst.mode == NG_M68K_EA_NONE) {
+        return 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        fprintf(out,
+                "    { uint32_t ng_mask = (uint32_t)(1u << %uu); uint32_t ng_value = g_ng_m68k.d[%u];\n",
+                (unsigned)bit, instr->dst.reg);
+        fprintf(out,
+                "      if ((ng_value & ng_mask) == 0) g_ng_m68k.sr |= NG_CCR_Z; else g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & (uint16_t)~NG_CCR_Z);\n");
+        if (instr->mnemonic == NG_M68K_BCHG) {
+            fprintf(out, "      g_ng_m68k.d[%u] = ng_value ^ ng_mask;\n",
+                    instr->dst.reg);
+        } else if (instr->mnemonic == NG_M68K_BCLR) {
+            fprintf(out, "      g_ng_m68k.d[%u] = ng_value & (uint32_t)~ng_mask;\n",
+                    instr->dst.reg);
+        } else if (instr->mnemonic == NG_M68K_BSET) {
+            fprintf(out, "      g_ng_m68k.d[%u] = ng_value | ng_mask;\n",
+                    instr->dst.reg);
+        }
+        fprintf(out, "    }\n");
+        return 1;
+    }
+
+    if (!emit_ea_address(out, instr, &instr->dst, 1u,
+                         addr_expr, (unsigned)sizeof(addr_expr))) {
+        return 0;
+    }
+    fprintf(out,
+            "    { uint8_t ng_mask = (uint8_t)(1u << %uu); uint8_t ng_value = ng68k_read8(%s);\n",
+            (unsigned)bit, addr_expr);
+    fprintf(out,
+            "      if ((ng_value & ng_mask) == 0) g_ng_m68k.sr |= NG_CCR_Z; else g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & (uint16_t)~NG_CCR_Z);\n");
+    if (instr->mnemonic == NG_M68K_BCHG) {
+        fprintf(out, "      ng68k_write8(%s, (uint8_t)(ng_value ^ ng_mask));\n",
+                addr_expr);
+    } else if (instr->mnemonic == NG_M68K_BCLR) {
+        fprintf(out, "      ng68k_write8(%s, (uint8_t)(ng_value & (uint8_t)~ng_mask));\n",
+                addr_expr);
+    } else if (instr->mnemonic == NG_M68K_BSET) {
+        fprintf(out, "      ng68k_write8(%s, (uint8_t)(ng_value | ng_mask));\n",
+                addr_expr);
+    }
+    fprintf(out, "    }\n");
+    return 1;
+}
+
 static int emit_quick_generic(FILE *out, const NgM68kInstr *instr) {
     const char *ctype = ng_ctype_for_size(instr->size);
     const char *read_fn = ng_read_fn_for_size(instr->size);
@@ -955,13 +1007,14 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         break;
+    case NG_M68K_BTST:
+    case NG_M68K_BCHG:
     case NG_M68K_BCLR:
-        fprintf(out,
-                "    ng68k_write8(0x%08Xu, (uint8_t)(ng68k_read8(0x%08Xu) & (uint8_t)~0x%02Xu));\n",
-                instr->absolute_addr & 0x00FFFFFFu,
-                instr->absolute_addr & 0x00FFFFFFu,
-                (unsigned)(1u << (instr->immediate & 7u)));
-        return 1;
+    case NG_M68K_BSET:
+        if (emit_bit_imm_generic(out, instr)) {
+            return 1;
+        }
+        break;
     case NG_M68K_ANDI_TO_SR:
         fprintf(out, "    g_ng_m68k.sr &= 0x%04Xu;\n", instr->immediate & 0xFFFFu);
         return 1;

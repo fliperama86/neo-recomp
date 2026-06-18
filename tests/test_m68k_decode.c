@@ -65,11 +65,60 @@ int main(void) {
 
     {
         const unsigned char bytes[] = { 0x08, 0xB9, 0x00, 0x07, 0x00, 0x10, 0xFD, 0x80 };
+        char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_BCLR);
         CHECK(instr.byte_length == 8);
+        CHECK(instr.size == 1);
         CHECK(instr.immediate == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_ABS_L);
+        CHECK(instr.dst.absolute_addr == 0x0010FD80u);
         CHECK(instr.absolute_addr == 0x0010FD80u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "BCLR #7,$10FD80") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x08, 0x39, 0x00, 0x07, 0x00, 0x10, 0xFD, 0x80 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_BTST);
+        CHECK(instr.byte_length == 8);
+        CHECK(instr.size == 1);
+        CHECK(instr.immediate == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_ABS_L);
+        CHECK(instr.absolute_addr == 0x0010FD80u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "BTST #7,$10FD80") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x08, 0x42, 0x00, 0x01 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_BCHG);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 4);
+        CHECK(instr.immediate == 1);
+        CHECK(instr.form == NG_M68K_FORM_DREG);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "BCHG #1,D2") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x08, 0xD8, 0x00, 0x00 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_BSET);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 1);
+        CHECK(instr.immediate == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "BSET #0,(A0)+") == 0);
     }
 
     {

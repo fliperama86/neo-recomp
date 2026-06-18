@@ -31,7 +31,10 @@ typedef enum NgM68kMnemonic {
     NG_M68K_ORI,
     NG_M68K_ANDI,
     NG_M68K_EORI,
+    NG_M68K_BTST,
+    NG_M68K_BCHG,
     NG_M68K_BCLR,
+    NG_M68K_BSET,
     NG_M68K_ANDI_TO_SR,
 } NgM68kMnemonic;
 
