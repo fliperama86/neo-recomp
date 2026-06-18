@@ -1049,6 +1049,20 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
     case NG_M68K_RTS:
         fprintf(out, "    return;\n");
         return 0;
+    case NG_M68K_LINK:
+        fprintf(out, "    g_ng_m68k.a[7] -= 4u;\n");
+        fprintf(out, "    ng68k_write32(g_ng_m68k.a[7], g_ng_m68k.a[%u]);\n",
+                instr->reg);
+        fprintf(out, "    g_ng_m68k.a[%u] = g_ng_m68k.a[7];\n", instr->reg);
+        fprintf(out, "    g_ng_m68k.a[7] = (uint32_t)((int32_t)g_ng_m68k.a[7] + (int32_t)%d);\n",
+                instr->displacement);
+        return 1;
+    case NG_M68K_UNLK:
+        fprintf(out, "    g_ng_m68k.a[7] = g_ng_m68k.a[%u];\n", instr->reg);
+        fprintf(out, "    g_ng_m68k.a[%u] = ng68k_read32(g_ng_m68k.a[7]);\n",
+                instr->reg);
+        fprintf(out, "    g_ng_m68k.a[7] += 4u;\n");
+        return 1;
     case NG_M68K_LEA:
         fprintf(out, "    g_ng_m68k.a[%u] = 0x%08Xu;\n",
                 instr->reg, instr->target & 0x00FFFFFFu);

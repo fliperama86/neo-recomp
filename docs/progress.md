@@ -102,6 +102,7 @@ Covered by executable generated-C validation:
     address-register sources
   - `MOVE.L An,abs`
   - `LEA`
+  - `LINK An,#disp` and `UNLK An`
 - arithmetic/logical:
   - `ADD.W Dn,Dn`
   - generic `ADD.B/W/L <ea>,Dn` paths covered so far by Dn reads
@@ -155,6 +156,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added stack-frame setup/teardown (`LINK`/`UNLK`) with generated-exec
+  stack and frame-register validation.
 - local: Added `PEA <ea>` decode/format/emission on control addressing modes,
   using a reusable effective-address-value helper and generated-exec stack
   push validation.

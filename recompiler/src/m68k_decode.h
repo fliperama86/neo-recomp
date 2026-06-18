@@ -10,6 +10,8 @@ typedef enum NgM68kMnemonic {
     NG_M68K_RTS,
     NG_M68K_JMP,
     NG_M68K_JSR,
+    NG_M68K_LINK,
+    NG_M68K_UNLK,
     NG_M68K_BRA,
     NG_M68K_BSR,
     NG_M68K_BCC,

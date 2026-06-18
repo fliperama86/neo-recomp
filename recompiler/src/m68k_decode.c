@@ -508,6 +508,19 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->mnemonic = NG_M68K_RTS;
         return 1;
     }
+    if ((op & 0xFFF8u) == 0x4E50u) {
+        out->mnemonic = NG_M68K_LINK;
+        out->byte_length = 4;
+        out->reg = (uint8_t)(op & 7u);
+        out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
+        return 1;
+    }
+    if ((op & 0xFFF8u) == 0x4E58u) {
+        out->mnemonic = NG_M68K_UNLK;
+        out->byte_length = 2;
+        out->reg = (uint8_t)(op & 7u);
+        return 1;
+    }
     if (op == 0x4EF9u || op == 0x4EB9u) {
         out->mnemonic = (op == 0x4EF9u) ? NG_M68K_JMP : NG_M68K_JSR;
         out->byte_length = 6;
@@ -1203,6 +1216,8 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_RTS: return "RTS";
     case NG_M68K_JMP: return "JMP";
     case NG_M68K_JSR: return "JSR";
+    case NG_M68K_LINK: return "LINK";
+    case NG_M68K_UNLK: return "UNLK";
     case NG_M68K_BRA: return "BRA";
     case NG_M68K_BSR: return "BSR";
     case NG_M68K_BCC: return "BCC";
@@ -1316,6 +1331,12 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         }
         snprintf(out, out_size, "%s $%06X",
                  ng_m68k_mnemonic_name(instr->mnemonic), instr->target & 0xFFFFFFu);
+        break;
+    case NG_M68K_LINK:
+        snprintf(out, out_size, "LINK A%u,#%d", instr->reg, instr->displacement);
+        break;
+    case NG_M68K_UNLK:
+        snprintf(out, out_size, "UNLK A%u", instr->reg);
         break;
     case NG_M68K_BRA:
     case NG_M68K_BSR:

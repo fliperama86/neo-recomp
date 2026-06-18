@@ -1139,6 +1139,29 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x4E, 0x55, 0xFF, 0xFC };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_LINK);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.reg == 5);
+        CHECK(instr.displacement == -4);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "LINK A5,#-4") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0x5D };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_UNLK);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.reg == 5);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "UNLK A5") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x4E, 0x75 };
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_RTS);
