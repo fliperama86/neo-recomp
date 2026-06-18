@@ -21,6 +21,7 @@ typedef enum NgM68kMnemonic {
     NG_M68K_CLR,
     NG_M68K_TST,
     NG_M68K_CMPI,
+    NG_M68K_ANDI,
     NG_M68K_BCLR,
     NG_M68K_ANDI_TO_SR,
 } NgM68kMnemonic;
@@ -34,6 +35,7 @@ typedef enum NgM68kOperandForm {
     NG_M68K_FORM_DREG_TO_ABS,
     NG_M68K_FORM_DREG_TO_DREG,
     NG_M68K_FORM_DREG,
+    NG_M68K_FORM_AREG_DISP,
     NG_M68K_FORM_PC_INDEX_TO_AREG,
     NG_M68K_FORM_AREG_INDIRECT,
     NG_M68K_FORM_PC_RELATIVE,

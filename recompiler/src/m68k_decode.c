@@ -140,6 +140,16 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->immediate = ng_program_rom_read16(rom, addr + 2u);
         return 1;
     }
+    if ((op & 0xFFF8u) == 0x0228u) {
+        out->mnemonic = NG_M68K_ANDI;
+        out->byte_length = 6;
+        out->size = NG_M68K_SIZE_BYTE;
+        out->form = NG_M68K_FORM_AREG_DISP;
+        out->reg = (uint8_t)(op & 7u);
+        out->immediate = ng_program_rom_read16(rom, addr + 2u) & 0xFFu;
+        out->displacement = sign16(ng_program_rom_read16(rom, addr + 4u));
+        return 1;
+    }
     if ((op & 0xFFF8u) == 0x23C8u) {
         out->mnemonic = NG_M68K_MOVE;
         out->byte_length = 6;
@@ -295,6 +305,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_CLR: return "CLR";
     case NG_M68K_TST: return "TST";
     case NG_M68K_CMPI: return "CMPI";
+    case NG_M68K_ANDI: return "ANDI";
     case NG_M68K_BCLR: return "BCLR";
     case NG_M68K_ANDI_TO_SR: return "ANDI_SR";
     default: return "?";
@@ -404,6 +415,18 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                  instr->size == NG_M68K_SIZE_BYTE ? 'B' :
                  (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
                  (unsigned)instr->immediate, instr->reg);
+        break;
+    case NG_M68K_ANDI:
+        if (instr->form == NG_M68K_FORM_AREG_DISP) {
+            snprintf(out, out_size, "ANDI.%c #$%X,($%X,A%u)",
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     (unsigned)instr->immediate,
+                     (unsigned)(uint16_t)instr->displacement,
+                     instr->reg);
+        } else {
+            snprintf(out, out_size, "ANDI");
+        }
         break;
     case NG_M68K_UNKNOWN:
         snprintf(out, out_size, "DC.W $%04X", instr->opcode);
