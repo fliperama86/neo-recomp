@@ -43,7 +43,9 @@ recompiler code.
 
 For now this loads the P-ROM, prints reset vectors, classifies vector target
 regions, extracts the standard `NEO-GEO` cartridge header entry jump, and
-recognizes the first PC-indexed entry dispatch-table pattern.
+recognizes the first PC-indexed entry dispatch-table pattern. Those dispatch
+targets are queued as bounded function candidates and printed with short decode
+previews.
 
 Example real `.neo` smoke output:
 
@@ -62,6 +64,15 @@ entry preview:
     [1] $00000832 (p_rom_fixed)
     [2] $00000836 (p_rom_fixed)
     [3] $00000840 (p_rom_fixed)
+function candidates: 5
+  [00] $000007CC (p_rom_fixed) entry
+  [01] $0000080C (p_rom_fixed)
+  [02] $00000832 (p_rom_fixed)
+  [03] $00000836 (p_rom_fixed)
+  [04] $00000840 (p_rom_fixed)
+function preview $00080C:
+  $00080C: JSR $024E38              ; JSR
+  $000812: DC.W $2039               ; UNKNOWN
 ```
 
 ## Development Style
@@ -131,5 +142,19 @@ The first analysis pass recognizes this narrow dispatch shape:
 `MOVEA.L (d8,PC,Dn.W),An` followed by `JMP (An)`. It is currently only a
 candidate jump-table discovery aid, not proof that a full function boundary has
 been recovered.
+
+## Function Discovery Slice
+
+The first discovery pass is deliberately conservative:
+
+- seed the queue from the cartridge header entry
+- scan a bounded number of instructions per candidate
+- recognize the tested PC-indexed jump-table shape
+- enqueue the first four mapped, unique table targets
+- ignore unmapped and duplicate table targets
+
+This is enough to turn the Metal Slug entry dispatch into five candidate
+addresses. It is not yet a general call graph, and it does not yet follow
+`JSR`, `BSR`, or PC-relative `JMP` / `JSR` forms.
 
 Unknown opcodes are still printed as `DC.W`; they are not executable support.

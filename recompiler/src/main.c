@@ -1,3 +1,4 @@
+#include "function_discovery.h"
 #include "m68k_analyze.h"
 #include "m68k_decode.h"
 #include "m68k_stub.h"
@@ -6,6 +7,8 @@
 
 #include <stdio.h>
 #include <string.h>
+
+#define CLI_MAX_FUNCTION_PREVIEWS 4u
 
 static void print_usage(const char *argv0) {
     fprintf(stderr,
@@ -42,12 +45,16 @@ static void print_dispatch_table(const NgProgramRom *rom,
     }
 }
 
-static void print_decode_preview(const NgProgramRom *rom, uint32_t start_addr) {
-    printf("entry preview:\n");
+static void print_decode_preview(const NgProgramRom *rom,
+                                 const char *label,
+                                 uint32_t start_addr,
+                                 int max_instructions,
+                                 int show_dispatch_tables) {
+    printf("%s:\n", label);
     uint32_t pc = start_addr;
     NgM68kInstr previous;
     int have_previous = 0;
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < max_instructions; ++i) {
         NgM68kInstr instr;
         char text[128];
         if (!ng_m68k_decode(rom, pc, &instr)) {
@@ -57,7 +64,7 @@ static void print_decode_preview(const NgProgramRom *rom, uint32_t start_addr) {
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         printf("  $%06X: %-24s ; %s\n",
                pc & 0xFFFFFFu, text, ng_m68k_mnemonic_name(instr.mnemonic));
-        if (have_previous) {
+        if (show_dispatch_tables && have_previous) {
             NgM68kJumpTablePattern pattern;
             if (ng_m68k_match_pc_index_jump_table(&previous, &instr, &pattern)) {
                 print_dispatch_table(rom, &pattern);
@@ -72,6 +79,30 @@ static void print_decode_preview(const NgProgramRom *rom, uint32_t start_addr) {
         }
         previous = instr;
         have_previous = 1;
+    }
+}
+
+static void print_function_candidates(const NgProgramRom *rom,
+                                      const NgFunctionDiscovery *discovery) {
+    printf("function candidates: %u%s\n",
+           discovery->count,
+           discovery->truncated ? " (truncated)" : "");
+    for (uint32_t i = 0; i < discovery->count; ++i) {
+        uint32_t addr = discovery->addrs[i];
+        printf("  [%02u] $%08X (%s)%s\n",
+               i,
+               addr,
+               ng_address_region_name(ng_address_region(addr)),
+               i == 0 ? " entry" : "");
+    }
+
+    uint32_t previews = 0;
+    for (uint32_t i = 1; i < discovery->count && previews < CLI_MAX_FUNCTION_PREVIEWS; ++i) {
+        char label[64];
+        snprintf(label, sizeof(label), "function preview $%06X",
+                 discovery->addrs[i] & 0xFFFFFFu);
+        print_decode_preview(rom, label, discovery->addrs[i], 6, 0);
+        ++previews;
     }
 }
 
@@ -126,7 +157,12 @@ int main(int argc, char **argv) {
             printf("cartridge header: NEO-GEO, entry=$%08X (%s)\n",
                    cart_entry, ng_address_region_name(ng_address_region(cart_entry)));
             if (ng_program_rom_addr_is_mapped(&rom, cart_entry)) {
-                print_decode_preview(&rom, cart_entry);
+                print_decode_preview(&rom, "entry preview", cart_entry, 16, 1);
+
+                NgFunctionDiscovery discovery;
+                if (ng_function_discover_from_entry(&rom, cart_entry, &discovery)) {
+                    print_function_candidates(&rom, &discovery);
+                }
             } else {
                 printf("entry preview: entry is outside loaded P-ROM image\n");
             }
