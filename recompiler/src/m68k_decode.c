@@ -54,6 +54,13 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->target = ng_program_rom_read32(rom, addr + 2u);
         return 1;
     }
+    if ((op & 0xFFF8u) == 0x4ED0u) {
+        out->mnemonic = NG_M68K_JMP;
+        out->byte_length = 2;
+        out->form = NG_M68K_FORM_AREG_INDIRECT;
+        out->reg = (uint8_t)(op & 7u);
+        return 1;
+    }
     if ((op & 0xFF00u) == 0x6000u) {
         out->mnemonic = NG_M68K_BRA;
         out->target = branch_target(addr, op, &out->byte_length);
@@ -98,6 +105,18 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->byte_length = 6;
         out->reg = (uint8_t)((op >> 9) & 7u);
         out->target = ng_program_rom_read32(rom, addr + 2u);
+        return 1;
+    }
+    if (op == 0x207Bu) {
+        uint16_t ext = ng_program_rom_read16(rom, addr + 2u);
+        out->mnemonic = NG_M68K_MOVEA;
+        out->byte_length = 4;
+        out->size = NG_M68K_SIZE_LONG;
+        out->form = NG_M68K_FORM_PC_INDEX_TO_AREG;
+        out->reg = 0;
+        out->src_reg = (uint8_t)((ext >> 12) & 7u);
+        out->displacement = (int8_t)(ext & 0xFFu);
+        out->target = (uint32_t)((int32_t)(addr + 2u) + (int32_t)out->displacement);
         return 1;
     }
     if (op == 0x08B9u) {
@@ -174,6 +193,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_BSR: return "BSR";
     case NG_M68K_BCC: return "BCC";
     case NG_M68K_LEA: return "LEA";
+    case NG_M68K_MOVEA: return "MOVEA";
     case NG_M68K_MOVEQ: return "MOVEQ";
     case NG_M68K_MOVE: return "MOVE";
     case NG_M68K_ADD: return "ADD";
@@ -191,6 +211,14 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         break;
     case NG_M68K_JMP:
     case NG_M68K_JSR:
+        if (instr->form == NG_M68K_FORM_AREG_INDIRECT) {
+            snprintf(out, out_size, "%s (A%u)",
+                     ng_m68k_mnemonic_name(instr->mnemonic), instr->reg);
+            break;
+        }
+        snprintf(out, out_size, "%s $%06X",
+                 ng_m68k_mnemonic_name(instr->mnemonic), instr->target & 0xFFFFFFu);
+        break;
     case NG_M68K_BRA:
     case NG_M68K_BSR:
         snprintf(out, out_size, "%s $%06X",
@@ -202,6 +230,14 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         break;
     case NG_M68K_LEA:
         snprintf(out, out_size, "LEA $%06X,A%u", instr->target & 0xFFFFFFu, instr->reg);
+        break;
+    case NG_M68K_MOVEA:
+        if (instr->form == NG_M68K_FORM_PC_INDEX_TO_AREG) {
+            snprintf(out, out_size, "MOVEA.L ($%06X,PC,D%u.W),A%u",
+                     instr->target & 0xFFFFFFu, instr->src_reg, instr->reg);
+        } else {
+            snprintf(out, out_size, "MOVEA");
+        }
         break;
     case NG_M68K_MOVEQ:
         snprintf(out, out_size, "MOVEQ #%d,D%u", (int32_t)instr->immediate, instr->reg);

@@ -1,3 +1,4 @@
+#include "m68k_analyze.h"
 #include "m68k_decode.h"
 
 #include <stdio.h>
@@ -97,6 +98,48 @@ int main(void) {
         CHECK(instr.form == NG_M68K_FORM_DREG_TO_DREG);
         CHECK(instr.src_reg == 0);
         CHECK(instr.reg == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x20, 0x7B, 0x00, 0x04 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0x0007F6u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVEA);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.form == NG_M68K_FORM_PC_INDEX_TO_AREG);
+        CHECK(instr.reg == 0);
+        CHECK(instr.src_reg == 0);
+        CHECK(instr.displacement == 4);
+        CHECK(instr.target == 0x0007FCu);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0xD0 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_JMP);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.form == NG_M68K_FORM_AREG_INDIRECT);
+        CHECK(instr.reg == 0);
+    }
+
+    {
+        const unsigned char load_bytes[] = { 0x20, 0x7B, 0x00, 0x04 };
+        const unsigned char jump_bytes[] = { 0x4E, 0xD0 };
+        NgM68kInstr load;
+        NgM68kInstr jump;
+        NgM68kJumpTablePattern pattern;
+        CHECK(decode_one(load_bytes, sizeof(load_bytes), 0x0007F6u, &load));
+        CHECK(decode_one(jump_bytes, sizeof(jump_bytes), 0x0007FAu, &jump));
+        CHECK(ng_m68k_match_pc_index_jump_table(&load, &jump, &pattern));
+        CHECK(pattern.table_addr == 0x0007FCu);
+        CHECK(pattern.index_reg == 0);
+        CHECK(pattern.target_reg == 0);
+        CHECK(pattern.entry_size == 4);
+
+        jump.reg = 1;
+        CHECK(!ng_m68k_match_pc_index_jump_table(&load, &jump, &pattern));
+        jump.reg = 0;
+        jump.mnemonic = NG_M68K_RTS;
+        CHECK(!ng_m68k_match_pc_index_jump_table(&load, &jump, &pattern));
     }
 
     {

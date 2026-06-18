@@ -14,6 +14,7 @@ typedef enum NgM68kMnemonic {
     NG_M68K_BSR,
     NG_M68K_BCC,
     NG_M68K_LEA,
+    NG_M68K_MOVEA,
     NG_M68K_MOVEQ,
     NG_M68K_MOVE,
     NG_M68K_ADD,
@@ -28,6 +29,8 @@ typedef enum NgM68kOperandForm {
     NG_M68K_FORM_IMM_TO_DREG,
     NG_M68K_FORM_ABS_TO_DREG,
     NG_M68K_FORM_DREG_TO_DREG,
+    NG_M68K_FORM_PC_INDEX_TO_AREG,
+    NG_M68K_FORM_AREG_INDIRECT,
 } NgM68kOperandForm;
 
 typedef struct NgM68kInstr {
@@ -43,6 +46,7 @@ typedef struct NgM68kInstr {
     uint32_t target;
     uint32_t immediate;
     uint32_t absolute_addr;
+    int8_t displacement;
 } NgM68kInstr;
 
 int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out);

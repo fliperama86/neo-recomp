@@ -1,3 +1,4 @@
+#include "m68k_analyze.h"
 #include "m68k_decode.h"
 #include "m68k_stub.h"
 #include "neogeo_map.h"
@@ -19,10 +20,34 @@ static void print_vector(const NgProgramRom *rom, int index) {
            index, value, ng_address_region_name(region));
 }
 
+static void print_dispatch_table(const NgProgramRom *rom,
+                                 const NgM68kJumpTablePattern *pattern) {
+    printf("  dispatch table: base=$%06X index=D%u.W target=A%u entry_size=%u\n",
+           pattern->table_addr & 0xFFFFFFu,
+           pattern->index_reg,
+           pattern->target_reg,
+           pattern->entry_size);
+
+    for (uint8_t i = 0; i < 4; ++i) {
+        uint32_t entry_addr = pattern->table_addr + (uint32_t)i * pattern->entry_size;
+        if (!ng_program_rom_addr_is_mapped(rom, entry_addr) ||
+            !ng_program_rom_addr_is_mapped(rom, entry_addr + 3u)) {
+            printf("    [%u] <unmapped>\n", i);
+            break;
+        }
+
+        uint32_t target = ng_program_rom_read32(rom, entry_addr);
+        printf("    [%u] $%08X (%s)\n",
+               i, target, ng_address_region_name(ng_address_region(target)));
+    }
+}
+
 static void print_decode_preview(const NgProgramRom *rom, uint32_t start_addr) {
     printf("entry preview:\n");
     uint32_t pc = start_addr;
-    for (int i = 0; i < 8; ++i) {
+    NgM68kInstr previous;
+    int have_previous = 0;
+    for (int i = 0; i < 16; ++i) {
         NgM68kInstr instr;
         char text[128];
         if (!ng_m68k_decode(rom, pc, &instr)) {
@@ -32,10 +57,21 @@ static void print_decode_preview(const NgProgramRom *rom, uint32_t start_addr) {
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         printf("  $%06X: %-24s ; %s\n",
                pc & 0xFFFFFFu, text, ng_m68k_mnemonic_name(instr.mnemonic));
+        if (have_previous) {
+            NgM68kJumpTablePattern pattern;
+            if (ng_m68k_match_pc_index_jump_table(&previous, &instr, &pattern)) {
+                print_dispatch_table(rom, &pattern);
+            }
+        }
         if (instr.byte_length == 0) {
             break;
         }
         pc += instr.byte_length;
+        if (instr.mnemonic == NG_M68K_JMP || instr.mnemonic == NG_M68K_RTS) {
+            break;
+        }
+        previous = instr;
+        have_previous = 1;
     }
 }
 

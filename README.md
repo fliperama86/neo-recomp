@@ -42,7 +42,8 @@ recompiler code.
 ```
 
 For now this loads the P-ROM, prints reset vectors, classifies vector target
-regions, and extracts the standard `NEO-GEO` cartridge header entry jump.
+regions, extracts the standard `NEO-GEO` cartridge header entry jump, and
+recognizes the first PC-indexed entry dispatch-table pattern.
 
 Example real `.neo` smoke output:
 
@@ -53,6 +54,14 @@ entry preview:
   $0007CC: LEA $0008F4,A0           ; LEA
   $0007D0: MOVE.L A0,$106EA8        ; MOVE
   $0007D6: BCLR #7,$10FD80          ; BCLR
+  ...
+  $0007F6: MOVEA.L ($0007FC,PC,D0.W),A0 ; MOVEA
+  $0007FA: JMP (A0)                 ; JMP
+  dispatch table: base=$0007FC index=D0.W target=A0 entry_size=4
+    [0] $0000080C (p_rom_fixed)
+    [1] $00000832 (p_rom_fixed)
+    [2] $00000836 (p_rom_fixed)
+    [3] $00000840 (p_rom_fixed)
 ```
 
 ## Development Style
@@ -117,5 +126,10 @@ Covered so far:
 - `JMP`
 - `BRA` / `BSR` / `Bcc`
 - `RTS`
+
+The first analysis pass recognizes this narrow dispatch shape:
+`MOVEA.L (d8,PC,Dn.W),An` followed by `JMP (An)`. It is currently only a
+candidate jump-table discovery aid, not proof that a full function boundary has
+been recovered.
 
 Unknown opcodes are still printed as `DC.W`; they are not executable support.
