@@ -107,6 +107,8 @@ Covered by executable generated-C validation:
   - `MOVE.L An,abs`
   - generic `LEA <ea>,An` control-address loads covered so far by PC-relative
     and displacement sources
+  - `MOVEM.W/L` register-list transfers covered so far by long Dn masks to/from
+    address-indirect memory
   - `LINK An,#disp` and `UNLK An`
 - arithmetic/logical:
   - `ADD.W Dn,Dn`
@@ -166,6 +168,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `MOVEM.W/L` decode/emission for register-list memory transfers
+  using generated unrolled register masks, with generated-exec coverage for
+  long Dn saves/restores through address-indirect memory.
 - local: Added data-register shift/rotate decode/emission for arithmetic,
   logical, extend, and pure rotate variants with generated-exec coverage for
   logical shifts.

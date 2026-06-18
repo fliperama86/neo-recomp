@@ -479,6 +479,73 @@ static int emit_movea_generic(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_movem(FILE *out, const NgM68kInstr *instr) {
+    uint16_t mask = (uint16_t)(instr->immediate & 0xFFFFu);
+    const char *read_fn = ng_read_fn_for_size(instr->size);
+    const char *write_fn = ng_write_fn_for_size(instr->size);
+    char addr_expr[256];
+
+    if (instr->dst.mode != NG_M68K_EA_NONE) {
+        if (!emit_ea_address_value(&instr->dst, addr_expr, (unsigned)sizeof(addr_expr))) {
+            return 0;
+        }
+        fprintf(out, "    { uint32_t ng_addr = (uint32_t)(%s);\n", addr_expr);
+        for (uint8_t i = 0; i < 16u; ++i) {
+            if ((mask & (uint16_t)(1u << i)) == 0) {
+                continue;
+            }
+            if (i < 8u) {
+                fprintf(out, "      %s(ng_addr, (%s)(g_ng_m68k.d[%u])); ng_addr += %uu;\n",
+                        write_fn, ng_ctype_for_size(instr->size), i, (unsigned)instr->size);
+            } else {
+                fprintf(out, "      %s(ng_addr, (%s)(g_ng_m68k.a[%u])); ng_addr += %uu;\n",
+                        write_fn, ng_ctype_for_size(instr->size), i - 8u, (unsigned)instr->size);
+            }
+        }
+        fprintf(out, "    }\n");
+        return 1;
+    }
+
+    if (instr->src.mode != NG_M68K_EA_NONE) {
+        int postincrement = instr->src.mode == NG_M68K_EA_APOST;
+        if (postincrement) {
+            snprintf(addr_expr, sizeof(addr_expr), "g_ng_m68k.a[%u]", instr->src.reg);
+        } else if (!emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
+            return 0;
+        }
+        fprintf(out, "    { uint32_t ng_addr = (uint32_t)(%s);\n", addr_expr);
+        for (uint8_t i = 0; i < 16u; ++i) {
+            if ((mask & (uint16_t)(1u << i)) == 0) {
+                continue;
+            }
+            if (i < 8u) {
+                if (instr->size == 4u) {
+                    fprintf(out, "      g_ng_m68k.d[%u] = %s(ng_addr); ng_addr += %uu;\n",
+                            i, read_fn, (unsigned)instr->size);
+                } else {
+                    fprintf(out, "      g_ng_m68k.d[%u] = (uint32_t)(int32_t)(int16_t)%s(ng_addr); ng_addr += %uu;\n",
+                            i, read_fn, (unsigned)instr->size);
+                }
+            } else {
+                if (instr->size == 4u) {
+                    fprintf(out, "      g_ng_m68k.a[%u] = %s(ng_addr); ng_addr += %uu;\n",
+                            i - 8u, read_fn, (unsigned)instr->size);
+                } else {
+                    fprintf(out, "      g_ng_m68k.a[%u] = (uint32_t)(int32_t)(int16_t)%s(ng_addr); ng_addr += %uu;\n",
+                            i - 8u, read_fn, (unsigned)instr->size);
+                }
+            }
+        }
+        if (postincrement) {
+            fprintf(out, "      g_ng_m68k.a[%u] = ng_addr;\n", instr->src.reg);
+        }
+        fprintf(out, "    }\n");
+        return 1;
+    }
+
+    return 0;
+}
+
 static int emit_tst_generic(FILE *out, const NgM68kInstr *instr) {
     char expr[256];
     if (instr->src.mode == NG_M68K_EA_NONE) {
@@ -1380,6 +1447,11 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         if (emit_move_generic(out, instr)) {
+            return 1;
+        }
+        break;
+    case NG_M68K_MOVEM:
+        if (emit_movem(out, instr)) {
             return 1;
         }
         break;

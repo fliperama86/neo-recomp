@@ -706,6 +706,34 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x48, 0xD4, 0x00, 0x03 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVEM);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 4);
+        CHECK(instr.immediate == 0x0003u);
+        CHECK(instr.dst.mode == NG_M68K_EA_AIND);
+        CHECK(instr.dst.reg == 4);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVEM.L #$0003,(A4)") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4C, 0xD4, 0x00, 0x03 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVEM);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 4);
+        CHECK(instr.immediate == 0x0003u);
+        CHECK(instr.src.mode == NG_M68K_EA_AIND);
+        CHECK(instr.src.reg == 4);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVEM.L (A4),#$0003") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x30, 0x85 };
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_MOVE);
