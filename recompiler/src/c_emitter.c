@@ -366,6 +366,47 @@ static int emit_ea_address(FILE *out,
     }
 }
 
+static int emit_ea_address_value(const NgM68kEa *ea,
+                                 char *expr,
+                                 unsigned expr_size) {
+    switch (ea->mode) {
+    case NG_M68K_EA_AIND:
+        snprintf(expr, expr_size, "g_ng_m68k.a[%u]", ea->reg);
+        return 1;
+    case NG_M68K_EA_ADISP:
+        snprintf(expr, expr_size, "(uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d)",
+                 ea->reg, ea->displacement);
+        return 1;
+    case NG_M68K_EA_AINDEX: {
+        char index_expr[64];
+        ng_format_index_expr(ea, index_expr, (unsigned)sizeof(index_expr));
+        snprintf(expr, expr_size, "(uint32_t)(g_ng_m68k.a[%u] + %s + (int32_t)%d)",
+                 ea->reg, index_expr, ea->displacement);
+        return 1;
+    }
+    case NG_M68K_EA_ABS_W:
+    case NG_M68K_EA_ABS_L:
+    case NG_M68K_EA_PC_DISP:
+        snprintf(expr, expr_size, "0x%08Xu", ea->absolute_addr & 0x00FFFFFFu);
+        return 1;
+    case NG_M68K_EA_PC_INDEX: {
+        char index_expr[64];
+        ng_format_index_expr(ea, index_expr, (unsigned)sizeof(index_expr));
+        snprintf(expr, expr_size, "(uint32_t)(0x%08Xu + %s)",
+                 ea->absolute_addr & 0x00FFFFFFu, index_expr);
+        return 1;
+    }
+    case NG_M68K_EA_NONE:
+    case NG_M68K_EA_DREG:
+    case NG_M68K_EA_AREG:
+    case NG_M68K_EA_APOST:
+    case NG_M68K_EA_APRE:
+    case NG_M68K_EA_IMM:
+    default:
+        return 0;
+    }
+}
+
 static void emit_set_nz_for_size(FILE *out, uint8_t size, const char *expr) {
     if (size == 4u) {
         fprintf(out, "    ng_set_nz32((uint32_t)(%s));\n", expr);
@@ -1220,6 +1261,16 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
                 instr->reg, instr->reg, instr->reg);
         fprintf(out, "    ng_set_nz32(g_ng_m68k.d[%u]);\n", instr->reg);
         return 1;
+    case NG_M68K_PEA: {
+        char addr_expr[256];
+        if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
+            fprintf(out, "    g_ng_m68k.a[7] -= 4u;\n");
+            fprintf(out, "    ng68k_write32(g_ng_m68k.a[7], (uint32_t)(%s));\n",
+                    addr_expr);
+            return 1;
+        }
+        break;
+    }
     case NG_M68K_TST:
         if (instr->form == NG_M68K_FORM_ABS) {
             if (instr->size == 4u) {

@@ -146,6 +146,7 @@ Covered by executable generated-C validation:
   - generic `NEG.B/W/L <ea>` and `NOT.B/W/L <ea>` paths covered so far by Dn,
     abs, and postincrement memory destinations
   - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
+  - `PEA <ea>` control-address pushes covered so far by displacement sources
   - `ANDI #imm,SR`
 
 Important caveat: this is not a complete 68000 condition-code model. `V` is only
@@ -154,6 +155,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `PEA <ea>` decode/format/emission on control addressing modes,
+  using a reusable effective-address-value helper and generated-exec stack
+  push validation.
 - local: Added generic `ADD/SUB Dn,<ea>` emission for memory destinations,
   sharing the same single-address RMW path as logical and immediate ops.
 - local: Added generic register/logical binary operations (`OR`, `AND`, `EOR`)

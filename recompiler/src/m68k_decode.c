@@ -289,6 +289,11 @@ static int is_memory_alterable_ea(uint8_t mode, uint8_t reg) {
     return mode >= 2u && !(mode == 7u && reg >= 2u);
 }
 
+static int is_control_ea(uint8_t mode, uint8_t reg) {
+    return mode == 2u || mode == 5u || mode == 6u ||
+           (mode == 7u && reg <= 3u);
+}
+
 static int decode_logic_binary(const NgProgramRom *rom,
                                uint32_t addr,
                                uint16_t op,
@@ -1088,6 +1093,22 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->dst.reg = out->reg;
         return 1;
     }
+    if ((op & 0xFFC0u) == 0x4840u) {
+        uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
+        uint8_t ea_reg = (uint8_t)(op & 7u);
+        if (is_control_ea(ea_mode, ea_reg)) {
+            out->mnemonic = NG_M68K_PEA;
+            out->size = NG_M68K_SIZE_LONG;
+            out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
+                                                        ea_mode, ea_reg,
+                                                        out->size, &out->src));
+            if (out->src.mode == NG_M68K_EA_NONE) {
+                out->mnemonic = NG_M68K_UNKNOWN;
+                out->byte_length = 2;
+            }
+            return 1;
+        }
+    }
     if ((op & 0xFF00u) == 0x4A00u) {
         uint8_t size_code = (uint8_t)((op >> 6) & 3u);
         uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
@@ -1206,6 +1227,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_NOT: return "NOT";
     case NG_M68K_EXT: return "EXT";
     case NG_M68K_SWAP: return "SWAP";
+    case NG_M68K_PEA: return "PEA";
     case NG_M68K_TST: return "TST";
     case NG_M68K_ADDI: return "ADDI";
     case NG_M68K_SUBI: return "SUBI";
@@ -1530,6 +1552,15 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         break;
     case NG_M68K_SWAP:
         snprintf(out, out_size, "SWAP D%u", instr->reg);
+        break;
+    case NG_M68K_PEA:
+        if (instr->src.mode != NG_M68K_EA_NONE) {
+            char src[64];
+            format_ea_operand(&instr->src, instr->size, src, (unsigned)sizeof(src));
+            snprintf(out, out_size, "PEA %s", src);
+        } else {
+            snprintf(out, out_size, "PEA ?");
+        }
         break;
     case NG_M68K_TST:
         if (instr->src.mode != NG_M68K_EA_NONE) {

@@ -1059,6 +1059,20 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x48, 0x68, 0x00, 0x10 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_PEA);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_ADISP);
+        CHECK(instr.src.reg == 0);
+        CHECK(instr.src.displacement == 0x10);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "PEA ($10,A0)") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x4A, 0x39, 0x00, 0x10, 0xFE, 0x80 };
         CHECK(decode_one(bytes, sizeof(bytes), 0x000996u, &instr));
         CHECK(instr.mnemonic == NG_M68K_TST);
