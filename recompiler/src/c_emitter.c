@@ -1321,6 +1321,86 @@ static int emit_shift_rotate_dreg(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_shift_rotate_memory(FILE *out, const NgM68kInstr *instr) {
+    char addr_expr[256];
+    uint32_t value_mask = 0x0000FFFFu;
+    uint32_t sign_mask = 0x00008000u;
+    int is_left = instr->mnemonic == NG_M68K_ASL ||
+                  instr->mnemonic == NG_M68K_LSL ||
+                  instr->mnemonic == NG_M68K_ROXL ||
+                  instr->mnemonic == NG_M68K_ROL;
+    int is_arith = instr->mnemonic == NG_M68K_ASL ||
+                   instr->mnemonic == NG_M68K_ASR;
+    int is_logical = instr->mnemonic == NG_M68K_LSL ||
+                     instr->mnemonic == NG_M68K_LSR;
+    int is_rox = instr->mnemonic == NG_M68K_ROXL ||
+                 instr->mnemonic == NG_M68K_ROXR;
+    int is_rot = instr->mnemonic == NG_M68K_ROL ||
+                 instr->mnemonic == NG_M68K_ROR;
+
+    if (instr->dst.mode == NG_M68K_EA_NONE ||
+        instr->dst.mode == NG_M68K_EA_DREG ||
+        instr->dst.mode == NG_M68K_EA_AREG ||
+        instr->size != 2u) {
+        return 0;
+    }
+    if (!(is_arith || is_logical || is_rox || is_rot)) {
+        return 0;
+    }
+    if (!emit_ea_address(out, instr, &instr->dst, 2u,
+                         addr_expr, (unsigned)sizeof(addr_expr))) {
+        return 0;
+    }
+
+    fprintf(out, "    { uint32_t ng_addr = %s; uint32_t ng_result = ng68k_read16(ng_addr);\n",
+            addr_expr);
+    fprintf(out, "      uint8_t ng_last = 0; uint8_t ng_v = 0; uint8_t ng_x = (g_ng_m68k.sr & NG_CCR_X) ? 1u : 0u;\n");
+    fprintf(out, "      (void)ng_v; (void)ng_x;\n");
+    if (is_left && is_logical) {
+        fprintf(out, "      ng_last = (uint8_t)((ng_result & 0x%08Xu) != 0); ng_result = (ng_result << 1) & 0x%08Xu;\n",
+                sign_mask, value_mask);
+    } else if (!is_left && is_logical) {
+        fprintf(out, "      ng_last = (uint8_t)(ng_result & 1u); ng_result >>= 1;\n");
+    } else if (is_left && is_arith) {
+        fprintf(out, "      { uint32_t ng_old_sign = ng_result & 0x%08Xu; ng_last = (uint8_t)(ng_old_sign != 0); ng_result = (ng_result << 1) & 0x%08Xu; if ((ng_result & 0x%08Xu) != ng_old_sign) ng_v = 1; }\n",
+                sign_mask, value_mask, sign_mask);
+    } else if (!is_left && is_arith) {
+        fprintf(out, "      ng_last = (uint8_t)(ng_result & 1u); ng_result = (ng_result >> 1) | (ng_result & 0x%08Xu);\n",
+                sign_mask);
+    } else if (is_left && is_rox) {
+        fprintf(out, "      ng_last = (uint8_t)((ng_result & 0x%08Xu) != 0); ng_result = ((ng_result << 1) & 0x%08Xu) | ng_x; ng_x = ng_last;\n",
+                sign_mask, value_mask);
+    } else if (!is_left && is_rox) {
+        fprintf(out, "      ng_last = (uint8_t)(ng_result & 1u); ng_result = (ng_result >> 1) | (ng_x ? 0x%08Xu : 0u); ng_x = ng_last;\n",
+                sign_mask);
+    } else if (is_left && is_rot) {
+        fprintf(out, "      ng_last = (uint8_t)((ng_result & 0x%08Xu) != 0); ng_result = ((ng_result << 1) & 0x%08Xu) | ng_last;\n",
+                sign_mask, value_mask);
+    } else {
+        fprintf(out, "      ng_last = (uint8_t)(ng_result & 1u); ng_result = (ng_result >> 1) | (ng_last ? 0x%08Xu : 0u);\n",
+                sign_mask);
+    }
+    fprintf(out, "      ng68k_write16(ng_addr, (uint16_t)(ng_result & 0x%08Xu));\n",
+            value_mask);
+    fprintf(out, "      g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0x%04Xu);\n",
+            is_rot ? 0xFFF0u : 0xFFE0u);
+    fprintf(out, "      if ((ng_result & 0x%08Xu) == 0) g_ng_m68k.sr |= NG_CCR_Z;\n",
+            value_mask);
+    fprintf(out, "      if (ng_result & 0x%08Xu) g_ng_m68k.sr |= NG_CCR_N;\n",
+            sign_mask);
+    fprintf(out, "      if (ng_last) g_ng_m68k.sr |= NG_CCR_C%s;\n",
+            is_rot ? "" : " | NG_CCR_X");
+    if (is_rox) {
+        fprintf(out, "      if (ng_x) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;\n");
+        fprintf(out, "      else g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & (uint16_t)~(NG_CCR_C | NG_CCR_X));\n");
+    }
+    if (is_left && is_arith) {
+        fprintf(out, "      if (ng_v) g_ng_m68k.sr |= NG_CCR_V;\n");
+    }
+    fprintf(out, "    }\n");
+    return 1;
+}
+
 static int emit_alu_ea_to_dreg(FILE *out, const NgM68kInstr *instr) {
     char src_expr[256];
     const char *ctype = ng_ctype_for_size(instr->size);
@@ -1584,6 +1664,9 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
     case NG_M68K_ROXR:
     case NG_M68K_ROL:
     case NG_M68K_ROR:
+        if (emit_shift_rotate_memory(out, instr)) {
+            return 1;
+        }
         if (emit_shift_rotate_dreg(out, instr)) {
             return 1;
         }

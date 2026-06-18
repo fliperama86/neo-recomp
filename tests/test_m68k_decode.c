@@ -740,6 +740,20 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0xE3, 0xF9, 0x00, 0x00, 0x01, 0x8A };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_LSL);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 2);
+        CHECK(instr.immediate == 1u);
+        CHECK(instr.dst.mode == NG_M68K_EA_ABS_L);
+        CHECK(instr.dst.absolute_addr == 0x0000018Au);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "LSL.W $00018A") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0xD1, 0x01 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

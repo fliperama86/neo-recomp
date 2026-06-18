@@ -514,7 +514,10 @@ static int decode_exchange(uint16_t op, NgM68kInstr *out) {
     return 0;
 }
 
-static int decode_shift_rotate(uint16_t op, NgM68kInstr *out) {
+static int decode_shift_rotate(const NgProgramRom *rom,
+                               uint32_t addr,
+                               uint16_t op,
+                               NgM68kInstr *out) {
     uint8_t size_code;
     uint8_t dir_left;
     uint8_t count_is_reg;
@@ -528,7 +531,38 @@ static int decode_shift_rotate(uint16_t op, NgM68kInstr *out) {
 
     size_code = (uint8_t)((op >> 6) & 3u);
     if (size_code == 3u) {
-        return 0;
+        uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
+        uint8_t ea_reg = (uint8_t)(op & 7u);
+        if (!is_memory_alterable_ea(ea_mode, ea_reg)) {
+            return 0;
+        }
+
+        dir_left = (uint8_t)((op >> 8) & 1u);
+        kind = (uint8_t)((op >> 9) & 3u);
+        static const NgM68kMnemonic right_mnemonics[4] = {
+            NG_M68K_ASR,
+            NG_M68K_LSR,
+            NG_M68K_ROXR,
+            NG_M68K_ROR,
+        };
+        static const NgM68kMnemonic left_mnemonics[4] = {
+            NG_M68K_ASL,
+            NG_M68K_LSL,
+            NG_M68K_ROXL,
+            NG_M68K_ROL,
+        };
+
+        out->mnemonic = dir_left ? left_mnemonics[kind] : right_mnemonics[kind];
+        out->size = NG_M68K_SIZE_WORD;
+        out->immediate = 1u;
+        out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
+                                                    ea_mode, ea_reg,
+                                                    out->size, &out->dst));
+        if (out->dst.mode == NG_M68K_EA_NONE) {
+            out->mnemonic = NG_M68K_UNKNOWN;
+            out->byte_length = 2;
+        }
+        return 1;
     }
 
     dir_left = (uint8_t)((op >> 8) & 1u);
@@ -688,7 +722,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
     if (decode_exchange(op, out)) {
         return 1;
     }
-    if (decode_shift_rotate(op, out)) {
+    if (decode_shift_rotate(rom, addr, op, out)) {
         return 1;
     }
     if (decode_multiply(rom, addr, op, out)) {
@@ -2040,7 +2074,12 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
     case NG_M68K_ROXR:
     case NG_M68K_ROL:
     case NG_M68K_ROR:
-        if (instr->src.mode == NG_M68K_EA_DREG) {
+        if (instr->dst.mode != NG_M68K_EA_DREG) {
+            char dst[64];
+            format_ea_operand(&instr->dst, instr->size, dst, (unsigned)sizeof(dst));
+            snprintf(out, out_size, "%s.W %s",
+                     ng_m68k_mnemonic_name(instr->mnemonic), dst);
+        } else if (instr->src.mode == NG_M68K_EA_DREG) {
             snprintf(out, out_size, "%s.%c D%u,D%u",
                      ng_m68k_mnemonic_name(instr->mnemonic),
                      instr->size == NG_M68K_SIZE_BYTE ? 'B' :

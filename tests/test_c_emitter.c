@@ -110,7 +110,7 @@ int main(void) {
     }
 
     {
-        NgProgramRom rom = make_rom(0x174u);
+        NgProgramRom rom = make_rom(0x182u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x41FAu); /* LEA $000008,A0 */
         write16(&rom, 0x02u, 0x0004u);
@@ -276,7 +276,12 @@ int main(void) {
         write16(&rom, 0x16Au, 0xFFFFu);
         write16(&rom, 0x16Cu, 0x40F9u); /* MOVE SR,$00000188 */
         write32(&rom, 0x16Eu, 0x00000188u);
-        write16(&rom, 0x172u, 0x4E75u);
+        write16(&rom, 0x172u, 0x33FCu); /* MOVE.W #$0003,$0000018A */
+        write16(&rom, 0x174u, 0x0003u);
+        write32(&rom, 0x176u, 0x0000018Au);
+        write16(&rom, 0x17Au, 0xE3F9u); /* LSL.W $0000018A */
+        write32(&rom, 0x17Cu, 0x0000018Au);
+        write16(&rom, 0x180u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -467,6 +472,10 @@ int main(void) {
         CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFFFu);") != NULL);
         CHECK(strstr(text, "/* $00016C: MOVE SR,$000188 */") != NULL);
         CHECK(strstr(text, "ng68k_write16(0x00000188u, (uint16_t)(g_ng_m68k.sr));") != NULL);
+        CHECK(strstr(text, "/* $00017A: LSL.W $00018A */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_addr = 0x0000018Au; uint32_t ng_result = ng68k_read16(ng_addr);") != NULL);
+        CHECK(strstr(text, "ng_result = (ng_result << 1) & 0x0000FFFFu;") != NULL);
+        CHECK(strstr(text, "ng68k_write16(ng_addr, (uint16_t)(ng_result & 0x0000FFFFu));") != NULL);
 
         ng_program_rom_free(&rom);
     }

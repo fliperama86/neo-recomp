@@ -161,6 +161,8 @@ Covered by executable generated-C validation:
   - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
   - data-register `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` decode/emission,
     covered so far by generated-exec logical shift pairs
+  - memory `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` word forms, covered so far by
+    an absolute-memory logical shift
   - `PEA <ea>` control-address pushes covered so far by displacement sources
   - `ORI/ANDI/EORI #imm,CCR/SR` immediate status-register operations
 
@@ -170,6 +172,10 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added memory word shift/rotate decode/emission for
+  `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR <ea>`, sharing the generated flag logic
+  shape with data-register shifts and adding generated-exec absolute-memory
+  coverage.
 - local: Generalized immediate status-register operations to cover
   `ORI/ANDI/EORI #imm,CCR/SR`, with generated-exec coverage preserving CCR
   state through the existing SR store/check path.

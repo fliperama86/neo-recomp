@@ -1206,6 +1206,68 @@ static int oracle_exec(const uint8_t *program,
             pc += 2u;
             continue;
         }
+        if ((op & 0xF000u) == 0xE000u && ((op >> 6) & 3u) == 3u) {
+            uint8_t dir_left = (uint8_t)((op >> 8) & 1u);
+            uint8_t kind = (uint8_t)((op >> 9) & 3u);
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint32_t next_pc = pc + 2u;
+            uint32_t addr;
+            uint32_t result;
+            uint32_t mask = 0x0000FFFFu;
+            uint32_t sign_mask = 0x00008000u;
+            uint8_t last = 0;
+            uint8_t v = 0;
+            uint8_t x = (state->sr & CCR_X) ? 1u : 0u;
+
+            if (!oracle_ea_memory_addr(program, size, state, mode, reg,
+                                       2u, &next_pc, &addr)) {
+                return 0;
+            }
+            result = bus_read16(bus, addr);
+            if (kind == 0u && dir_left) {
+                uint32_t old_sign = result & sign_mask;
+                last = (uint8_t)(old_sign != 0);
+                result = (result << 1) & mask;
+                if ((result & sign_mask) != old_sign) v = 1;
+            } else if (kind == 0u) {
+                last = (uint8_t)(result & 1u);
+                result = (result >> 1) | (result & sign_mask);
+            } else if (kind == 1u && dir_left) {
+                last = (uint8_t)((result & sign_mask) != 0);
+                result = (result << 1) & mask;
+            } else if (kind == 1u) {
+                last = (uint8_t)(result & 1u);
+                result >>= 1;
+            } else if (kind == 2u && dir_left) {
+                last = (uint8_t)((result & sign_mask) != 0);
+                result = ((result << 1) & mask) | x;
+                x = last;
+            } else if (kind == 2u) {
+                last = (uint8_t)(result & 1u);
+                result = (result >> 1) | (x ? sign_mask : 0u);
+                x = last;
+            } else if (dir_left) {
+                last = (uint8_t)((result & sign_mask) != 0);
+                result = ((result << 1) & mask) | last;
+            } else {
+                last = (uint8_t)(result & 1u);
+                result = (result >> 1) | (last ? sign_mask : 0u);
+            }
+
+            bus_write16(bus, addr, (uint16_t)(result & mask));
+            state->sr = (uint16_t)(state->sr & (kind == 3u ? 0xFFF0u : 0xFFE0u));
+            if ((result & mask) == 0) state->sr |= CCR_Z;
+            if (result & sign_mask) state->sr |= CCR_N;
+            if (kind == 2u) {
+                if (x) state->sr |= CCR_C | CCR_X;
+            } else if (last) {
+                state->sr |= (uint16_t)(CCR_C | (kind == 3u ? 0u : CCR_X));
+            }
+            if (kind == 0u && dir_left && v) state->sr |= CCR_V;
+            pc = next_pc;
+            continue;
+        }
         if (op == 0x4EB9u) {
             uint32_t target = program_read32(program, size, pc + 2u);
             if (!oracle_exec(program, size, target, state, bus, depth + 1u)) {
@@ -1714,6 +1776,7 @@ int main(void) {
     CHECK(ng68k_read32(0x0180u) == 0x00000034u);
     CHECK(ng68k_read32(0x0184u) == 0x00000012u);
     CHECK(ng68k_read16(0x0188u) == 0x001Bu);
+    CHECK(ng68k_read16(0x018Au) == 0x0006u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);
