@@ -1674,5 +1674,47 @@ int main(void) {
         CHECK(instr.byte_length == 2);
     }
 
+    {
+        const unsigned char bytes[] = { 0x4E, 0x43 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_TRAP);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.immediate == 3u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "TRAP #3") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0x72, 0x27, 0x00 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_STOP);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.immediate == 0x2700u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "STOP #$2700") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0x73 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_RTE);
+        CHECK(instr.byte_length == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "RTE") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4A, 0xFC };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ILLEGAL);
+        CHECK(instr.byte_length == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ILLEGAL") == 0);
+    }
+
     return 0;
 }

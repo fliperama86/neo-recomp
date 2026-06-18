@@ -1778,6 +1778,22 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
     case NG_M68K_NOP:
         fprintf(out, "    /* NOP */\n");
         return 1;
+    case NG_M68K_RESET:
+        fprintf(out, "    /* RESET privileged side effects are host-handled. */\n");
+        return 1;
+    case NG_M68K_STOP:
+        fprintf(out, "    g_ng_m68k.sr = 0x%04Xu;\n", instr->immediate & 0xFFFFu);
+        fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n", instr->addr & 0x00FFFFFFu);
+        fprintf(out, "    return;\n");
+        return 0;
+    case NG_M68K_ILLEGAL:
+    case NG_M68K_TRAP:
+    case NG_M68K_TRAPV:
+    case NG_M68K_RTE:
+    case NG_M68K_RTR:
+        fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n", instr->addr & 0x00FFFFFFu);
+        fprintf(out, "    return;\n");
+        return 0;
     case NG_M68K_RTS:
         fprintf(out, "    return;\n");
         return 0;
@@ -2317,6 +2333,12 @@ static void emit_function_body(FILE *out, const NgProgramRom *rom, uint32_t star
         if (instr.byte_length == 0 ||
             instr.mnemonic == NG_M68K_JMP ||
             instr.mnemonic == NG_M68K_RTS ||
+            instr.mnemonic == NG_M68K_STOP ||
+            instr.mnemonic == NG_M68K_ILLEGAL ||
+            instr.mnemonic == NG_M68K_TRAP ||
+            instr.mnemonic == NG_M68K_TRAPV ||
+            instr.mnemonic == NG_M68K_RTE ||
+            instr.mnemonic == NG_M68K_RTR ||
             instr.mnemonic == NG_M68K_UNKNOWN ||
             instr.mnemonic == NG_M68K_INVALID) {
             break;

@@ -653,6 +653,31 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x08u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x4E70u); /* RESET */
+        write16(&rom, 0x02u, 0x4E43u); /* TRAP #3 */
+        write16(&rom, 0x04u, 0x4E72u); /* STOP #$2700, not reached */
+        write16(&rom, 0x06u, 0x2700u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: RESET */") != NULL);
+        CHECK(strstr(text, "/* RESET privileged side effects are host-handled. */") != NULL);
+        CHECK(strstr(text, "/* $000002: TRAP #3 */") != NULL);
+        CHECK(strstr(text, "ng_log_dispatch_miss(0x00000002u);") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x30u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x08B9u); /* BCLR #7,$0010FD80 */

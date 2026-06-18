@@ -757,12 +757,43 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         return 1;
     }
 
+    if (op == 0x4AFCu) {
+        out->mnemonic = NG_M68K_ILLEGAL;
+        return 1;
+    }
+    if ((op & 0xFFF0u) == 0x4E40u) {
+        out->mnemonic = NG_M68K_TRAP;
+        out->immediate = op & 0x000Fu;
+        return 1;
+    }
+    if (op == 0x4E70u) {
+        out->mnemonic = NG_M68K_RESET;
+        return 1;
+    }
     if (op == 0x4E71u) {
         out->mnemonic = NG_M68K_NOP;
         return 1;
     }
+    if (op == 0x4E72u) {
+        out->mnemonic = NG_M68K_STOP;
+        out->byte_length = 4;
+        out->immediate = ng_program_rom_read16(rom, addr + 2u);
+        return 1;
+    }
+    if (op == 0x4E73u) {
+        out->mnemonic = NG_M68K_RTE;
+        return 1;
+    }
     if (op == 0x4E75u) {
         out->mnemonic = NG_M68K_RTS;
+        return 1;
+    }
+    if (op == 0x4E76u) {
+        out->mnemonic = NG_M68K_TRAPV;
+        return 1;
+    }
+    if (op == 0x4E77u) {
+        out->mnemonic = NG_M68K_RTR;
         return 1;
     }
     if ((op & 0xFFF8u) == 0x4E50u) {
@@ -1751,7 +1782,14 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_INVALID: return "INVALID";
     case NG_M68K_UNKNOWN: return "UNKNOWN";
     case NG_M68K_NOP: return "NOP";
+    case NG_M68K_ILLEGAL: return "ILLEGAL";
+    case NG_M68K_RESET: return "RESET";
+    case NG_M68K_STOP: return "STOP";
     case NG_M68K_RTS: return "RTS";
+    case NG_M68K_RTE: return "RTE";
+    case NG_M68K_RTR: return "RTR";
+    case NG_M68K_TRAP: return "TRAP";
+    case NG_M68K_TRAPV: return "TRAPV";
     case NG_M68K_JMP: return "JMP";
     case NG_M68K_JSR: return "JSR";
     case NG_M68K_LINK: return "LINK";
@@ -1922,7 +1960,18 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
     switch (instr->mnemonic) {
     case NG_M68K_NOP:
     case NG_M68K_RTS:
+    case NG_M68K_RTE:
+    case NG_M68K_RTR:
+    case NG_M68K_RESET:
+    case NG_M68K_TRAPV:
+    case NG_M68K_ILLEGAL:
         snprintf(out, out_size, "%s", ng_m68k_mnemonic_name(instr->mnemonic));
+        break;
+    case NG_M68K_STOP:
+        snprintf(out, out_size, "STOP #$%04X", (unsigned)(instr->immediate & 0xFFFFu));
+        break;
+    case NG_M68K_TRAP:
+        snprintf(out, out_size, "TRAP #%u", (unsigned)(instr->immediate & 0x0Fu));
         break;
     case NG_M68K_JMP:
     case NG_M68K_JSR:

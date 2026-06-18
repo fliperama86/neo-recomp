@@ -88,6 +88,9 @@ Covered by executable generated-C validation:
 
 - control flow: direct and control-EA `JSR`/tail `JMP`, local `BRA`,
   selected `Bcc`
+- system/exception-control decode paths: `TRAP`, `TRAPV`, `ILLEGAL`, `RESET`,
+  `STOP`, `RTE`, and `RTR` are recognized; exception-return/trap side effects
+  currently dispatch-miss rather than emulate full exception frames
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
 - conditional branches: all 68000 `Bcc` condition predicates are emitted;
   generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
@@ -184,6 +187,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added decode/format/emission paths for system/exception-control
+  opcodes (`TRAP`, `TRAPV`, `ILLEGAL`, `RESET`, `STOP`, `RTE`, `RTR`), with
+  generated code terminating into dispatch misses where full exception-frame
+  semantics are still pending.
 - local: Added `CHK.W <ea>,Dn` decode/emission with in-range generated-exec
   coverage and a dispatch miss path for trap cases.
 - local: Added `ABCD`/`SBCD` decode/emission for register and predecrement
