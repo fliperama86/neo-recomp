@@ -772,6 +772,57 @@ static int oracle_exec(const uint8_t *program,
         if ((op & 0xF000u) == 0x8000u ||
             (op & 0xF000u) == 0xB000u ||
             (op & 0xF000u) == 0xC000u) {
+            if (((op & 0xF1F0u) == 0xC100u ||
+                 (op & 0xF1F0u) == 0x8100u) &&
+                (((op >> 3) & 7u) == 0u || ((op >> 3) & 7u) == 1u)) {
+                uint8_t src_reg = (uint8_t)(op & 7u);
+                uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
+                uint8_t mem_form = (uint8_t)(((op >> 3) & 7u) == 1u);
+                uint8_t is_sub = (uint8_t)((op & 0xF000u) == 0x8000u);
+                uint8_t x = (state->sr & CCR_X) ? 1u : 0u;
+                uint8_t src;
+                uint8_t dst;
+                uint8_t src_dec;
+                uint8_t dst_dec;
+                uint8_t result_dec;
+                uint8_t result;
+                uint8_t carry;
+
+                if (mem_form) {
+                    uint8_t src_step = src_reg == 7u ? 2u : 1u;
+                    uint8_t dst_step = dst_reg == 7u ? 2u : 1u;
+                    state->a[src_reg] -= src_step;
+                    state->a[dst_reg] -= dst_step;
+                    src = bus_read8(bus, state->a[src_reg]);
+                    dst = bus_read8(bus, state->a[dst_reg]);
+                } else {
+                    src = (uint8_t)(state->d[src_reg] & 0xFFu);
+                    dst = (uint8_t)(state->d[dst_reg] & 0xFFu);
+                }
+                src_dec = (uint8_t)(((src >> 4) & 0x0Fu) * 10u + (src & 0x0Fu));
+                dst_dec = (uint8_t)(((dst >> 4) & 0x0Fu) * 10u + (dst & 0x0Fu));
+                if (is_sub) {
+                    uint16_t src_full = (uint16_t)src_dec + (uint16_t)x;
+                    carry = (uint8_t)(src_full > dst_dec);
+                    result_dec = (uint8_t)((100u + dst_dec - src_full) % 100u);
+                } else {
+                    uint16_t sum = (uint16_t)dst_dec + (uint16_t)src_dec + (uint16_t)x;
+                    carry = (uint8_t)(sum > 99u);
+                    result_dec = (uint8_t)(sum % 100u);
+                }
+                result = (uint8_t)(((result_dec / 10u) << 4) | (result_dec % 10u));
+                if (mem_form) {
+                    bus_write8(bus, state->a[dst_reg], result);
+                } else {
+                    state->d[dst_reg] = (state->d[dst_reg] & 0xFFFFFF00u) | result;
+                }
+                state->sr = (uint16_t)(state->sr & 0xFFE4u);
+                if (result != 0) state->sr = (uint16_t)(state->sr & (uint16_t)~CCR_Z);
+                if (result & 0x80u) state->sr |= CCR_N;
+                if (carry) state->sr |= CCR_C | CCR_X;
+                pc += 2u;
+                continue;
+            }
             if ((op & 0xF138u) == 0xB108u && ((op >> 6) & 3u) != 3u) {
                 uint8_t size_code = (uint8_t)((op >> 6) & 3u);
                 uint8_t bytes = size_code == 2u ? 4u : (size_code == 1u ? 2u : 1u);
@@ -1935,6 +1986,8 @@ int main(void) {
     CHECK(ng68k_read8(0x018Du) == 0x81u);
     CHECK(ng68k_read16(0x0192u) == 0x0004u);
     CHECK(ng68k_read8(0x0194u) == 0x54u);
+    CHECK(ng68k_read8(0x0195u) == 0x99u);
+    CHECK(ng68k_read8(0x0196u) == 0x38u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

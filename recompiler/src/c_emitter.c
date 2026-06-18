@@ -882,6 +882,56 @@ static int emit_addsubx(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_abcd_sbcd(FILE *out, const NgM68kInstr *instr) {
+    int is_sub = instr->mnemonic == NG_M68K_SBCD;
+
+    if (instr->mnemonic != NG_M68K_ABCD &&
+        instr->mnemonic != NG_M68K_SBCD) {
+        return 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_DREG &&
+        instr->dst.mode == NG_M68K_EA_DREG) {
+        fprintf(out,
+                "    { uint8_t ng_src = (uint8_t)(g_ng_m68k.d[%u] & 0xFFu); uint8_t ng_dst = (uint8_t)(g_ng_m68k.d[%u] & 0xFFu); uint8_t ng_x = (g_ng_m68k.sr & NG_CCR_X) ? 1u : 0u;\n",
+                instr->src.reg, instr->dst.reg);
+    } else if (instr->src.mode == NG_M68K_EA_APRE &&
+               instr->dst.mode == NG_M68K_EA_APRE) {
+        uint8_t src_step = ng_ea_step_bytes(&instr->src, 1u);
+        uint8_t dst_step = ng_ea_step_bytes(&instr->dst, 1u);
+        fprintf(out,
+                "    { g_ng_m68k.a[%u] -= %uu; uint32_t ng_src_addr = g_ng_m68k.a[%u]; g_ng_m68k.a[%u] -= %uu; uint32_t ng_dst_addr = g_ng_m68k.a[%u];\n",
+                instr->src.reg, (unsigned)src_step, instr->src.reg,
+                instr->dst.reg, (unsigned)dst_step, instr->dst.reg);
+        fprintf(out,
+                "      uint8_t ng_src = ng68k_read8(ng_src_addr); uint8_t ng_dst = ng68k_read8(ng_dst_addr); uint8_t ng_x = (g_ng_m68k.sr & NG_CCR_X) ? 1u : 0u;\n");
+    } else {
+        return 0;
+    }
+
+    fprintf(out, "      uint8_t ng_src_dec = (uint8_t)(((ng_src >> 4) & 0x0Fu) * 10u + (ng_src & 0x0Fu));\n");
+    fprintf(out, "      uint8_t ng_dst_dec = (uint8_t)(((ng_dst >> 4) & 0x0Fu) * 10u + (ng_dst & 0x0Fu));\n");
+    if (is_sub) {
+        fprintf(out, "      uint16_t ng_src_full = (uint16_t)ng_src_dec + (uint16_t)ng_x; uint8_t ng_borrow = (uint8_t)(ng_src_full > ng_dst_dec); uint8_t ng_result_dec = (uint8_t)((100u + ng_dst_dec - ng_src_full) %% 100u);\n");
+    } else {
+        fprintf(out, "      uint16_t ng_sum = (uint16_t)ng_dst_dec + (uint16_t)ng_src_dec + (uint16_t)ng_x; uint8_t ng_borrow = (uint8_t)(ng_sum > 99u); uint8_t ng_result_dec = (uint8_t)(ng_sum %% 100u);\n");
+    }
+    fprintf(out, "      uint8_t ng_result = (uint8_t)(((ng_result_dec / 10u) << 4) | (ng_result_dec %% 10u));\n");
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        fprintf(out, "      g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFFFF00u) | (uint32_t)ng_result;\n",
+                instr->dst.reg, instr->dst.reg);
+    } else {
+        fprintf(out, "      ng68k_write8(ng_dst_addr, ng_result);\n");
+    }
+    fprintf(out, "      uint16_t ng_sr = (uint16_t)(g_ng_m68k.sr & 0xFFE4u);\n");
+    fprintf(out, "      if (ng_result != 0) ng_sr = (uint16_t)(ng_sr & (uint16_t)~NG_CCR_Z);\n");
+    fprintf(out, "      if (ng_result & 0x80u) ng_sr |= NG_CCR_N;\n");
+    fprintf(out, "      if (ng_borrow) ng_sr |= NG_CCR_C | NG_CCR_X;\n");
+    fprintf(out, "      g_ng_m68k.sr = ng_sr;\n");
+    fprintf(out, "    }\n");
+    return 1;
+}
+
 static int emit_logical_imm_generic(FILE *out, const NgM68kInstr *instr) {
     const char *ctype = ng_ctype_for_size(instr->size);
     const char *read_fn = ng_read_fn_for_size(instr->size);
@@ -1924,6 +1974,12 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
     case NG_M68K_ADDX:
     case NG_M68K_SUBX:
         if (emit_addsubx(out, instr)) {
+            return 1;
+        }
+        break;
+    case NG_M68K_ABCD:
+    case NG_M68K_SBCD:
+        if (emit_abcd_sbcd(out, instr)) {
             return 1;
         }
         break;

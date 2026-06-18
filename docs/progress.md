@@ -136,6 +136,8 @@ Covered by executable generated-C validation:
     comparisons
   - `ADDX/SUBX.B/W/L` register and predecrement-memory forms, covered so far
     by generated-exec byte add-extend and word subtract-extend paths
+  - `ABCD/SBCD` register and predecrement-memory BCD extend forms, covered so
+    far by generated-exec register BCD arithmetic
   - generic `OR.B/W/L <ea>,Dn` and `AND.B/W/L <ea>,Dn` paths covered so far
     by data-register sources
   - generic `OR.B/W/L Dn,<ea>`, `AND.B/W/L Dn,<ea>`, and
@@ -181,6 +183,8 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `ABCD`/`SBCD` decode/emission for register and predecrement
+  memory forms, including generated-exec BCD arithmetic coverage.
 - local: Added `NBCD <ea>` decode/emission with BCD negate and extend-aware
   status updates, including generated-exec absolute-memory coverage.
 - local: Generalized extend arithmetic to `ADDX/SUBX.B/W/L` for data-register

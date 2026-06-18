@@ -1384,6 +1384,30 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
             return 1;
         }
     }
+    if (((op & 0xF1F0u) == 0xC100u ||
+         (op & 0xF1F0u) == 0x8100u) &&
+        (((op >> 3) & 7u) == 0u || ((op >> 3) & 7u) == 1u)) {
+        uint8_t mem_form = (uint8_t)(((op >> 3) & 7u) == 1u);
+        out->mnemonic = ((op & 0xF000u) == 0xC000u) ?
+            NG_M68K_ABCD : NG_M68K_SBCD;
+        out->size = NG_M68K_SIZE_BYTE;
+        out->byte_length = 2;
+        if (mem_form) {
+            out->src.mode = NG_M68K_EA_APRE;
+            out->src.reg = (uint8_t)(op & 7u);
+            out->dst.mode = NG_M68K_EA_APRE;
+            out->dst.reg = (uint8_t)((op >> 9) & 7u);
+        } else {
+            out->form = NG_M68K_FORM_DREG_TO_DREG;
+            out->src.mode = NG_M68K_EA_DREG;
+            out->src.reg = (uint8_t)(op & 7u);
+            out->dst.mode = NG_M68K_EA_DREG;
+            out->dst.reg = (uint8_t)((op >> 9) & 7u);
+        }
+        out->src_reg = (uint8_t)(op & 7u);
+        out->reg = (uint8_t)((op >> 9) & 7u);
+        return 1;
+    }
     if (op == 0xD040u) {
         out->mnemonic = NG_M68K_ADD;
         out->byte_length = 2;
@@ -1731,10 +1755,12 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_ADDA: return "ADDA";
     case NG_M68K_ADDQ: return "ADDQ";
     case NG_M68K_ADDX: return "ADDX";
+    case NG_M68K_ABCD: return "ABCD";
     case NG_M68K_SUB: return "SUB";
     case NG_M68K_SUBA: return "SUBA";
     case NG_M68K_SUBQ: return "SUBQ";
     case NG_M68K_SUBX: return "SUBX";
+    case NG_M68K_SBCD: return "SBCD";
     case NG_M68K_CMP: return "CMP";
     case NG_M68K_CMPA: return "CMPA";
     case NG_M68K_CMPM: return "CMPM";
@@ -2180,6 +2206,8 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         break;
     case NG_M68K_ADDX:
     case NG_M68K_SUBX:
+    case NG_M68K_ABCD:
+    case NG_M68K_SBCD:
         if (instr->src.mode == NG_M68K_EA_APRE &&
             instr->dst.mode == NG_M68K_EA_APRE) {
             snprintf(out, out_size, "%s.%c -(A%u),-(A%u)",
