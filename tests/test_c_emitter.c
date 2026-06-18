@@ -110,7 +110,7 @@ int main(void) {
     }
 
     {
-        NgProgramRom rom = make_rom(0x140u);
+        NgProgramRom rom = make_rom(0x144u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x41FAu); /* LEA $000008,A0 */
         write16(&rom, 0x02u, 0x0004u);
@@ -252,7 +252,9 @@ int main(void) {
         write16(&rom, 0x138u, 0x7EF6u); /* MOVEQ #-10,D7 */
         write16(&rom, 0x13Au, 0x8FFCu); /* DIVS.W #-2,D7 */
         write16(&rom, 0x13Cu, 0xFFFEu);
-        write16(&rom, 0x13Eu, 0x4E75u);
+        write16(&rom, 0x13Eu, 0xE34Fu); /* LSL.W #1,D7 */
+        write16(&rom, 0x140u, 0xE24Fu); /* LSR.W #1,D7 */
+        write16(&rom, 0x142u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -421,6 +423,8 @@ int main(void) {
         CHECK(strstr(text, "uint32_t ng_dividend = g_ng_m68k.d[7]; uint32_t ng_quotient = ng_dividend / ng_divisor;") != NULL);
         CHECK(strstr(text, "/* $00013A: DIVS.W #$FFFE,D7 */") != NULL);
         CHECK(strstr(text, "int32_t ng_dividend = (int32_t)g_ng_m68k.d[7]; int32_t ng_quotient = ng_dividend / ng_divisor;") != NULL);
+        CHECK(strstr(text, "/* $00013E: LSL.W #1,D7 */") != NULL);
+        CHECK(strstr(text, "uint8_t ng_count = 1u; uint32_t ng_result = g_ng_m68k.d[7] & 0x0000FFFFu;") != NULL);
 
         ng_program_rom_free(&rom);
     }

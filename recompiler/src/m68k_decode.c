@@ -514,6 +514,58 @@ static int decode_exchange(uint16_t op, NgM68kInstr *out) {
     return 0;
 }
 
+static int decode_shift_rotate(uint16_t op, NgM68kInstr *out) {
+    uint8_t size_code;
+    uint8_t dir_left;
+    uint8_t count_is_reg;
+    uint8_t kind;
+    uint8_t dst_reg;
+    uint8_t count_field;
+
+    if ((op & 0xF000u) != 0xE000u) {
+        return 0;
+    }
+
+    size_code = (uint8_t)((op >> 6) & 3u);
+    if (size_code == 3u) {
+        return 0;
+    }
+
+    dir_left = (uint8_t)((op >> 8) & 1u);
+    count_is_reg = (uint8_t)((op >> 5) & 1u);
+    kind = (uint8_t)((op >> 3) & 3u);
+    dst_reg = (uint8_t)(op & 7u);
+    count_field = (uint8_t)((op >> 9) & 7u);
+
+    static const NgM68kMnemonic right_mnemonics[4] = {
+        NG_M68K_ASR,
+        NG_M68K_LSR,
+        NG_M68K_ROXR,
+        NG_M68K_ROR,
+    };
+    static const NgM68kMnemonic left_mnemonics[4] = {
+        NG_M68K_ASL,
+        NG_M68K_LSL,
+        NG_M68K_ROXL,
+        NG_M68K_ROL,
+    };
+
+    out->mnemonic = dir_left ? left_mnemonics[kind] : right_mnemonics[kind];
+    out->size = size_from_opcode_bits(size_code);
+    out->byte_length = 2;
+    out->dst.mode = NG_M68K_EA_DREG;
+    out->dst.reg = dst_reg;
+    out->reg = dst_reg;
+    if (count_is_reg) {
+        out->src.mode = NG_M68K_EA_DREG;
+        out->src.reg = count_field;
+        out->src_reg = count_field;
+    } else {
+        out->immediate = count_field == 0u ? 8u : count_field;
+    }
+    return 1;
+}
+
 static int decode_alu_ea_to_dreg(const NgProgramRom *rom,
                                  uint32_t addr,
                                  uint16_t op,
@@ -591,6 +643,9 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         return 1;
     }
     if (decode_exchange(op, out)) {
+        return 1;
+    }
+    if (decode_shift_rotate(op, out)) {
         return 1;
     }
     if (decode_multiply(rom, addr, op, out)) {
@@ -1402,6 +1457,14 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_NOT: return "NOT";
     case NG_M68K_EXT: return "EXT";
     case NG_M68K_SWAP: return "SWAP";
+    case NG_M68K_ASL: return "ASL";
+    case NG_M68K_ASR: return "ASR";
+    case NG_M68K_LSL: return "LSL";
+    case NG_M68K_LSR: return "LSR";
+    case NG_M68K_ROXL: return "ROXL";
+    case NG_M68K_ROXR: return "ROXR";
+    case NG_M68K_ROL: return "ROL";
+    case NG_M68K_ROR: return "ROR";
     case NG_M68K_PEA: return "PEA";
     case NG_M68K_TST: return "TST";
     case NG_M68K_ADDI: return "ADDI";
@@ -1778,6 +1841,28 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         break;
     case NG_M68K_SWAP:
         snprintf(out, out_size, "SWAP D%u", instr->reg);
+        break;
+    case NG_M68K_ASL:
+    case NG_M68K_ASR:
+    case NG_M68K_LSL:
+    case NG_M68K_LSR:
+    case NG_M68K_ROXL:
+    case NG_M68K_ROXR:
+    case NG_M68K_ROL:
+    case NG_M68K_ROR:
+        if (instr->src.mode == NG_M68K_EA_DREG) {
+            snprintf(out, out_size, "%s.%c D%u,D%u",
+                     ng_m68k_mnemonic_name(instr->mnemonic),
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     instr->src.reg, instr->dst.reg);
+        } else {
+            snprintf(out, out_size, "%s.%c #%u,D%u",
+                     ng_m68k_mnemonic_name(instr->mnemonic),
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     (unsigned)instr->immediate, instr->dst.reg);
+        }
         break;
     case NG_M68K_PEA:
         if (instr->src.mode != NG_M68K_EA_NONE) {

@@ -1117,6 +1117,72 @@ static int oracle_exec(const uint8_t *program,
             pc = take ? (uint32_t)((int32_t)next_pc + (int32_t)displacement) : next_pc;
             continue;
         }
+        if ((op & 0xF000u) == 0xE000u && ((op >> 6) & 3u) != 3u) {
+            uint8_t count_field = (uint8_t)((op >> 9) & 7u);
+            uint8_t dir_left = (uint8_t)((op >> 8) & 1u);
+            uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+            uint8_t count_is_reg = (uint8_t)((op >> 5) & 1u);
+            uint8_t kind = (uint8_t)((op >> 3) & 3u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint8_t bytes = size_code == 2u ? 4u : (size_code == 1u ? 2u : 1u);
+            uint8_t bits = (uint8_t)(bytes * 8u);
+            uint32_t mask = oracle_value_mask(bytes);
+            uint32_t sign_mask = oracle_sign_mask(bytes);
+            uint8_t count = count_is_reg ? (uint8_t)(state->d[count_field] & 0x3Fu) :
+                                           (uint8_t)(count_field == 0u ? 8u : count_field);
+            uint32_t result = state->d[reg] & mask;
+
+            if (count != 0u) {
+                uint8_t last = 0;
+                uint8_t v = 0;
+                uint8_t x = (state->sr & CCR_X) ? 1u : 0u;
+                for (uint8_t i = 0; i < count; ++i) {
+                    if (kind == 0u && dir_left) {
+                        uint32_t old_sign = result & sign_mask;
+                        last = (uint8_t)(old_sign != 0);
+                        result = (result << 1) & mask;
+                        if ((result & sign_mask) != old_sign) v = 1;
+                    } else if (kind == 0u) {
+                        last = (uint8_t)(result & 1u);
+                        result = (result >> 1) | (result & sign_mask);
+                    } else if (kind == 1u && dir_left) {
+                        last = (uint8_t)((result & sign_mask) != 0);
+                        result = (result << 1) & mask;
+                    } else if (kind == 1u) {
+                        last = (uint8_t)(result & 1u);
+                        result >>= 1;
+                    } else if (kind == 2u && dir_left) {
+                        last = (uint8_t)((result & sign_mask) != 0);
+                        result = ((result << 1) & mask) | x;
+                        x = last;
+                    } else if (kind == 2u) {
+                        last = (uint8_t)(result & 1u);
+                        result = (result >> 1) | (x ? sign_mask : 0u);
+                        x = last;
+                    } else if (dir_left) {
+                        last = (uint8_t)((result & sign_mask) != 0);
+                        result = ((result << 1) & mask) | last;
+                    } else {
+                        last = (uint8_t)(result & 1u);
+                        result = (result >> 1) | (last ? sign_mask : 0u);
+                    }
+                }
+
+                state->sr = (uint16_t)(state->sr & (kind == 3u ? 0xFFF0u : 0xFFE0u));
+                if ((result & mask) == 0) state->sr |= CCR_Z;
+                if (result & sign_mask) state->sr |= CCR_N;
+                if (kind == 2u) {
+                    if (x) state->sr |= CCR_C | CCR_X;
+                } else if (last) {
+                    state->sr |= (uint16_t)(CCR_C | (kind == 3u ? 0u : CCR_X));
+                }
+                if (kind == 0u && dir_left && v) state->sr |= CCR_V;
+                state->d[reg] = (state->d[reg] & ~mask) | (result & mask);
+            }
+            (void)bits;
+            pc += 2u;
+            continue;
+        }
         if (op == 0x4EB9u) {
             uint32_t target = program_read32(program, size, pc + 2u);
             if (!oracle_exec(program, size, target, state, bus, depth + 1u)) {

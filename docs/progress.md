@@ -155,6 +155,8 @@ Covered by executable generated-C validation:
   - generic `NEG.B/W/L <ea>` and `NOT.B/W/L <ea>` paths covered so far by Dn,
     abs, and postincrement memory destinations
   - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
+  - data-register `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` decode/emission,
+    covered so far by generated-exec logical shift pairs
   - `PEA <ea>` control-address pushes covered so far by displacement sources
   - `ANDI #imm,SR`
 
@@ -164,6 +166,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added data-register shift/rotate decode/emission for arithmetic,
+  logical, extend, and pure rotate variants with generated-exec coverage for
+  logical shifts.
 - local: Added signed/unsigned 32-by-16 divide (`DIVS`/`DIVU`) over shared EA
   reads with generated-exec coverage for immediate operands and quotient flags.
 - local: Generalized `LEA <ea>,An` onto the reusable effective-address-value

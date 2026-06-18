@@ -647,6 +647,35 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0xE3, 0x4F };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_LSL);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.immediate == 1u);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 7);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "LSL.W #1,D7") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xE2, 0x6F };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_LSR);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 7);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "LSR.W D1,D7") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0xD1, 0x01 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
