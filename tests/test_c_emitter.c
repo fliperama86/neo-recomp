@@ -182,7 +182,11 @@ int main(void) {
         write16(&rom, 0x9Eu, 0x00F0u);
         write16(&rom, 0xA0u, 0x0A18u); /* EORI.B #$0F,(A0)+ */
         write16(&rom, 0xA2u, 0x000Fu);
-        write16(&rom, 0xA4u, 0x4E75u);
+        write16(&rom, 0xA4u, 0x0642u); /* ADDI.W #$0010,D2 */
+        write16(&rom, 0xA6u, 0x0010u);
+        write16(&rom, 0xA8u, 0x0418u); /* SUBI.B #$01,(A0)+ */
+        write16(&rom, 0xAAu, 0x0001u);
+        write16(&rom, 0xACu, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -274,6 +278,12 @@ int main(void) {
         CHECK(strstr(text, "uint32_t ng_addr_0000A0 = g_ng_m68k.a[0];") != NULL);
         CHECK(strstr(text, "uint8_t ng_value = ng68k_read8(ng_addr_0000A0); uint8_t ng_result = (uint8_t)(ng_value ^ 0x0Fu);") != NULL);
         CHECK(strstr(text, "ng68k_write8(ng_addr_0000A0, ng_result);") != NULL);
+        CHECK(strstr(text, "/* $0000A4: ADDI.W #$10,D2 */") != NULL);
+        CHECK(strstr(text, "{ uint16_t ng_src = (uint16_t)(0x0010u); uint16_t ng_dst = (uint16_t)((uint16_t)(g_ng_m68k.d[2] & 0xFFFFu)); uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src; uint16_t ng_result = (uint16_t)ng_full;") != NULL);
+        CHECK(strstr(text, "/* $0000A8: SUBI.B #$1,(A0)+ */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_addr_0000A8 = g_ng_m68k.a[0];") != NULL);
+        CHECK(strstr(text, "{ uint8_t ng_src = (uint8_t)(0x01u); uint8_t ng_dst = ng68k_read8(ng_addr_0000A8); uint8_t ng_result = (uint8_t)(ng_dst - ng_src);") != NULL);
+        CHECK(strstr(text, "ng68k_write8(ng_addr_0000A8, ng_result);") != NULL);
 
         ng_program_rom_free(&rom);
     }

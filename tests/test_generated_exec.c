@@ -473,6 +473,61 @@ static int oracle_exec(const uint8_t *program,
             pc = next_pc;
             continue;
         }
+        if ((op & 0xFF00u) == 0x0400u ||
+            (op & 0xFF00u) == 0x0600u) {
+            uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint8_t bytes = size_code == 2u ? 4u : (size_code == 1u ? 2u : 1u);
+            uint32_t mask = oracle_value_mask(bytes);
+            uint32_t sign_mask = oracle_sign_mask(bytes);
+            uint32_t next_pc = pc + 2u;
+            uint32_t src;
+            uint32_t dst;
+            uint32_t result;
+            uint8_t is_add = (uint8_t)((op & 0xFF00u) == 0x0600u);
+
+            if (size_code == 3u || mode == 1u ||
+                (mode == 7u && reg >= 2u)) {
+                return 0;
+            }
+            if (bytes == 4u) {
+                src = program_read32(program, size, next_pc);
+                next_pc += 4u;
+            } else {
+                src = program_read16(program, size, next_pc);
+                next_pc += 2u;
+            }
+            src &= mask;
+            if (mode == 0u) {
+                dst = state->d[reg] & mask;
+                result = is_add ? ((dst + src) & mask) : ((dst - src) & mask);
+                state->d[reg] = (state->d[reg] & ~mask) | result;
+            } else {
+                uint32_t addr;
+                if (!oracle_ea_memory_addr(program, size, state, mode, reg,
+                                           bytes, &next_pc, &addr)) {
+                    return 0;
+                }
+                dst = bus_read_size(bus, addr, bytes) & mask;
+                result = is_add ? ((dst + src) & mask) : ((dst - src) & mask);
+                bus_write_size(bus, addr, result, bytes);
+            }
+
+            state->sr = (uint16_t)(state->sr & 0xFFE0u);
+            if (result == 0) state->sr |= CCR_Z;
+            if (result & sign_mask) state->sr |= CCR_N;
+            if (is_add) {
+                uint64_t full = (uint64_t)dst + (uint64_t)src;
+                if (full > mask) state->sr |= CCR_C | CCR_X;
+                if (((~(dst ^ src) & (dst ^ result)) & sign_mask) != 0) state->sr |= CCR_V;
+            } else {
+                if (src > dst) state->sr |= CCR_C | CCR_X;
+                if (((dst ^ src) & (dst ^ result) & sign_mask) != 0) state->sr |= CCR_V;
+            }
+            pc = next_pc;
+            continue;
+        }
         if (((op & 0xF000u) == 0xD000u ||
              (op & 0xF000u) == 0x9000u ||
              (op & 0xF000u) == 0xB000u) &&
@@ -904,6 +959,7 @@ int main(void) {
     bus_write8(expected_bus, 0x0125u, 0x3Fu);
     bus_write8(expected_bus, 0x0126u, 0x10u);
     bus_write8(expected_bus, 0x0127u, 0x30u);
+    bus_write8(expected_bus, 0x0128u, 0x20u);
     CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0, &expected_state, expected_bus, 0));
 
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
@@ -914,6 +970,7 @@ int main(void) {
     ng68k_write8(0x0125u, 0x3Fu);
     ng68k_write8(0x0126u, 0x10u);
     ng68k_write8(0x0127u, 0x30u);
+    ng68k_write8(0x0128u, 0x20u);
     g_dispatch_miss_count = 0;
     g_last_dispatch_miss = 0;
 
@@ -925,12 +982,12 @@ int main(void) {
     CHECK(g_ng_m68k.sr == expected_state.sr);
     CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
     CHECK(g_ng_m68k.d[0] == 0u);
-    CHECK((g_ng_m68k.d[2] & 0xFFFFu) == 0x00F1u);
+    CHECK((g_ng_m68k.d[2] & 0xFFFFu) == 0x0101u);
     CHECK((g_ng_m68k.d[3] & 0xFFu) == 0x00u);
     CHECK((g_ng_m68k.d[4] & 0xFFu) == 0x0Eu);
     CHECK((g_ng_m68k.d[5] & 0xFFFFu) == 0x1357u);
     CHECK((g_ng_m68k.d[6] & 0xFFFFu) == 0x1357u);
-    CHECK(g_ng_m68k.a[0] == 0x00000128u);
+    CHECK(g_ng_m68k.a[0] == 0x00000129u);
     CHECK(g_ng_m68k.a[1] == 0x00000125u);
     CHECK(ng68k_read16(0x0068u) == 0x0000u);
     CHECK(ng68k_read16(0x00ACu) == 0x0000u);
@@ -939,6 +996,7 @@ int main(void) {
     CHECK(ng68k_read8(0x0125u) == 0x0Fu);
     CHECK(ng68k_read8(0x0126u) == 0x0Fu);
     CHECK(ng68k_read8(0x0127u) == 0x3Fu);
+    CHECK(ng68k_read8(0x0128u) == 0x1Fu);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

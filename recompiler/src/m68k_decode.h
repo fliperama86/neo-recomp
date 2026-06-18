@@ -25,6 +25,8 @@ typedef enum NgM68kMnemonic {
     NG_M68K_CMP,
     NG_M68K_CLR,
     NG_M68K_TST,
+    NG_M68K_ADDI,
+    NG_M68K_SUBI,
     NG_M68K_CMPI,
     NG_M68K_ORI,
     NG_M68K_ANDI,

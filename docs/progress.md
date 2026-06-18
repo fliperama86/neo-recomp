@@ -105,8 +105,11 @@ Covered by executable generated-C validation:
 - arithmetic/logical:
   - `ADD.W Dn,Dn`
   - generic `ADD.B/W/L <ea>,Dn` paths covered so far by Dn reads
+  - generic `ADDI.B/W/L #imm,<ea>` paths covered so far by Dn destinations
   - generic `ADDQ.B/W/L #imm,<ea>` paths covered so far by Dn destinations
   - generic `SUB.B/W/L <ea>,Dn` paths covered so far by Dn reads
+  - generic `SUBI.B/W/L #imm,<ea>` paths covered so far by postincrement
+    memory destinations
   - generic `SUBQ.B/W/L #imm,<ea>` paths covered so far by Dn and
     postincrement memory destinations
   - generic `CMP.B/W/L <ea>,Dn` paths covered so far by Dn and abs reads
@@ -136,6 +139,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized `ADDI/SUBI #imm,<ea>` using the shared arithmetic RMW
+  path and generated-exec coverage for Dn and postincrement memory targets.
 - local: Reused the logical-immediate RMW path for `ORI/EORI #imm,<ea>` and
   raised the generated-exec decode window to keep the growing fixture covered.
 - local: Generalized `ADDQ/SUBQ #imm,<ea>` decode/emission with shared
