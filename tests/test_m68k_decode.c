@@ -768,6 +768,36 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x93, 0x40 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_SUBX);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 1);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "SUBX.W D0,D1") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xDD, 0x4D };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ADDX);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_APRE);
+        CHECK(instr.src.reg == 5);
+        CHECK(instr.dst.mode == NG_M68K_EA_APRE);
+        CHECK(instr.dst.reg == 6);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ADDX.W -(A5),-(A6)") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x3A, 0x06 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

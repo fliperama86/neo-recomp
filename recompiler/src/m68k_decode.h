@@ -33,6 +33,7 @@ typedef enum NgM68kMnemonic {
     NG_M68K_SUB,
     NG_M68K_SUBA,
     NG_M68K_SUBQ,
+    NG_M68K_SUBX,
     NG_M68K_CMP,
     NG_M68K_CMPA,
     NG_M68K_CMPM,

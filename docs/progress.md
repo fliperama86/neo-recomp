@@ -134,7 +134,8 @@ Covered by executable generated-C validation:
     `CMPA.W/L <ea>,An` paths covered so far by immediate sources
   - `CMPM.B/W/L (Ay)+,(Ax)+` covered so far by word postincrement memory
     comparisons
-  - `ADDX.B Dn,Dn`
+  - `ADDX/SUBX.B/W/L` register and predecrement-memory forms, covered so far
+    by generated-exec byte add-extend and word subtract-extend paths
   - generic `OR.B/W/L <ea>,Dn` and `AND.B/W/L <ea>,Dn` paths covered so far
     by data-register sources
   - generic `OR.B/W/L Dn,<ea>`, `AND.B/W/L Dn,<ea>`, and
@@ -174,12 +175,14 @@ Covered by executable generated-C validation:
   - `PEA <ea>` control-address pushes covered so far by displacement sources
   - `ORI/ANDI/EORI #imm,CCR/SR` immediate status-register operations
 
-Important caveat: this is not a complete 68000 condition-code model. `V` is only
-covered for the tested `ADDX.B` helper path, and `C`/`X` are only trusted where
-tests cover them.
+Important caveat: this is not a complete 68000 condition-code model. `C`/`X`
+and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized extend arithmetic to `ADDX/SUBX.B/W/L` for data-register
+  and predecrement-memory forms, with generated-exec coverage for word
+  subtract-extend.
 - local: Added `MOVEP.W/L` decode/emission for staggered `(d16,An)` peripheral
   transfers in both directions, with decode and emitter coverage.
 - local: Added `MOVE USP` transfers in both directions, including generated

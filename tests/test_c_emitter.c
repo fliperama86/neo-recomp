@@ -333,7 +333,8 @@ int main(void) {
         CHECK(strstr(text, "ng_set_nz8(ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962)));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[4] = (g_ng_m68k.d[4] & 0xFFFFFF00u) | ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962));") != NULL);
         CHECK(strstr(text, "uint8_t ng_src = (uint8_t)(4u); uint8_t ng_dst = (uint8_t)((uint8_t)(g_ng_m68k.d[4] & 0xFFu)); uint8_t ng_result = (uint8_t)(ng_dst - ng_src);") != NULL);
-        CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | ng_addx8((uint8_t)(g_ng_m68k.d[1] & 0x00FFu), (uint8_t)(g_ng_m68k.d[0] & 0x00FFu));") != NULL);
+        CHECK(strstr(text, "uint8_t ng_src = (uint8_t)(g_ng_m68k.d[1] & 0x000000FFu); uint8_t ng_dst = (uint8_t)(g_ng_m68k.d[0] & 0x000000FFu);") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | (uint32_t)(ng_result & 0x000000FFu);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[5] = (g_ng_m68k.d[5] & 0xFFFF0000u)") != NULL);
         CHECK(strstr(text, "ng68k_write16(g_ng_m68k.a[0], (uint16_t)((uint16_t)(g_ng_m68k.d[5] & 0xFFFFu)));") != NULL);
         CHECK(strstr(text, "/* $000056: ADD.B D1,D0 */") != NULL);
@@ -567,6 +568,32 @@ int main(void) {
         CHECK(strstr(text, "/* $000004: MOVEP.L ($FFFC,A1),D1 */") != NULL);
         CHECK(strstr(text, "uint32_t ng_addr = (uint32_t)(g_ng_m68k.a[1] + (int32_t)-4);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[1] = ((uint32_t)ng68k_read8(ng_addr) << 24)") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x06u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x9340u); /* SUBX.W D0,D1 */
+        write16(&rom, 0x02u, 0xDD4Du); /* ADDX.W -(A5),-(A6) */
+        write16(&rom, 0x04u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: SUBX.W D0,D1 */") != NULL);
+        CHECK(strstr(text, "uint16_t ng_src = (uint16_t)(g_ng_m68k.d[0] & 0x0000FFFFu); uint16_t ng_dst = (uint16_t)(g_ng_m68k.d[1] & 0x0000FFFFu);") != NULL);
+        CHECK(strstr(text, "uint64_t ng_src_full = (uint64_t)ng_src + (uint64_t)ng_x;") != NULL);
+        CHECK(strstr(text, "/* $000002: ADDX.W -(A5),-(A6) */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[5] -= 2u; uint32_t ng_src_addr = g_ng_m68k.a[5]; g_ng_m68k.a[6] -= 2u; uint32_t ng_dst_addr = g_ng_m68k.a[6];") != NULL);
+        CHECK(strstr(text, "ng68k_write16(ng_dst_addr, ng_result);") != NULL);
 
         ng_program_rom_free(&rom);
     }

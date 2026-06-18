@@ -1034,31 +1034,73 @@ static int oracle_exec(const uint8_t *program,
             pc += 2u;
             continue;
         }
-        if ((op & 0xF138u) == 0xD100u) {
+        if (((op & 0xF100u) == 0xD100u ||
+             (op & 0xF100u) == 0x9100u) &&
+            (((op >> 3) & 7u) == 0u || ((op >> 3) & 7u) == 1u)) {
             uint8_t size_code = (uint8_t)((op >> 6) & 3u);
             uint8_t src_reg = (uint8_t)(op & 7u);
             uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
-            uint8_t src = (uint8_t)(state->d[src_reg] & 0xFFu);
-            uint8_t dst = (uint8_t)(state->d[dst_reg] & 0xFFu);
+            uint8_t mem_form = (uint8_t)(((op >> 3) & 7u) == 1u);
+            uint8_t is_sub = (uint8_t)((op & 0xF000u) == 0x9000u);
             uint8_t x = (state->sr & CCR_X) ? 1u : 0u;
-            uint16_t sum = (uint16_t)dst + (uint16_t)src + (uint16_t)x;
-            uint8_t result = (uint8_t)sum;
+            uint8_t bytes = size_code == 2u ? 4u : (size_code == 1u ? 2u : 1u);
+            uint32_t mask = oracle_value_mask(bytes);
+            uint32_t sign_mask = oracle_sign_mask(bytes);
+            uint32_t src;
+            uint32_t dst;
+            uint32_t result;
+            uint64_t full;
             uint16_t sr = (uint16_t)(state->sr & 0xFFE4u);
-            if (size_code != 0) {
+            if (size_code == 3u) {
                 return 0;
             }
-            state->d[dst_reg] = (state->d[dst_reg] & 0xFFFFFF00u) | result;
+
+            if (mem_form) {
+                uint8_t src_step = (src_reg == 7u && bytes == 1u) ? 2u : bytes;
+                uint8_t dst_step = (dst_reg == 7u && bytes == 1u) ? 2u : bytes;
+                state->a[src_reg] -= src_step;
+                state->a[dst_reg] -= dst_step;
+                src = bus_read_size(bus, state->a[src_reg], bytes) & mask;
+                dst = bus_read_size(bus, state->a[dst_reg], bytes) & mask;
+            } else {
+                src = state->d[src_reg] & mask;
+                dst = state->d[dst_reg] & mask;
+            }
+
+            if (is_sub) {
+                full = (uint64_t)src + (uint64_t)x;
+                result = (uint32_t)((uint64_t)dst - full) & mask;
+            } else {
+                full = (uint64_t)dst + (uint64_t)src + (uint64_t)x;
+                result = (uint32_t)full & mask;
+            }
+
+            if (mem_form) {
+                bus_write_size(bus, state->a[dst_reg], result, bytes);
+            } else {
+                state->d[dst_reg] = (state->d[dst_reg] & ~mask) | result;
+            }
             if (result != 0) {
                 sr = (uint16_t)(sr & (uint16_t)~CCR_Z);
             }
-            if (result & 0x80u) {
+            if (result & sign_mask) {
                 sr |= CCR_N;
             }
-            if (sum & 0x0100u) {
-                sr |= CCR_C | CCR_X;
-            }
-            if (((~(dst ^ src) & (dst ^ result)) & 0x80u) != 0) {
-                sr |= CCR_V;
+            if (is_sub) {
+                uint32_t src_v = (uint32_t)full & mask;
+                if (full > (uint64_t)dst) {
+                    sr |= CCR_C | CCR_X;
+                }
+                if (((dst ^ src_v) & (dst ^ result) & sign_mask) != 0) {
+                    sr |= CCR_V;
+                }
+            } else {
+                if (full > mask) {
+                    sr |= CCR_C | CCR_X;
+                }
+                if (((~(dst ^ src) & (dst ^ result)) & sign_mask) != 0) {
+                    sr |= CCR_V;
+                }
             }
             state->sr = sr;
             pc += 2u;
@@ -1852,6 +1894,7 @@ int main(void) {
     CHECK(ng68k_read16(0x018Au) == 0x0006u);
     CHECK(ng68k_read8(0x018Cu) == 0xFDu);
     CHECK(ng68k_read8(0x018Du) == 0x81u);
+    CHECK(ng68k_read16(0x0192u) == 0x0004u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

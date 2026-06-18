@@ -1351,14 +1351,15 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->immediate = ng_program_rom_read16(rom, addr + 2u) & 0xFFu;
         return 1;
     }
-    if ((op & 0xF138u) == 0xD100u) {
+    if (((op & 0xF100u) == 0xD100u ||
+         (op & 0xF100u) == 0x9100u) &&
+        (((op >> 3) & 7u) == 0u || ((op >> 3) & 7u) == 1u)) {
         uint8_t size_code = (uint8_t)((op >> 6) & 3u);
         if (size_code != 3u) {
-            out->mnemonic = NG_M68K_ADDX;
+            uint8_t mem_form = (uint8_t)(((op >> 3) & 7u) == 1u);
+            out->mnemonic = ((op & 0xF000u) == 0xD000u) ?
+                NG_M68K_ADDX : NG_M68K_SUBX;
             out->byte_length = 2;
-            out->form = NG_M68K_FORM_DREG_TO_DREG;
-            out->src_reg = (uint8_t)(op & 7u);
-            out->reg = (uint8_t)((op >> 9) & 7u);
             if (size_code == 2u) {
                 out->size = NG_M68K_SIZE_LONG;
             } else if (size_code == 1u) {
@@ -1366,6 +1367,20 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
             } else {
                 out->size = NG_M68K_SIZE_BYTE;
             }
+            if (mem_form) {
+                out->src.mode = NG_M68K_EA_APRE;
+                out->src.reg = (uint8_t)(op & 7u);
+                out->dst.mode = NG_M68K_EA_APRE;
+                out->dst.reg = (uint8_t)((op >> 9) & 7u);
+            } else {
+                out->form = NG_M68K_FORM_DREG_TO_DREG;
+                out->src.mode = NG_M68K_EA_DREG;
+                out->src.reg = (uint8_t)(op & 7u);
+                out->dst.mode = NG_M68K_EA_DREG;
+                out->dst.reg = (uint8_t)((op >> 9) & 7u);
+            }
+            out->src_reg = (uint8_t)(op & 7u);
+            out->reg = (uint8_t)((op >> 9) & 7u);
             return 1;
         }
     }
@@ -1703,6 +1718,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_SUB: return "SUB";
     case NG_M68K_SUBA: return "SUBA";
     case NG_M68K_SUBQ: return "SUBQ";
+    case NG_M68K_SUBX: return "SUBX";
     case NG_M68K_CMP: return "CMP";
     case NG_M68K_CMPA: return "CMPA";
     case NG_M68K_CMPM: return "CMPM";
@@ -2146,10 +2162,21 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                  instr->src.reg, instr->dst.reg);
         break;
     case NG_M68K_ADDX:
-        snprintf(out, out_size, "ADDX.%c D%u,D%u",
-                 instr->size == NG_M68K_SIZE_BYTE ? 'B' :
-                 (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
-                 instr->src_reg, instr->reg);
+    case NG_M68K_SUBX:
+        if (instr->src.mode == NG_M68K_EA_APRE &&
+            instr->dst.mode == NG_M68K_EA_APRE) {
+            snprintf(out, out_size, "%s.%c -(A%u),-(A%u)",
+                     ng_m68k_mnemonic_name(instr->mnemonic),
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     instr->src.reg, instr->dst.reg);
+        } else {
+            snprintf(out, out_size, "%s.%c D%u,D%u",
+                     ng_m68k_mnemonic_name(instr->mnemonic),
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     instr->src_reg, instr->reg);
+        }
         break;
     case NG_M68K_ADDQ:
     case NG_M68K_SUBQ:
