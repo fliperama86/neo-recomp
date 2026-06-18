@@ -163,6 +163,14 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             }
             return 1;
         }
+        if (instr->form == NG_M68K_FORM_AREG_DISP && instr->size == 1u) {
+            fprintf(out,
+                    "    g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFFFF00u) | ng68k_read8((uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d));\n",
+                    instr->reg, instr->reg, instr->src_reg, instr->displacement);
+            fprintf(out, "    ng_set_nz8((uint8_t)(g_ng_m68k.d[%u] & 0x00FFu));\n",
+                    instr->reg);
+            return 1;
+        }
         if (instr->form == NG_M68K_FORM_DREG_TO_ABS && instr->size == 1u) {
             fprintf(out, "    ng68k_write8(0x%08Xu, (uint8_t)(g_ng_m68k.d[%u] & 0x00FFu));\n",
                     instr->absolute_addr & 0x00FFFFFFu, instr->reg);

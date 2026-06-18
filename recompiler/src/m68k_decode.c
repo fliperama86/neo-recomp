@@ -195,6 +195,16 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->absolute_addr = ng_program_rom_read32(rom, addr + 2u);
         return 1;
     }
+    if ((op & 0xF1F8u) == 0x1028u) {
+        out->mnemonic = NG_M68K_MOVE;
+        out->byte_length = 4;
+        out->size = NG_M68K_SIZE_BYTE;
+        out->form = NG_M68K_FORM_AREG_DISP;
+        out->reg = (uint8_t)((op >> 9) & 7u);
+        out->src_reg = (uint8_t)(op & 7u);
+        out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
+        return 1;
+    }
     if ((op & 0xF1FFu) == 0x2039u) {
         out->mnemonic = NG_M68K_MOVE;
         out->byte_length = 6;
@@ -382,6 +392,12 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                      instr->size == NG_M68K_SIZE_BYTE ? 'B' :
                      (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
                      instr->reg, instr->absolute_addr & 0xFFFFFFu);
+        } else if (instr->form == NG_M68K_FORM_AREG_DISP) {
+            snprintf(out, out_size, "MOVE.%c ($%X,A%u),D%u",
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     (unsigned)(uint16_t)instr->displacement,
+                     instr->src_reg, instr->reg);
         } else if (instr->form == NG_M68K_FORM_ABS_TO_DREG) {
             snprintf(out, out_size, "MOVE.%c $%06X,D%u",
                      instr->size == NG_M68K_SIZE_BYTE ? 'B' :
