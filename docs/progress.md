@@ -113,6 +113,8 @@ Covered by executable generated-C validation:
   - generic `SUBQ.B/W/L #imm,<ea>` paths covered so far by Dn and
     postincrement memory destinations
   - generic `CMP.B/W/L <ea>,Dn` paths covered so far by Dn and abs reads
+  - generic `ADDA.W/L <ea>,An`, `SUBA.W/L <ea>,An`, and
+    `CMPA.W/L <ea>,An` paths covered so far by immediate sources
   - `ADDX.B Dn,Dn`
   - `ANDI.B #imm,(d16,An)`
   - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
@@ -143,6 +145,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added address-register arithmetic/compare (`ADDA`, `SUBA`, `CMPA`)
+  over the shared EA reader, including generated-exec coverage for
+  sign-extended word and long immediate sources.
 - local: Added data-register transform ops `EXT.W`, `EXT.L`, and `SWAP` with
   decode/format/emission coverage and generated-exec sign-extension/register
   swap validation.

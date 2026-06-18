@@ -392,6 +392,51 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0xD4, 0xFC, 0x00, 0x10 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ADDA);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_IMM);
+        CHECK(instr.src.immediate == 0x10u);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ADDA.W #$10,A2") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x95, 0xFC, 0x00, 0x00, 0x00, 0x08 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_SUBA);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_IMM);
+        CHECK(instr.src.immediate == 0x08u);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "SUBA.L #$8,A2") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xB5, 0xFC, 0x00, 0x00, 0x01, 0x08 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_CMPA);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_IMM);
+        CHECK(instr.src.immediate == 0x108u);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "CMPA.L #$108,A2") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0xD1, 0x01 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

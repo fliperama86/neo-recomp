@@ -110,7 +110,7 @@ int main(void) {
     }
 
     {
-        NgProgramRom rom = make_rom(0xD0u);
+        NgProgramRom rom = make_rom(0xE0u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x41FAu); /* LEA $000008,A0 */
         write16(&rom, 0x02u, 0x0004u);
@@ -199,7 +199,15 @@ int main(void) {
         write16(&rom, 0xC0u, 0x4883u); /* EXT.W D3 */
         write16(&rom, 0xC2u, 0x48C3u); /* EXT.L D3 */
         write16(&rom, 0xC4u, 0x4842u); /* SWAP D2 */
-        write16(&rom, 0xC6u, 0x4E75u);
+        write16(&rom, 0xC6u, 0x247Cu); /* MOVEA.L #$00000100,A2 */
+        write32(&rom, 0xC8u, 0x00000100u);
+        write16(&rom, 0xCCu, 0xD4FCu); /* ADDA.W #$0010,A2 */
+        write16(&rom, 0xCEu, 0x0010u);
+        write16(&rom, 0xD0u, 0x95FCu); /* SUBA.L #$00000008,A2 */
+        write32(&rom, 0xD2u, 0x00000008u);
+        write16(&rom, 0xD6u, 0xB5FCu); /* CMPA.L #$00000108,A2 */
+        write32(&rom, 0xD8u, 0x00000108u);
+        write16(&rom, 0xDCu, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -322,6 +330,12 @@ int main(void) {
         CHECK(strstr(text, "g_ng_m68k.d[3] = (uint32_t)(int32_t)(int16_t)(g_ng_m68k.d[3] & 0xFFFFu);") != NULL);
         CHECK(strstr(text, "/* $0000C4: SWAP D2 */") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[2] = (g_ng_m68k.d[2] << 16) | (g_ng_m68k.d[2] >> 16);") != NULL);
+        CHECK(strstr(text, "/* $0000CC: ADDA.W #$10,A2 */") != NULL);
+        CHECK(strstr(text, "{ uint32_t ng_src = (uint32_t)(int32_t)(int16_t)(0x0010u); g_ng_m68k.a[2] += ng_src; }") != NULL);
+        CHECK(strstr(text, "/* $0000D0: SUBA.L #$8,A2 */") != NULL);
+        CHECK(strstr(text, "{ uint32_t ng_src = (uint32_t)(0x00000008u); g_ng_m68k.a[2] -= ng_src; }") != NULL);
+        CHECK(strstr(text, "/* $0000D6: CMPA.L #$108,A2 */") != NULL);
+        CHECK(strstr(text, "{ uint32_t ng_src = (uint32_t)(0x00000108u); uint32_t ng_dst = g_ng_m68k.a[2]; uint32_t ng_result = ng_dst - ng_src;") != NULL);
 
         ng_program_rom_free(&rom);
     }

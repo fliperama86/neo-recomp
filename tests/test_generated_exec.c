@@ -633,6 +633,42 @@ static int oracle_exec(const uint8_t *program,
         if (((op & 0xF000u) == 0xD000u ||
              (op & 0xF000u) == 0x9000u ||
              (op & 0xF000u) == 0xB000u) &&
+            (((op >> 6) & 7u) == 3u || ((op >> 6) & 7u) == 7u)) {
+            uint8_t opmode = (uint8_t)((op >> 6) & 7u);
+            uint8_t src_mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t src_reg = (uint8_t)(op & 7u);
+            uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
+            uint8_t bytes = opmode == 7u ? 4u : 2u;
+            uint32_t next_pc = pc + 2u;
+            uint32_t src;
+
+            if (!oracle_read_ea(program, size, state, bus, src_mode, src_reg,
+                                bytes, &next_pc, &src)) {
+                return 0;
+            }
+            if (bytes == 2u) {
+                src = (uint32_t)(int32_t)(int16_t)src;
+            }
+
+            if ((op & 0xF000u) == 0xD000u) {
+                state->a[dst_reg] += src;
+            } else if ((op & 0xF000u) == 0x9000u) {
+                state->a[dst_reg] -= src;
+            } else {
+                uint32_t dst = state->a[dst_reg];
+                uint32_t result = dst - src;
+                state->sr = (uint16_t)(state->sr & 0xFFF0u);
+                if (result == 0) state->sr |= CCR_Z;
+                if (result & 0x80000000u) state->sr |= CCR_N;
+                if (src > dst) state->sr |= CCR_C;
+                if (((dst ^ src) & (dst ^ result) & 0x80000000u) != 0) state->sr |= CCR_V;
+            }
+            pc = next_pc;
+            continue;
+        }
+        if (((op & 0xF000u) == 0xD000u ||
+             (op & 0xF000u) == 0x9000u ||
+             (op & 0xF000u) == 0xB000u) &&
             ((op >> 8) & 1u) == 0u) {
             uint8_t size_code = (uint8_t)((op >> 6) & 3u);
             uint8_t src_mode = (uint8_t)((op >> 3) & 7u);
@@ -1159,6 +1195,7 @@ int main(void) {
     CHECK((g_ng_m68k.d[6] & 0xFFFFu) == 0x1357u);
     CHECK(g_ng_m68k.a[0] == 0x0000012Cu);
     CHECK(g_ng_m68k.a[1] == 0x00000125u);
+    CHECK(g_ng_m68k.a[2] == 0x00000108u);
     CHECK(ng68k_read16(0x0068u) == 0x0000u);
     CHECK(ng68k_read16(0x00ACu) == 0x0000u);
     CHECK(ng68k_read8(0x0120u) == 0x5Au);
