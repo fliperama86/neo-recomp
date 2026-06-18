@@ -192,7 +192,9 @@ int main(void) {
         write16(&rom, 0xB2u, 0x0001u);
         write16(&rom, 0xB4u, 0x01C2u); /* BSET D0,D2 */
         write16(&rom, 0xB6u, 0x03D8u); /* BSET D1,(A0)+ */
-        write16(&rom, 0xB8u, 0x4E75u);
+        write16(&rom, 0xB8u, 0x4442u); /* NEG.W D2 */
+        write16(&rom, 0xBAu, 0x4618u); /* NOT.B (A0)+ */
+        write16(&rom, 0xBCu, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -303,6 +305,12 @@ int main(void) {
         CHECK(strstr(text, "/* $0000B6: BSET D1,(A0)+ */") != NULL);
         CHECK(strstr(text, "uint32_t ng_addr_0000B6 = g_ng_m68k.a[0];") != NULL);
         CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << (g_ng_m68k.d[1] & 7u)); uint8_t ng_value = ng68k_read8(ng_addr_0000B6);") != NULL);
+        CHECK(strstr(text, "/* $0000B8: NEG.W D2 */") != NULL);
+        CHECK(strstr(text, "{ uint16_t ng_value = (uint16_t)((uint16_t)(g_ng_m68k.d[2] & 0xFFFFu)); uint16_t ng_result = (uint16_t)(0u - ng_value);") != NULL);
+        CHECK(strstr(text, "if (ng_value != 0) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);
+        CHECK(strstr(text, "/* $0000BA: NOT.B (A0)+ */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_addr_0000BA = g_ng_m68k.a[0];") != NULL);
+        CHECK(strstr(text, "{ uint8_t ng_value = ng68k_read8(ng_addr_0000BA); uint8_t ng_result = (uint8_t)~ng_value;") != NULL);
 
         ng_program_rom_free(&rom);
     }

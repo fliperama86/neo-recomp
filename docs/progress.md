@@ -132,6 +132,8 @@ Covered by executable generated-C validation:
   - generic `CLR.B/W/L <ea>` paths covered so far by `(d16,An)` and `(An)+`
   - generic `BTST/BCHG/BCLR/BSET #imm,<ea>` and `BTST/BCHG/BCLR/BSET Dn,<ea>`
     paths covered so far by abs, Dn, and postincrement memory destinations
+  - generic `NEG.B/W/L <ea>` and `NOT.B/W/L <ea>` paths covered so far by Dn,
+    abs, and postincrement memory destinations
   - `ANDI #imm,SR`
 
 Important caveat: this is not a complete 68000 condition-code model. `V` is only
@@ -140,6 +142,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized unary read-modify-write `NEG <ea>` and `NOT <ea>` with
+  correct flag behavior and generated-exec Dn/postincrement coverage.
 - local: Added dynamic bit operations (`BTST/BCHG/BCLR/BSET Dn,<ea>`) on the
   same generic bit-op EA path, with generated-exec Dn and postincrement coverage.
 - local: Generalized immediate bit operations (`BTST/BCHG/BCLR/BSET #imm,<ea>`)

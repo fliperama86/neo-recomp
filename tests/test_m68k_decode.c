@@ -809,6 +809,46 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x44, 0x42 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_NEG);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.form == NG_M68K_FORM_DREG);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "NEG.W D2") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x46, 0x18 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_NOT);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "NOT.B (A0)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x46, 0x79, 0x00, 0x10, 0xFE, 0x80 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_NOT);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 2);
+        CHECK(instr.form == NG_M68K_FORM_ABS);
+        CHECK(instr.absolute_addr == 0x0010FE80u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "NOT.W $10FE80") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x4A, 0x39, 0x00, 0x10, 0xFE, 0x80 };
         CHECK(decode_one(bytes, sizeof(bytes), 0x000996u, &instr));
         CHECK(instr.mnemonic == NG_M68K_TST);
