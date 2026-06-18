@@ -546,6 +546,36 @@ static int emit_movem(FILE *out, const NgM68kInstr *instr) {
     return 0;
 }
 
+static int emit_move_sr_ccr(FILE *out, const NgM68kInstr *instr) {
+    char expr[256];
+
+    if (instr->mnemonic != NG_M68K_MOVE_SR &&
+        instr->mnemonic != NG_M68K_MOVE_CCR) {
+        return 0;
+    }
+
+    if (instr->dst.mode != NG_M68K_EA_NONE) {
+        const char *value = instr->mnemonic == NG_M68K_MOVE_SR ?
+            "g_ng_m68k.sr" : "(g_ng_m68k.sr & 0x001Fu)";
+        return emit_ea_write(out, &instr->dst, 2u, value);
+    }
+
+    if (instr->src.mode != NG_M68K_EA_NONE) {
+        if (!emit_ea_read(out, instr, &instr->src, 2u, expr, (unsigned)sizeof(expr))) {
+            return 0;
+        }
+        if (instr->mnemonic == NG_M68K_MOVE_SR) {
+            fprintf(out, "    g_ng_m68k.sr = (uint16_t)(%s);\n", expr);
+        } else {
+            fprintf(out, "    g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((%s) & 0x001Fu));\n",
+                    expr);
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
 static int emit_tst_generic(FILE *out, const NgM68kInstr *instr) {
     char expr[256];
     if (instr->src.mode == NG_M68K_EA_NONE) {
@@ -1452,6 +1482,12 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         break;
     case NG_M68K_MOVEM:
         if (emit_movem(out, instr)) {
+            return 1;
+        }
+        break;
+    case NG_M68K_MOVE_SR:
+    case NG_M68K_MOVE_CCR:
+        if (emit_move_sr_ccr(out, instr)) {
             return 1;
         }
         break;

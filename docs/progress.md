@@ -109,6 +109,8 @@ Covered by executable generated-C validation:
     and displacement sources
   - `MOVEM.W/L` register-list transfers covered so far by long Dn masks to/from
     address-indirect memory
+  - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
+    source and absolute SR destination forms
   - `LINK An,#disp` and `UNLK An`
 - arithmetic/logical:
   - `ADD.W Dn,Dn`
@@ -168,6 +170,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` decode/emission over
+  the shared EA helpers, with generated-exec coverage for immediate CCR loads
+  and absolute SR stores.
 - local: Added `MOVEM.W/L` decode/emission for register-list memory transfers
   using generated unrolled register masks, with generated-exec coverage for
   long Dn saves/restores through address-indirect memory.

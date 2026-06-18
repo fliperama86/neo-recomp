@@ -1352,6 +1352,38 @@ static int oracle_exec(const uint8_t *program,
             pc += 6u;
             continue;
         }
+        if ((op & 0xFFC0u) == 0x40C0u ||
+            (op & 0xFFC0u) == 0x42C0u) {
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint32_t next_pc = pc + 2u;
+            uint32_t value = ((op & 0xFFC0u) == 0x40C0u) ?
+                state->sr : (state->sr & 0x001Fu);
+            if (!oracle_write_ea(program, size, state, bus, mode, reg,
+                                 2u, &next_pc, value)) {
+                return 0;
+            }
+            pc = next_pc;
+            continue;
+        }
+        if ((op & 0xFFC0u) == 0x44C0u ||
+            (op & 0xFFC0u) == 0x46C0u) {
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint32_t next_pc = pc + 2u;
+            uint32_t value;
+            if (!oracle_read_ea(program, size, state, bus, mode, reg,
+                                2u, &next_pc, &value)) {
+                return 0;
+            }
+            if ((op & 0xFFC0u) == 0x46C0u) {
+                state->sr = (uint16_t)value;
+            } else {
+                state->sr = (uint16_t)((state->sr & 0xFFE0u) | (value & 0x001Fu));
+            }
+            pc = next_pc;
+            continue;
+        }
         if ((op & 0xFF00u) == 0x4400u ||
             (op & 0xFF00u) == 0x4600u) {
             uint8_t size_code = (uint8_t)((op >> 6) & 3u);
@@ -1658,6 +1690,7 @@ int main(void) {
     CHECK(ng68k_read32(0x013Cu) == 0x00000141u);
     CHECK(ng68k_read32(0x0180u) == 0x00000034u);
     CHECK(ng68k_read32(0x0184u) == 0x00000012u);
+    CHECK(ng68k_read16(0x0188u) == 0x001Bu);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

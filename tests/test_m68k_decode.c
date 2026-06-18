@@ -734,6 +734,32 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x44, 0xFC, 0x00, 0x1B };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE_CCR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_IMM);
+        CHECK(instr.src.immediate == 0x001Bu);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE #$1B,CCR") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x40, 0xF9, 0x00, 0x00, 0x01, 0x88 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE_SR);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 2);
+        CHECK(instr.dst.mode == NG_M68K_EA_ABS_L);
+        CHECK(instr.dst.absolute_addr == 0x00000188u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE SR,$000188") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x30, 0x85 };
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_MOVE);
