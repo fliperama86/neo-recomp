@@ -152,7 +152,10 @@ int main(void) {
         write16(&rom, 0x5Au, 0xB001u); /* CMP.B D1,D0 */
         write16(&rom, 0x5Cu, 0xB039u); /* CMP.B $0010FE80,D0 */
         write32(&rom, 0x5Eu, 0x0010FE80u);
-        write16(&rom, 0x62u, 0x4E75u);
+        write16(&rom, 0x62u, 0x4268u); /* CLR.W ($44,A0) */
+        write16(&rom, 0x64u, 0x0044u);
+        write16(&rom, 0x66u, 0x4298u); /* CLR.L (A0)+ */
+        write16(&rom, 0x68u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -190,6 +193,11 @@ int main(void) {
         CHECK(strstr(text, "if (ng_src > ng_dst) g_ng_m68k.sr |= NG_CCR_C;") != NULL);
         CHECK(strstr(text, "/* $00005C: CMP.B $10FE80,D0 */") != NULL);
         CHECK(strstr(text, "uint8_t ng_ea_00005C = ng68k_read8(0x0010FE80u);") != NULL);
+        CHECK(strstr(text, "/* $000062: CLR.W ($44,A0) */") != NULL);
+        CHECK(strstr(text, "ng68k_write16((uint32_t)(g_ng_m68k.a[0] + (int32_t)68), (uint16_t)(0));") != NULL);
+        CHECK(strstr(text, "/* $000066: CLR.L (A0)+ */") != NULL);
+        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[0], (uint32_t)(0));") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[0] += 4u;") != NULL);
 
         ng_program_rom_free(&rom);
     }

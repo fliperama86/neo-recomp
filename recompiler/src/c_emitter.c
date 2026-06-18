@@ -602,6 +602,11 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             }
             return 1;
         }
+        if (instr->dst.mode != NG_M68K_EA_NONE &&
+            emit_ea_write(out, &instr->dst, instr->size, "0")) {
+            emit_set_nz_for_size(out, instr->size, "0");
+            return 1;
+        }
         break;
     case NG_M68K_TST:
         if (instr->form == NG_M68K_FORM_ABS) {

@@ -106,7 +106,8 @@ Covered by executable generated-C validation:
   - `TST.B abs`
   - `TST.B (d16,An)`
   - `CLR.B/W/L abs`
-  - `CLR.B Dn`
+  - `CLR.B/W/L Dn`
+  - generic `CLR.B/W/L <ea>` paths covered so far by `(d16,An)` and `(An)+`
   - `BCLR #imm,abs`
   - `ANDI #imm,SR`
 
@@ -118,6 +119,7 @@ tests cover them.
 
 - local: Added a generic 68k effective-address model and generic MOVE emission fallback.
 - local: Added generic EA-to-data-register `ADD`, `SUB`, and `CMP` decode/emission.
+- local: Added generic `CLR <ea>` decode/emission for address-register memory targets.
 - local: Decode/emit byte `ADDX` data-register ops; verified `$D101` is `ADDX.B D1,D0`.
 - `50bb51f` Emit byte `SUBQ` data-register ops.
 - `8b0d1d5` Emit byte address-register loads.

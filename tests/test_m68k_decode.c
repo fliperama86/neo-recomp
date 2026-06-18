@@ -422,6 +422,33 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x42, 0x68, 0x00, 0x44 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0x00081Cu, &instr));
+        CHECK(instr.mnemonic == NG_M68K_CLR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
+        CHECK(instr.dst.mode == NG_M68K_EA_ADISP);
+        CHECK(instr.dst.reg == 0);
+        CHECK(instr.dst.displacement == 0x44);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "CLR.W ($44,A0)") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x42, 0x98 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0x00081Cu, &instr));
+        CHECK(instr.mnemonic == NG_M68K_CLR);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "CLR.L (A0)+") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x4A, 0x39, 0x00, 0x10, 0xFE, 0x80 };
         CHECK(decode_one(bytes, sizeof(bytes), 0x000996u, &instr));
         CHECK(instr.mnemonic == NG_M68K_TST);

@@ -344,6 +344,58 @@ static int oracle_exec(const uint8_t *program,
             pc += 6u;
             continue;
         }
+        if ((op & 0xFF00u) == 0x4200u &&
+            (((op >> 3) & 7u) == 0u ||
+             ((op >> 3) & 7u) == 3u ||
+             ((op >> 3) & 7u) == 5u)) {
+            uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint32_t pc_next = pc + 2u;
+            uint32_t addr = 0;
+            uint8_t bytes = size_code == 2u ? 4u : (size_code == 1u ? 2u : 1u);
+
+            if (size_code == 3u) {
+                return 0;
+            }
+            if (mode == 0u) {
+                if (size_code == 2u) {
+                    state->d[reg] = 0;
+                    oracle_set_nz32(state, 0);
+                } else if (size_code == 1u) {
+                    state->d[reg] &= 0xFFFF0000u;
+                    oracle_set_nz16(state, 0);
+                } else {
+                    state->d[reg] &= 0xFFFFFF00u;
+                    oracle_set_nz8(state, 0);
+                }
+                pc = pc_next;
+                continue;
+            }
+            if (mode == 3u) {
+                addr = state->a[reg];
+                state->a[reg] += (reg == 7u && size_code == 0u) ? 2u : bytes;
+            } else if (mode == 5u) {
+                int16_t displacement = (int16_t)program_read16(program, size, pc_next);
+                pc_next += 2u;
+                addr = (uint32_t)((int32_t)state->a[reg] + (int32_t)displacement);
+            } else {
+                return 0;
+            }
+
+            if (size_code == 2u) {
+                bus_write32(bus, addr, 0);
+                oracle_set_nz32(state, 0);
+            } else if (size_code == 1u) {
+                bus_write16(bus, addr, 0);
+                oracle_set_nz16(state, 0);
+            } else {
+                bus_write8(bus, addr, 0);
+                oracle_set_nz8(state, 0);
+            }
+            pc = pc_next;
+            continue;
+        }
         if (op == 0x4239u) {
             uint32_t addr = program_read32(program, size, pc + 2u);
             bus_write8(bus, addr, 0);
@@ -539,7 +591,8 @@ int main(void) {
     CHECK((g_ng_m68k.d[4] & 0xFFu) == 0x0Eu);
     CHECK((g_ng_m68k.d[5] & 0xFFFFu) == 0x1357u);
     CHECK((g_ng_m68k.d[6] & 0xFFFFu) == 0x1357u);
-    CHECK(ng68k_read16(0x0068u) == 0x1357u);
+    CHECK(ng68k_read16(0x0068u) == 0x0000u);
+    CHECK(ng68k_read16(0x00ACu) == 0x0000u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

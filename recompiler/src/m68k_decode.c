@@ -554,6 +554,32 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         }
         return 1;
     }
+    if ((op & 0xFF00u) == 0x4200u) {
+        uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+        uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
+        uint8_t ea_reg = (uint8_t)(op & 7u);
+        if (size_code != 3u) {
+            out->mnemonic = NG_M68K_CLR;
+            out->size = size_from_opcode_bits(size_code);
+            out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
+                                                        ea_mode, ea_reg,
+                                                        out->size, &out->dst));
+            if (out->dst.mode == NG_M68K_EA_NONE) {
+                out->mnemonic = NG_M68K_UNKNOWN;
+                out->byte_length = 2;
+                return 1;
+            }
+            if (out->dst.mode == NG_M68K_EA_DREG) {
+                out->form = NG_M68K_FORM_DREG;
+                out->reg = out->dst.reg;
+            } else if (out->dst.mode == NG_M68K_EA_ABS_W ||
+                       out->dst.mode == NG_M68K_EA_ABS_L) {
+                out->form = NG_M68K_FORM_ABS;
+                out->absolute_addr = out->dst.absolute_addr;
+            }
+            return 1;
+        }
+    }
     if (op == 0x4239u || op == 0x4279u || op == 0x42B9u) {
         out->mnemonic = NG_M68K_CLR;
         out->byte_length = 6;
@@ -834,6 +860,13 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                      instr->size == NG_M68K_SIZE_BYTE ? 'B' :
                      (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
                      instr->reg);
+        } else if (instr->dst.mode != NG_M68K_EA_NONE) {
+            char dst[64];
+            format_ea_operand(&instr->dst, instr->size, dst, (unsigned)sizeof(dst));
+            snprintf(out, out_size, "CLR.%c %s",
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     dst);
         } else {
             snprintf(out, out_size, "CLR.%c $%06X",
                      instr->size == NG_M68K_SIZE_BYTE ? 'B' :
