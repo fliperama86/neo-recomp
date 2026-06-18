@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 
-#define NG_EMIT_MAX_INSTRUCTIONS 64u
+#define NG_EMIT_MAX_INSTRUCTIONS 96u
 #define NG_CCR_C 0x0001u
 #define NG_CCR_V 0x0002u
 #define NG_CCR_Z 0x0004u
@@ -462,10 +462,12 @@ static int emit_cmpi_generic(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
-static int emit_andi_generic(FILE *out, const NgM68kInstr *instr) {
+static int emit_logical_imm_generic(FILE *out, const NgM68kInstr *instr) {
     const char *ctype = ng_ctype_for_size(instr->size);
     const char *read_fn = ng_read_fn_for_size(instr->size);
     const char *write_fn = ng_write_fn_for_size(instr->size);
+    const char *op = instr->mnemonic == NG_M68K_ORI ? "|" :
+                     (instr->mnemonic == NG_M68K_EORI ? "^" : "&");
     uint32_t mask = ng_value_mask(instr->size);
     char expr[256];
     char addr_expr[256];
@@ -479,8 +481,8 @@ static int emit_andi_generic(FILE *out, const NgM68kInstr *instr) {
                           expr, (unsigned)sizeof(expr))) {
             return 0;
         }
-        fprintf(out, "    { %s ng_result = (%s)((%s) & 0x%0*Xu);\n",
-                ctype, ctype, expr,
+        fprintf(out, "    { %s ng_result = (%s)((%s) %s 0x%0*Xu);\n",
+                ctype, ctype, expr, op,
                 instr->size == 4u ? 8 : (instr->size == 1u ? 2 : 4),
                 instr->immediate & mask);
         emit_ea_write(out, &instr->dst, instr->size, "ng_result");
@@ -494,9 +496,9 @@ static int emit_andi_generic(FILE *out, const NgM68kInstr *instr) {
         return 0;
     }
     fprintf(out,
-            "    { %s ng_value = %s(%s); %s ng_result = (%s)(ng_value & 0x%0*Xu);\n",
+            "    { %s ng_value = %s(%s); %s ng_result = (%s)(ng_value %s 0x%0*Xu);\n",
             ctype, read_fn, addr_expr,
-            ctype, ctype,
+            ctype, ctype, op,
             instr->size == 4u ? 8 : (instr->size == 1u ? 2 : 4),
             instr->immediate & mask);
     fprintf(out, "      %s(%s, ng_result);\n", write_fn, addr_expr);
@@ -850,8 +852,11 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         break;
+    case NG_M68K_ORI:
     case NG_M68K_ANDI:
-        if (instr->form == NG_M68K_FORM_AREG_DISP && instr->size == 1u) {
+    case NG_M68K_EORI:
+        if (instr->mnemonic == NG_M68K_ANDI &&
+            instr->form == NG_M68K_FORM_AREG_DISP && instr->size == 1u) {
             fprintf(out,
                     "    ng68k_write8((uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d), (uint8_t)(ng68k_read8((uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d)) & 0x%02Xu));\n",
                     instr->reg, instr->displacement, instr->reg, instr->displacement,
@@ -861,7 +866,7 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
                     instr->reg, instr->displacement);
             return 1;
         }
-        if (emit_andi_generic(out, instr)) {
+        if (emit_logical_imm_generic(out, instr)) {
             return 1;
         }
         break;

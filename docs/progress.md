@@ -114,6 +114,9 @@ Covered by executable generated-C validation:
   - `ANDI.B #imm,(d16,An)`
   - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
     displacement, and postincrement destinations
+  - generic `ORI.B/W/L #imm,<ea>` paths covered so far by Dn destinations
+  - generic `EORI.B/W/L #imm,<ea>` paths covered so far by postincrement
+    memory destinations
   - `CMPI.B #imm,Dn`
   - generic `CMPI.B/W/L #imm,<ea>` paths covered so far by Dn,
     postincrement, and indexed memory destinations
@@ -133,6 +136,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Reused the logical-immediate RMW path for `ORI/EORI #imm,<ea>` and
+  raised the generated-exec decode window to keep the growing fixture covered.
 - local: Generalized `ADDQ/SUBQ #imm,<ea>` decode/emission with shared
   read-modify-write EA handling and generated-exec coverage for Dn and
   postincrement memory destinations.
