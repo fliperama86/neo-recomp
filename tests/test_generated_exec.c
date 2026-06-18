@@ -1288,6 +1288,18 @@ static int oracle_exec(const uint8_t *program,
             pc = next_pc;
             continue;
         }
+        if ((op & 0xFFF8u) == 0x4E60u) {
+            uint8_t reg = (uint8_t)(op & 7u);
+            state->usp = state->a[reg];
+            pc += 2u;
+            continue;
+        }
+        if ((op & 0xFFF8u) == 0x4E68u) {
+            uint8_t reg = (uint8_t)(op & 7u);
+            state->a[reg] = state->usp;
+            pc += 2u;
+            continue;
+        }
         if (op == 0x4EB9u) {
             uint32_t target = program_read32(program, size, pc + 2u);
             if (!oracle_exec(program, size, target, state, bus, depth + 1u)) {
@@ -1810,10 +1822,11 @@ int main(void) {
     CHECK(g_ng_m68k.a[1] == 0x00000125u);
     CHECK(g_ng_m68k.a[2] == 0x00000108u);
     CHECK(g_ng_m68k.a[3] == 0x00000142u);
-    CHECK(g_ng_m68k.a[4] == 0x00000180u);
+    CHECK(g_ng_m68k.a[4] == 0x00000190u);
     CHECK(g_ng_m68k.a[5] == 0x00000190u);
     CHECK(g_ng_m68k.a[6] == 0x00000192u);
     CHECK(g_ng_m68k.a[7] == 0x0000013Cu);
+    CHECK(g_ng_m68k.usp == 0x00000190u);
     CHECK(ng68k_read16(0x0068u) == 0x0000u);
     CHECK(ng68k_read16(0x00ACu) == 0x0000u);
     CHECK(ng68k_read8(0x0120u) == 0x5Au);

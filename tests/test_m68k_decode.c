@@ -1298,6 +1298,32 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x4E, 0x65 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE_USP);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_AREG);
+        CHECK(instr.src.reg == 5);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE A5,USP") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0x6C };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE_USP);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 4);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE USP,A4") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x44, 0x42 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

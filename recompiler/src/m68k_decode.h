@@ -24,6 +24,7 @@ typedef enum NgM68kMnemonic {
     NG_M68K_MOVEM,
     NG_M68K_MOVE_SR,
     NG_M68K_MOVE_CCR,
+    NG_M68K_MOVE_USP,
     NG_M68K_ADD,
     NG_M68K_ADDA,
     NG_M68K_ADDQ,

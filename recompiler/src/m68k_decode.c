@@ -778,6 +778,21 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->reg = (uint8_t)(op & 7u);
         return 1;
     }
+    if ((op & 0xFFF8u) == 0x4E60u ||
+        (op & 0xFFF8u) == 0x4E68u) {
+        out->mnemonic = NG_M68K_MOVE_USP;
+        out->size = NG_M68K_SIZE_LONG;
+        out->byte_length = 2;
+        out->reg = (uint8_t)(op & 7u);
+        if ((op & 0x0008u) == 0u) {
+            out->src.mode = NG_M68K_EA_AREG;
+            out->src.reg = out->reg;
+        } else {
+            out->dst.mode = NG_M68K_EA_AREG;
+            out->dst.reg = out->reg;
+        }
+        return 1;
+    }
     if (op == 0x4EF9u || op == 0x4EB9u) {
         out->mnemonic = (op == 0x4EF9u) ? NG_M68K_JMP : NG_M68K_JSR;
         out->byte_length = 6;
@@ -1655,6 +1670,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_MOVEM: return "MOVEM";
     case NG_M68K_MOVE_SR: return "MOVE_SR";
     case NG_M68K_MOVE_CCR: return "MOVE_CCR";
+    case NG_M68K_MOVE_USP: return "MOVE_USP";
     case NG_M68K_ADD: return "ADD";
     case NG_M68K_ADDA: return "ADDA";
     case NG_M68K_ADDQ: return "ADDQ";
@@ -1906,6 +1922,15 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         } else {
             snprintf(out, out_size, "MOVE ?,%s",
                      instr->mnemonic == NG_M68K_MOVE_SR ? "SR" : "CCR");
+        }
+        break;
+    case NG_M68K_MOVE_USP:
+        if (instr->src.mode == NG_M68K_EA_AREG) {
+            snprintf(out, out_size, "MOVE A%u,USP", instr->src.reg);
+        } else if (instr->dst.mode == NG_M68K_EA_AREG) {
+            snprintf(out, out_size, "MOVE USP,A%u", instr->dst.reg);
+        } else {
+            snprintf(out, out_size, "MOVE USP,?");
         }
         break;
     case NG_M68K_BTST:

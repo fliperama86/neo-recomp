@@ -1693,6 +1693,16 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         break;
+    case NG_M68K_MOVE_USP:
+        if (instr->src.mode == NG_M68K_EA_AREG) {
+            fprintf(out, "    g_ng_m68k.usp = g_ng_m68k.a[%u];\n", instr->src.reg);
+            return 1;
+        }
+        if (instr->dst.mode == NG_M68K_EA_AREG) {
+            fprintf(out, "    g_ng_m68k.a[%u] = g_ng_m68k.usp;\n", instr->dst.reg);
+            return 1;
+        }
+        break;
     case NG_M68K_ADD:
     case NG_M68K_SUB:
     case NG_M68K_CMP:

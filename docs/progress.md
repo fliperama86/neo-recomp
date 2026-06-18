@@ -112,6 +112,7 @@ Covered by executable generated-C validation:
     address-indirect memory
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
     source and absolute SR destination forms
+  - `MOVE An,USP` and `MOVE USP,An` user-stack-pointer transfers
   - `LINK An,#disp` and `UNLK An`
 - arithmetic/logical:
   - `ADD.W Dn,Dn`
@@ -178,6 +179,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `MOVE USP` transfers in both directions, including generated
+  state coverage for USP and address-register updates.
 - local: Added `CMPM (Ay)+,(Ax)+` decode/emission with postincrement compare
   flag behavior and generated-exec word coverage.
 - local: Added `TAS <ea>` decode/emission with test-and-set byte semantics
