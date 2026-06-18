@@ -49,6 +49,10 @@ Example real `.neo` smoke output:
 ```text
 vector initial_ssp=$0010F300 (work_ram) initial_pc=$00C00402 (bios)
 cartridge header: NEO-GEO, entry=$000007CC (p_rom_fixed)
+entry preview:
+  $0007CC: LEA $0008F4,A0           ; LEA
+  $0007D0: MOVE.L A0,$106EA8        ; MOVE
+  $0007D6: BCLR #7,$10FD80          ; BCLR
 ```
 
 ## Development Style
@@ -95,3 +99,23 @@ Current M1 status:
 - MiSTer `.neo` P-region extraction and word normalization are covered by a
   synthetic unit test.
 - Real local smoke has been verified with `G:\Mister\NEOGEO\mslug.neo`.
+
+## Decoder Slice
+
+The first decoder milestone is intentionally tiny: decode enough of the Metal
+Slug cartridge entry to prove the normalized P-ROM image is usable.
+
+Covered so far:
+
+- `LEA`
+- `MOVE`
+- `MOVEQ`
+- `ADD`
+- `BCLR`
+- `ANDI #imm,SR`
+- `JSR`
+- `JMP`
+- `BRA` / `BSR` / `Bcc`
+- `RTS`
+
+Unknown opcodes are still printed as `DC.W`; they are not executable support.

@@ -1,3 +1,4 @@
+#include "m68k_decode.h"
 #include "m68k_stub.h"
 #include "neogeo_map.h"
 #include "p_rom.h"
@@ -16,6 +17,26 @@ static void print_vector(const NgProgramRom *rom, int index) {
     NgAddressRegion region = ng_address_region(value);
     printf("vector[%02d]=$%08X (%s)\n",
            index, value, ng_address_region_name(region));
+}
+
+static void print_decode_preview(const NgProgramRom *rom, uint32_t start_addr) {
+    printf("entry preview:\n");
+    uint32_t pc = start_addr;
+    for (int i = 0; i < 8; ++i) {
+        NgM68kInstr instr;
+        char text[128];
+        if (!ng_m68k_decode(rom, pc, &instr)) {
+            printf("  $%06X: <unmapped>\n", pc & 0xFFFFFFu);
+            break;
+        }
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        printf("  $%06X: %-24s ; %s\n",
+               pc & 0xFFFFFFu, text, ng_m68k_mnemonic_name(instr.mnemonic));
+        if (instr.byte_length == 0) {
+            break;
+        }
+        pc += instr.byte_length;
+    }
 }
 
 int main(int argc, char **argv) {
@@ -68,6 +89,11 @@ int main(int argc, char **argv) {
         if (ng_program_rom_cart_entry(&rom, &cart_entry)) {
             printf("cartridge header: NEO-GEO, entry=$%08X (%s)\n",
                    cart_entry, ng_address_region_name(ng_address_region(cart_entry)));
+            if (ng_program_rom_addr_is_mapped(&rom, cart_entry)) {
+                print_decode_preview(&rom, cart_entry);
+            } else {
+                printf("entry preview: entry is outside loaded P-ROM image\n");
+            }
         } else {
             printf("cartridge header: not found or unsupported\n");
         }

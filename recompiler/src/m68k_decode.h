@@ -1,0 +1,50 @@
+#pragma once
+
+#include <stdint.h>
+#include "p_rom.h"
+
+typedef enum NgM68kMnemonic {
+    NG_M68K_INVALID,
+    NG_M68K_UNKNOWN,
+    NG_M68K_NOP,
+    NG_M68K_RTS,
+    NG_M68K_JMP,
+    NG_M68K_JSR,
+    NG_M68K_BRA,
+    NG_M68K_BSR,
+    NG_M68K_BCC,
+    NG_M68K_LEA,
+    NG_M68K_MOVEQ,
+    NG_M68K_MOVE,
+    NG_M68K_ADD,
+    NG_M68K_BCLR,
+    NG_M68K_ANDI_TO_SR,
+} NgM68kMnemonic;
+
+typedef enum NgM68kOperandForm {
+    NG_M68K_FORM_NONE,
+    NG_M68K_FORM_AREG_TO_ABS,
+    NG_M68K_FORM_IMM_TO_ABS,
+    NG_M68K_FORM_IMM_TO_DREG,
+    NG_M68K_FORM_ABS_TO_DREG,
+    NG_M68K_FORM_DREG_TO_DREG,
+} NgM68kOperandForm;
+
+typedef struct NgM68kInstr {
+    uint32_t addr;
+    uint16_t opcode;
+    NgM68kMnemonic mnemonic;
+    uint8_t byte_length;
+    uint8_t reg;
+    uint8_t src_reg;
+    uint8_t size;
+    uint8_t condition;
+    NgM68kOperandForm form;
+    uint32_t target;
+    uint32_t immediate;
+    uint32_t absolute_addr;
+} NgM68kInstr;
+
+int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out);
+const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic);
+void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size);
