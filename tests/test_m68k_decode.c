@@ -212,6 +212,17 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x14, 0x3C, 0x00, 0x7F };
+        CHECK(decode_one(bytes, sizeof(bytes), 0x000812u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 1);
+        CHECK(instr.form == NG_M68K_FORM_IMM_TO_DREG);
+        CHECK(instr.reg == 2);
+        CHECK(instr.immediate == 0x7Fu);
+    }
+
+    {
         const unsigned char bytes[] = { 0x42, 0x79, 0x00, 0x10, 0xFE, 0x80 };
         CHECK(decode_one(bytes, sizeof(bytes), 0x00081Cu, &instr));
         CHECK(instr.mnemonic == NG_M68K_CLR);

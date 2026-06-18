@@ -257,8 +257,8 @@ The first generated-code sanity check is now executable:
 This is a stronger check than compiling generated C back to 68k and comparing
 machine code. A C compiler will not reproduce the original binary instruction
 stream; the useful invariant is behavior. The current behavior check covers
-`MOVEQ`, `ADD.W`, direct `JSR`, tail `JMP`, `MOVE.W #imm,abs`,
-`MOVE.B #imm,abs`, `CLR.B/W/L abs`, `TST.B abs`, `LEA`, and `MOVE.L An,abs`
-through the same generated dispatch shape used by real ROMs. It also covers
-both not-taken and taken `BNE`/`BEQ` paths, comparing generated C behavior
-against the tiny interpreter oracle.
+`MOVEQ`, `MOVE.B/W #imm,Dn`, `ADD.W`, direct `JSR`, tail `JMP`,
+`MOVE.W #imm,abs`, `MOVE.B #imm,abs`, `CLR.B/W/L abs`, `TST.B abs`, `LEA`,
+and `MOVE.L An,abs` through the same generated dispatch shape used by real
+ROMs. It also covers both not-taken and taken `BNE`/`BEQ` paths, comparing
+generated C behavior against the tiny interpreter oracle.

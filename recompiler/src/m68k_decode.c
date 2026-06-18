@@ -194,6 +194,15 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->immediate = ng_program_rom_read16(rom, addr + 2u);
         return 1;
     }
+    if ((op & 0xF1FFu) == 0x103Cu) {
+        out->mnemonic = NG_M68K_MOVE;
+        out->byte_length = 4;
+        out->size = NG_M68K_SIZE_BYTE;
+        out->form = NG_M68K_FORM_IMM_TO_DREG;
+        out->reg = (uint8_t)((op >> 9) & 7u);
+        out->immediate = ng_program_rom_read16(rom, addr + 2u) & 0xFFu;
+        return 1;
+    }
     if (op == 0xD040u) {
         out->mnemonic = NG_M68K_ADD;
         out->byte_length = 2;
@@ -322,7 +331,8 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                      instr->absolute_addr & 0xFFFFFFu, instr->reg);
         } else {
             snprintf(out, out_size, "MOVE.%c #$%X,D%u",
-                     instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W',
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
                      (unsigned)instr->immediate, instr->reg);
         }
         break;
