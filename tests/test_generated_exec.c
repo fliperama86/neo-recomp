@@ -258,6 +258,14 @@ static int oracle_exec(const uint8_t *program,
             pc += 6u;
             continue;
         }
+        if ((op & 0xFFF8u) == 0x4A28u) {
+            uint8_t reg = (uint8_t)(op & 7u);
+            int16_t displacement = (int16_t)program_read16(program, size, pc + 2u);
+            uint32_t addr = (uint32_t)((int32_t)state->a[reg] + (int32_t)displacement);
+            oracle_set_nz8(state, bus_read8(bus, addr));
+            pc += 4u;
+            continue;
+        }
         if ((op & 0xF1FFu) == 0x41FAu) {
             uint8_t reg = (uint8_t)((op >> 9) & 7u);
             int16_t disp = (int16_t)program_read16(program, size, pc + 2u);
@@ -358,6 +366,7 @@ int main(void) {
     CHECK(ng68k_read8(0x1018u) == 0x7Fu);
     CHECK(ng68k_read8(0x1019u) == 0x00u);
     CHECK(ng68k_read8(0x101Au) == 0x0Fu);
+    CHECK(ng68k_read8(0x101Bu) == 0x00u);
     CHECK((g_ng_m68k.sr & CCR_N) != 0);
 
     ng_generated_call(0x00DEADu);

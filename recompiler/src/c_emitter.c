@@ -242,6 +242,12 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             }
             return 1;
         }
+        if (instr->form == NG_M68K_FORM_AREG_DISP && instr->size == 1u) {
+            fprintf(out,
+                    "    ng_set_nz8(ng68k_read8((uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d)));\n",
+                    instr->reg, instr->displacement);
+            return 1;
+        }
         break;
     case NG_M68K_CMPI:
         if (instr->form == NG_M68K_FORM_IMM_TO_DREG && instr->size == 1u) {

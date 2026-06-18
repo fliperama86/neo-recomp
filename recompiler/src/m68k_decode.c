@@ -282,6 +282,15 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->absolute_addr = ng_program_rom_read32(rom, addr + 2u);
         return 1;
     }
+    if ((op & 0xFFF8u) == 0x4A28u) {
+        out->mnemonic = NG_M68K_TST;
+        out->byte_length = 4;
+        out->size = NG_M68K_SIZE_BYTE;
+        out->form = NG_M68K_FORM_AREG_DISP;
+        out->reg = (uint8_t)(op & 7u);
+        out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
+        return 1;
+    }
 
     return 1;
 }
@@ -405,10 +414,18 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         }
         break;
     case NG_M68K_TST:
-        snprintf(out, out_size, "TST.%c $%06X",
-                 instr->size == NG_M68K_SIZE_BYTE ? 'B' :
-                 (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
-                 instr->absolute_addr & 0xFFFFFFu);
+        if (instr->form == NG_M68K_FORM_AREG_DISP) {
+            snprintf(out, out_size, "TST.%c ($%X,A%u)",
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     (unsigned)(uint16_t)instr->displacement,
+                     instr->reg);
+        } else {
+            snprintf(out, out_size, "TST.%c $%06X",
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     instr->absolute_addr & 0xFFFFFFu);
+        }
         break;
     case NG_M68K_CMPI:
         snprintf(out, out_size, "CMPI.%c #$%X,D%u",

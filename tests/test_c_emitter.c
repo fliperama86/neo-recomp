@@ -137,7 +137,9 @@ int main(void) {
         write16(&rom, 0x40u, 0x022Eu); /* ANDI.B #$0F,($0F7A,A6) */
         write16(&rom, 0x42u, 0x000Fu);
         write16(&rom, 0x44u, 0x0F7Au);
-        write16(&rom, 0x46u, 0x4E75u);
+        write16(&rom, 0x46u, 0x4A2Eu); /* TST.B ($0F7A,A6) */
+        write16(&rom, 0x48u, 0x0F7Au);
+        write16(&rom, 0x4Au, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -161,6 +163,7 @@ int main(void) {
         CHECK(strstr(text, "ng68k_write8(0x00001018u, (uint8_t)(g_ng_m68k.d[0] & 0x00FFu));") != NULL);
         CHECK(strstr(text, "ng_set_nz8((uint8_t)((g_ng_m68k.d[0] & 0x00FFu) - 0x7Fu));") != NULL);
         CHECK(strstr(text, "ng68k_write8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962), (uint8_t)(ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962)) & 0x0Fu));") != NULL);
+        CHECK(strstr(text, "ng_set_nz8(ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962)));") != NULL);
 
         ng_program_rom_free(&rom);
     }
