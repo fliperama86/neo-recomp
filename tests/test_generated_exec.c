@@ -675,6 +675,33 @@ static int oracle_exec(const uint8_t *program,
             pc = next_pc;
             continue;
         }
+        if ((op & 0xF1F8u) == 0xC140u) {
+            uint8_t left_reg = (uint8_t)((op >> 9) & 7u);
+            uint8_t right_reg = (uint8_t)(op & 7u);
+            uint32_t tmp = state->d[left_reg];
+            state->d[left_reg] = state->d[right_reg];
+            state->d[right_reg] = tmp;
+            pc += 2u;
+            continue;
+        }
+        if ((op & 0xF1F8u) == 0xC148u) {
+            uint8_t left_reg = (uint8_t)((op >> 9) & 7u);
+            uint8_t right_reg = (uint8_t)(op & 7u);
+            uint32_t tmp = state->a[left_reg];
+            state->a[left_reg] = state->a[right_reg];
+            state->a[right_reg] = tmp;
+            pc += 2u;
+            continue;
+        }
+        if ((op & 0xF1F8u) == 0xC188u) {
+            uint8_t left_reg = (uint8_t)((op >> 9) & 7u);
+            uint8_t right_reg = (uint8_t)(op & 7u);
+            uint32_t tmp = state->d[left_reg];
+            state->d[left_reg] = state->a[right_reg];
+            state->a[right_reg] = tmp;
+            pc += 2u;
+            continue;
+        }
         if ((op & 0xF000u) == 0x8000u ||
             (op & 0xF000u) == 0xB000u ||
             (op & 0xF000u) == 0xC000u) {

@@ -587,6 +587,20 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0xC1, 0x41 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_EXG);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 1);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "EXG D0,D1") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0xD1, 0x01 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

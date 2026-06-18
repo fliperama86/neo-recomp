@@ -450,6 +450,40 @@ static int decode_multiply(const NgProgramRom *rom,
     return 1;
 }
 
+static int decode_exchange(uint16_t op, NgM68kInstr *out) {
+    uint8_t left_reg = (uint8_t)((op >> 9) & 7u);
+    uint8_t right_reg = (uint8_t)(op & 7u);
+
+    if ((op & 0xF1F8u) == 0xC140u) {
+        out->mnemonic = NG_M68K_EXG;
+        out->byte_length = 2;
+        out->src.mode = NG_M68K_EA_DREG;
+        out->src.reg = left_reg;
+        out->dst.mode = NG_M68K_EA_DREG;
+        out->dst.reg = right_reg;
+        return 1;
+    }
+    if ((op & 0xF1F8u) == 0xC148u) {
+        out->mnemonic = NG_M68K_EXG;
+        out->byte_length = 2;
+        out->src.mode = NG_M68K_EA_AREG;
+        out->src.reg = left_reg;
+        out->dst.mode = NG_M68K_EA_AREG;
+        out->dst.reg = right_reg;
+        return 1;
+    }
+    if ((op & 0xF1F8u) == 0xC188u) {
+        out->mnemonic = NG_M68K_EXG;
+        out->byte_length = 2;
+        out->src.mode = NG_M68K_EA_DREG;
+        out->src.reg = left_reg;
+        out->dst.mode = NG_M68K_EA_AREG;
+        out->dst.reg = right_reg;
+        return 1;
+    }
+    return 0;
+}
+
 static int decode_alu_ea_to_dreg(const NgProgramRom *rom,
                                  uint32_t addr,
                                  uint16_t op,
@@ -524,6 +558,9 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         return 1;
     }
     if (decode_addsub_dreg_to_ea(rom, addr, op, out)) {
+        return 1;
+    }
+    if (decode_exchange(op, out)) {
         return 1;
     }
     if (decode_multiply(rom, addr, op, out)) {
@@ -1299,6 +1336,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_EOR: return "EOR";
     case NG_M68K_MULU: return "MULU";
     case NG_M68K_MULS: return "MULS";
+    case NG_M68K_EXG: return "EXG";
     case NG_M68K_CLR: return "CLR";
     case NG_M68K_NEG: return "NEG";
     case NG_M68K_NOT: return "NOT";
@@ -1561,6 +1599,18 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         } else {
             snprintf(out, out_size, "%s.W ?,D%u",
                      ng_m68k_mnemonic_name(instr->mnemonic), instr->reg);
+        }
+        break;
+    case NG_M68K_EXG:
+        if (instr->src.mode != NG_M68K_EA_NONE &&
+            instr->dst.mode != NG_M68K_EA_NONE) {
+            char src[64];
+            char dst[64];
+            format_ea_operand(&instr->src, instr->size, src, (unsigned)sizeof(src));
+            format_ea_operand(&instr->dst, instr->size, dst, (unsigned)sizeof(dst));
+            snprintf(out, out_size, "EXG %s,%s", src, dst);
+        } else {
+            snprintf(out, out_size, "EXG ?");
         }
         break;
     case NG_M68K_ADD:
