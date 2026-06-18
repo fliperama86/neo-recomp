@@ -684,6 +684,54 @@ static int emit_tas_generic(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static void emit_nbcd_core(FILE *out, const char *value_expr, const char *write_stmt) {
+    fprintf(out, "    { uint8_t ng_value = (uint8_t)(%s); uint8_t ng_x = (g_ng_m68k.sr & NG_CCR_X) ? 1u : 0u;\n",
+            value_expr);
+    fprintf(out, "      uint8_t ng_decimal = (uint8_t)(((ng_value >> 4) & 0x0Fu) * 10u + (ng_value & 0x0Fu));\n");
+    fprintf(out, "      uint8_t ng_borrow = (uint8_t)((ng_decimal + ng_x) != 0u);\n");
+    fprintf(out, "      uint8_t ng_result_decimal = (uint8_t)((100u - ng_decimal - ng_x) %% 100u);\n");
+    fprintf(out, "      uint8_t ng_result = (uint8_t)(((ng_result_decimal / 10u) << 4) | (ng_result_decimal %% 10u));\n");
+    fprintf(out, "      %s\n", write_stmt);
+    fprintf(out, "      uint16_t ng_sr = (uint16_t)(g_ng_m68k.sr & 0xFFE4u);\n");
+    fprintf(out, "      if (ng_result != 0) ng_sr = (uint16_t)(ng_sr & (uint16_t)~NG_CCR_Z);\n");
+    fprintf(out, "      if (ng_result & 0x80u) ng_sr |= NG_CCR_N;\n");
+    fprintf(out, "      if (ng_borrow) ng_sr |= NG_CCR_C | NG_CCR_X;\n");
+    fprintf(out, "      g_ng_m68k.sr = ng_sr;\n");
+    fprintf(out, "    }\n");
+}
+
+static int emit_nbcd_generic(FILE *out, const NgM68kInstr *instr) {
+    char addr_expr[256];
+    char value_expr[128];
+    char write_stmt[256];
+
+    if (instr->mnemonic != NG_M68K_NBCD ||
+        instr->dst.mode == NG_M68K_EA_NONE ||
+        instr->size != 1u) {
+        return 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        snprintf(value_expr, sizeof(value_expr), "g_ng_m68k.d[%u] & 0xFFu",
+                 instr->dst.reg);
+        snprintf(write_stmt, sizeof(write_stmt),
+                 "g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFFFF00u) | (uint32_t)ng_result;",
+                 instr->dst.reg, instr->dst.reg);
+        emit_nbcd_core(out, value_expr, write_stmt);
+        return 1;
+    }
+
+    if (!emit_ea_address(out, instr, &instr->dst, 1u,
+                         addr_expr, (unsigned)sizeof(addr_expr))) {
+        return 0;
+    }
+    snprintf(value_expr, sizeof(value_expr), "ng68k_read8(%s)", addr_expr);
+    snprintf(write_stmt, sizeof(write_stmt), "ng68k_write8(%s, ng_result);",
+             addr_expr);
+    emit_nbcd_core(out, value_expr, write_stmt);
+    return 1;
+}
+
 static uint32_t ng_sign_mask(uint8_t size) {
     if (size == 4u) {
         return 0x80000000u;
@@ -1925,6 +1973,11 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
     case NG_M68K_NEGX:
     case NG_M68K_NOT:
         if (emit_unary_rmw_generic(out, instr)) {
+            return 1;
+        }
+        break;
+    case NG_M68K_NBCD:
+        if (emit_nbcd_generic(out, instr)) {
             return 1;
         }
         break;

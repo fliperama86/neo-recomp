@@ -167,6 +167,7 @@ Covered by executable generated-C validation:
     abs, and postincrement memory destinations
   - generic `NEGX.B/W/L <ea>` paths covered so far by absolute byte memory
     destinations
+  - `NBCD <ea>` covered so far by absolute byte memory destinations
   - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
   - data-register `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` decode/emission,
     covered so far by generated-exec logical shift pairs
@@ -180,6 +181,8 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `NBCD <ea>` decode/emission with BCD negate and extend-aware
+  status updates, including generated-exec absolute-memory coverage.
 - local: Generalized extend arithmetic to `ADDX/SUBX.B/W/L` for data-register
   and predecrement-memory forms, with generated-exec coverage for word
   subtract-extend.

@@ -1313,6 +1313,19 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x48, 0x39, 0x00, 0x00, 0x01, 0x94 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_NBCD);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_ABS_L);
+        CHECK(instr.dst.absolute_addr == 0x00000194u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "NBCD.B $000194") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0xBD, 0x4D };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

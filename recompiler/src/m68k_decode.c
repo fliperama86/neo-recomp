@@ -1514,6 +1514,22 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
             return 1;
         }
     }
+    if ((op & 0xFFC0u) == 0x4800u) {
+        uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
+        uint8_t ea_reg = (uint8_t)(op & 7u);
+        if (is_data_alterable_ea(ea_mode, ea_reg)) {
+            out->mnemonic = NG_M68K_NBCD;
+            out->size = NG_M68K_SIZE_BYTE;
+            out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
+                                                        ea_mode, ea_reg,
+                                                        out->size, &out->dst));
+            if (out->dst.mode == NG_M68K_EA_NONE) {
+                out->mnemonic = NG_M68K_UNKNOWN;
+                out->byte_length = 2;
+            }
+            return 1;
+        }
+    }
     if ((op & 0xFFF8u) == 0x4840u) {
         out->mnemonic = NG_M68K_SWAP;
         out->size = NG_M68K_SIZE_LONG;
@@ -1733,6 +1749,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_CLR: return "CLR";
     case NG_M68K_NEG: return "NEG";
     case NG_M68K_NEGX: return "NEGX";
+    case NG_M68K_NBCD: return "NBCD";
     case NG_M68K_NOT: return "NOT";
     case NG_M68K_EXT: return "EXT";
     case NG_M68K_SWAP: return "SWAP";
@@ -2218,6 +2235,7 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         break;
     case NG_M68K_NEG:
     case NG_M68K_NEGX:
+    case NG_M68K_NBCD:
     case NG_M68K_NOT:
         if (instr->dst.mode != NG_M68K_EA_NONE) {
             char dst[64];

@@ -1602,6 +1602,45 @@ static int oracle_exec(const uint8_t *program,
             pc = next_pc;
             continue;
         }
+        if ((op & 0xFFC0u) == 0x4800u) {
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint32_t next_pc = pc + 2u;
+            uint8_t value;
+            uint8_t x = (state->sr & CCR_X) ? 1u : 0u;
+            uint8_t decimal;
+            uint8_t borrow;
+            uint8_t result_decimal;
+            uint8_t result;
+            uint32_t addr = 0;
+
+            if (mode == 0u) {
+                value = (uint8_t)(state->d[reg] & 0xFFu);
+            } else {
+                if (!oracle_ea_memory_addr(program, size, state, mode, reg,
+                                           1u, &next_pc, &addr)) {
+                    return 0;
+                }
+                value = bus_read8(bus, addr);
+            }
+
+            decimal = (uint8_t)(((value >> 4) & 0x0Fu) * 10u + (value & 0x0Fu));
+            borrow = (uint8_t)((decimal + x) != 0u);
+            result_decimal = (uint8_t)((100u - decimal - x) % 100u);
+            result = (uint8_t)(((result_decimal / 10u) << 4) | (result_decimal % 10u));
+
+            if (mode == 0u) {
+                state->d[reg] = (state->d[reg] & 0xFFFFFF00u) | (uint32_t)result;
+            } else {
+                bus_write8(bus, addr, result);
+            }
+            state->sr = (uint16_t)(state->sr & 0xFFE4u);
+            if (result != 0) state->sr = (uint16_t)(state->sr & (uint16_t)~CCR_Z);
+            if (result & 0x80u) state->sr |= CCR_N;
+            if (borrow) state->sr |= CCR_C | CCR_X;
+            pc = next_pc;
+            continue;
+        }
         if ((op & 0xFFF8u) == 0x4880u) {
             uint8_t reg = (uint8_t)(op & 7u);
             uint16_t result = (uint16_t)(int16_t)(int8_t)(state->d[reg] & 0xFFu);
@@ -1895,6 +1934,7 @@ int main(void) {
     CHECK(ng68k_read8(0x018Cu) == 0xFDu);
     CHECK(ng68k_read8(0x018Du) == 0x81u);
     CHECK(ng68k_read16(0x0192u) == 0x0004u);
+    CHECK(ng68k_read8(0x0194u) == 0x54u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

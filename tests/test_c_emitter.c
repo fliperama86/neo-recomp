@@ -599,6 +599,30 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x08u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x4839u); /* NBCD.B $00000194 */
+        write32(&rom, 0x02u, 0x00000194u);
+        write16(&rom, 0x06u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: NBCD.B $000194 */") != NULL);
+        CHECK(strstr(text, "uint8_t ng_value = (uint8_t)(ng68k_read8(0x00000194u));") != NULL);
+        CHECK(strstr(text, "uint8_t ng_result_decimal = (uint8_t)((100u - ng_decimal - ng_x) % 100u);") != NULL);
+        CHECK(strstr(text, "ng68k_write8(0x00000194u, ng_result);") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x30u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x08B9u); /* BCLR #7,$0010FD80 */
