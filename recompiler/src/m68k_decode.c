@@ -1773,6 +1773,12 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
         return 1;
     }
+    if ((op & 0xF000u) == 0xA000u ||
+        (op & 0xF000u) == 0xF000u) {
+        out->mnemonic = NG_M68K_ILLEGAL;
+        out->immediate = ((op & 0xF000u) == 0xA000u) ? 10u : 11u;
+        return 1;
+    }
 
     return 1;
 }
@@ -1964,8 +1970,16 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
     case NG_M68K_RTR:
     case NG_M68K_RESET:
     case NG_M68K_TRAPV:
-    case NG_M68K_ILLEGAL:
         snprintf(out, out_size, "%s", ng_m68k_mnemonic_name(instr->mnemonic));
+        break;
+    case NG_M68K_ILLEGAL:
+        if (instr->immediate == 10u) {
+            snprintf(out, out_size, "A-LINE $%04X", instr->opcode);
+        } else if (instr->immediate == 11u) {
+            snprintf(out, out_size, "F-LINE $%04X", instr->opcode);
+        } else {
+            snprintf(out, out_size, "ILLEGAL");
+        }
         break;
     case NG_M68K_STOP:
         snprintf(out, out_size, "STOP #$%04X", (unsigned)(instr->immediate & 0xFFFFu));

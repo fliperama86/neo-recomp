@@ -672,7 +672,55 @@ int main(void) {
         CHECK(strstr(text, "/* $000000: RESET */") != NULL);
         CHECK(strstr(text, "/* RESET privileged side effects are host-handled. */") != NULL);
         CHECK(strstr(text, "/* $000002: TRAP #3 */") != NULL);
-        CHECK(strstr(text, "ng_log_dispatch_miss(0x00000002u);") != NULL);
+        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x00000004u);") != NULL);
+        CHECK(strstr(text, "ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);") != NULL);
+        CHECK(strstr(text, "ng_generated_call(ng68k_read32(0x0000008Cu));") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x06u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x4E73u); /* RTE */
+        write16(&rom, 0x02u, 0x4E77u); /* RTR, not reached */
+        write16(&rom, 0x04u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: RTE */") != NULL);
+        CHECK(strstr(text, "uint16_t ng_sr = ng68k_read16(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 2u;") != NULL);
+        CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;") != NULL);
+        CHECK(strstr(text, "ng_generated_call(ng_pc);") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x04u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x4E77u); /* RTR */
+        write16(&rom, 0x02u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: RTR */") != NULL);
+        CHECK(strstr(text, "uint16_t ng_ccr = ng68k_read16(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 2u;") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | (ng_ccr & 0x001Fu));") != NULL);
 
         ng_program_rom_free(&rom);
     }

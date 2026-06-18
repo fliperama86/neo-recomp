@@ -88,9 +88,12 @@ Covered by executable generated-C validation:
 
 - control flow: direct and control-EA `JSR`/tail `JMP`, local `BRA`,
   selected `Bcc`
-- system/exception-control decode paths: `TRAP`, `TRAPV`, `ILLEGAL`, `RESET`,
-  `STOP`, `RTE`, and `RTR` are recognized; exception-return/trap side effects
-  currently dispatch-miss rather than emulate full exception frames
+- system/exception-control paths: `TRAP`, `TRAPV`, `ILLEGAL`, A-line,
+  F-line, `RESET`, `STOP`, `RTE`, and `RTR` are recognized. `TRAP`,
+  `TRAPV`, `ILLEGAL`, A-line, F-line, and failed `CHK` now push 68000-style
+  SR/PC exception frames and dispatch through the vector table; `RTE`/`RTR`
+  pop stack frames back into SR/CCR and PC. `STOP` still yields through a host
+  dispatch miss, and full privilege/device/interrupt timing remains pending.
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
 - conditional branches: all 68000 `Bcc` condition predicates are emitted;
   generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
@@ -137,7 +140,8 @@ Covered by executable generated-C validation:
     `CMPA.W/L <ea>,An` paths covered so far by immediate sources
   - `CMPM.B/W/L (Ay)+,(Ax)+` covered so far by word postincrement memory
     comparisons
-  - `CHK.W <ea>,Dn` covered so far by immediate in-range checks
+  - `CHK.W <ea>,Dn` covered so far by immediate in-range checks, with failed
+    checks vectoring through the CHK exception path in emitted C
   - `ADDX/SUBX.B/W/L` register and predecrement-memory forms, covered so far
     by generated-exec byte add-extend and word subtract-extend paths
   - `ABCD/SBCD` register and predecrement-memory BCD extend forms, covered so
@@ -187,10 +191,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added 68000-style exception vector stack semantics for `TRAP`,
+  `TRAPV`, `ILLEGAL`, A-line/F-line emulator traps, and failed `CHK`, plus
+  `RTE`/`RTR` stack unwinding back into generated dispatch.
 - local: Added decode/format/emission paths for system/exception-control
-  opcodes (`TRAP`, `TRAPV`, `ILLEGAL`, `RESET`, `STOP`, `RTE`, `RTR`), with
-  generated code terminating into dispatch misses where full exception-frame
-  semantics are still pending.
+  opcodes (`TRAP`, `TRAPV`, `ILLEGAL`, `RESET`, `STOP`, `RTE`, `RTR`).
 - local: Added `CHK.W <ea>,Dn` decode/emission with in-range generated-exec
   coverage and a dispatch miss path for trap cases.
 - local: Added `ABCD`/`SBCD` decode/emission for register and predecrement

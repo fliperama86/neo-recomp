@@ -1707,6 +1707,36 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x4E, 0x77 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_RTR);
+        CHECK(instr.byte_length == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "RTR") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0x70 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_RESET);
+        CHECK(instr.byte_length == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "RESET") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0x76 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_TRAPV);
+        CHECK(instr.byte_length == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "TRAPV") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x4A, 0xFC };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
@@ -1714,6 +1744,28 @@ int main(void) {
         CHECK(instr.byte_length == 2);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "ILLEGAL") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xA0, 0x00 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ILLEGAL);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.immediate == 10u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "A-LINE $A000") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xF0, 0x00 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ILLEGAL);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.immediate == 11u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "F-LINE $F000") == 0);
     }
 
     return 0;

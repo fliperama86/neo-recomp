@@ -127,6 +127,19 @@ static int emit_branch_condition(FILE *out,
     return 0;
 }
 
+static void emit_exception_vector_call(FILE *out,
+                                       uint8_t vector,
+                                       uint32_t return_pc) {
+    fprintf(out, "    g_ng_m68k.a[7] -= 4u;\n");
+    fprintf(out, "    ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+            return_pc & 0x00FFFFFFu);
+    fprintf(out, "    g_ng_m68k.a[7] -= 2u;\n");
+    fprintf(out, "    ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
+    fprintf(out, "    ng_generated_call(ng68k_read32(0x%08Xu));\n",
+            (uint32_t)vector * 4u);
+    fprintf(out, "    return;\n");
+}
+
 static const char *ng_read_fn_for_size(uint8_t size) {
     if (size == 4u) {
         return "ng68k_read32";
@@ -948,8 +961,16 @@ static int emit_chk(FILE *out, const NgM68kInstr *instr) {
 
     fprintf(out, "    { int16_t ng_bound = (int16_t)(%s); int16_t ng_value = (int16_t)(g_ng_m68k.d[%u] & 0xFFFFu);\n",
             src_expr, instr->dst.reg);
-    fprintf(out, "      if (ng_value < 0 || ng_value > ng_bound) { if (ng_value < 0) g_ng_m68k.sr |= NG_CCR_N; else g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & (uint16_t)~NG_CCR_N); ng_log_dispatch_miss(0x%08Xu); return; }\n",
-            instr->addr & 0x00FFFFFFu);
+    fprintf(out, "      if (ng_value < 0 || ng_value > ng_bound) {\n");
+    fprintf(out, "        if (ng_value < 0) g_ng_m68k.sr |= NG_CCR_N; else g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & (uint16_t)~NG_CCR_N);\n");
+    fprintf(out, "        g_ng_m68k.a[7] -= 4u;\n");
+    fprintf(out, "        ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+            (instr->addr + instr->byte_length) & 0x00FFFFFFu);
+    fprintf(out, "        g_ng_m68k.a[7] -= 2u;\n");
+    fprintf(out, "        ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
+    fprintf(out, "        ng_generated_call(ng68k_read32(0x00000018u));\n");
+    fprintf(out, "        return;\n");
+    fprintf(out, "      }\n");
     fprintf(out, "    }\n");
     return 1;
 }
@@ -1787,11 +1808,39 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_ILLEGAL:
+        emit_exception_vector_call(out,
+                                   instr->immediate ? (uint8_t)instr->immediate : 4u,
+                                   instr->addr + instr->byte_length);
+        return 0;
     case NG_M68K_TRAP:
+        emit_exception_vector_call(out, (uint8_t)(32u + (instr->immediate & 0x0Fu)),
+                                   instr->addr + instr->byte_length);
+        return 0;
     case NG_M68K_TRAPV:
+        fprintf(out, "    if (g_ng_m68k.sr & NG_CCR_V) {\n");
+        fprintf(out, "      g_ng_m68k.a[7] -= 4u;\n");
+        fprintf(out, "      ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+                (instr->addr + instr->byte_length) & 0x00FFFFFFu);
+        fprintf(out, "      g_ng_m68k.a[7] -= 2u;\n");
+        fprintf(out, "      ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
+        fprintf(out, "      ng_generated_call(ng68k_read32(0x0000001Cu));\n");
+        fprintf(out, "      return;\n");
+        fprintf(out, "    }\n");
+        return 1;
     case NG_M68K_RTE:
+        fprintf(out, "    { uint16_t ng_sr = ng68k_read16(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 2u;\n");
+        fprintf(out, "      uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;\n");
+        fprintf(out, "      g_ng_m68k.sr = ng_sr;\n");
+        fprintf(out, "      ng_generated_call(ng_pc);\n");
+        fprintf(out, "    }\n");
+        fprintf(out, "    return;\n");
+        return 0;
     case NG_M68K_RTR:
-        fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n", instr->addr & 0x00FFFFFFu);
+        fprintf(out, "    { uint16_t ng_ccr = ng68k_read16(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 2u;\n");
+        fprintf(out, "      uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;\n");
+        fprintf(out, "      g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | (ng_ccr & 0x001Fu));\n");
+        fprintf(out, "      ng_generated_call(ng_pc);\n");
+        fprintf(out, "    }\n");
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_RTS:
