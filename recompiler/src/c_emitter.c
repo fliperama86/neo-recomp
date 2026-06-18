@@ -1148,9 +1148,19 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         fprintf(out, "    g_ng_m68k.a[7] += 4u;\n");
         return 1;
     case NG_M68K_LEA:
-        fprintf(out, "    g_ng_m68k.a[%u] = 0x%08Xu;\n",
-                instr->reg, instr->target & 0x00FFFFFFu);
-        return 1;
+        if (instr->src.mode != NG_M68K_EA_NONE) {
+            char addr_expr[256];
+            if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
+                fprintf(out, "    g_ng_m68k.a[%u] = (uint32_t)(%s);\n",
+                        instr->reg, addr_expr);
+                return 1;
+            }
+        } else {
+            fprintf(out, "    g_ng_m68k.a[%u] = 0x%08Xu;\n",
+                    instr->reg, instr->target & 0x00FFFFFFu);
+            return 1;
+        }
+        break;
     case NG_M68K_MOVEA:
         if (instr->form == NG_M68K_FORM_PC_INDEX_TO_AREG) {
             fprintf(out,

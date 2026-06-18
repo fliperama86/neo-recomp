@@ -1213,6 +1213,27 @@ static int oracle_exec(const uint8_t *program,
             pc += 4u;
             continue;
         }
+        if ((op & 0xF1C0u) == 0x41C0u) {
+            uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint32_t next_pc = pc + 2u;
+            uint32_t addr;
+            if (!oracle_ea_memory_addr(program, size, state, mode, reg,
+                                       4u, &next_pc, &addr)) {
+                return 0;
+            }
+            state->a[dst_reg] = addr;
+            pc = next_pc;
+            continue;
+        }
+        if ((op & 0xF1FFu) == 0x41FAu) {
+            uint8_t reg = (uint8_t)((op >> 9) & 7u);
+            int16_t disp = (int16_t)program_read16(program, size, pc + 2u);
+            state->a[reg] = (uint32_t)((int32_t)(pc + 4u) + (int32_t)disp);
+            pc += 4u;
+            continue;
+        }
         if ((op & 0xFFF8u) == 0x23C8u) {
             uint8_t reg = (uint8_t)(op & 7u);
             uint32_t addr = program_read32(program, size, pc + 2u);
@@ -1446,6 +1467,7 @@ int main(void) {
     CHECK(g_ng_m68k.a[0] == 0x00000132u);
     CHECK(g_ng_m68k.a[1] == 0x00000125u);
     CHECK(g_ng_m68k.a[2] == 0x00000108u);
+    CHECK(g_ng_m68k.a[3] == 0x00000142u);
     CHECK(g_ng_m68k.a[5] == 0x00000160u);
     CHECK(g_ng_m68k.a[7] == 0x0000013Cu);
     CHECK(ng68k_read16(0x0068u) == 0x0000u);

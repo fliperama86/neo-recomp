@@ -651,6 +651,31 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->target = addr + 4u + (int32_t)sign16(ng_program_rom_read16(rom, addr + 2u));
         return 1;
     }
+    if ((op & 0xF1C0u) == 0x41C0u) {
+        uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
+        uint8_t ea_reg = (uint8_t)(op & 7u);
+        if (is_control_ea(ea_mode, ea_reg)) {
+            out->mnemonic = NG_M68K_LEA;
+            out->size = NG_M68K_SIZE_LONG;
+            out->reg = (uint8_t)((op >> 9) & 7u);
+            out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
+                                                        ea_mode, ea_reg,
+                                                        out->size, &out->src));
+            out->dst.mode = NG_M68K_EA_AREG;
+            out->dst.reg = out->reg;
+            if (out->src.mode == NG_M68K_EA_ABS_W ||
+                out->src.mode == NG_M68K_EA_ABS_L ||
+                out->src.mode == NG_M68K_EA_PC_DISP ||
+                out->src.mode == NG_M68K_EA_PC_INDEX) {
+                out->target = out->src.absolute_addr;
+            }
+            if (out->src.mode == NG_M68K_EA_NONE) {
+                out->mnemonic = NG_M68K_UNKNOWN;
+                out->byte_length = 2;
+            }
+            return 1;
+        }
+    }
     if ((op & 0xF1FFu) == 0x41F9u) {
         out->mnemonic = NG_M68K_LEA;
         out->byte_length = 6;
@@ -1461,7 +1486,13 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                  instr->condition, instr->reg, instr->target & 0xFFFFFFu);
         break;
     case NG_M68K_LEA:
-        snprintf(out, out_size, "LEA $%06X,A%u", instr->target & 0xFFFFFFu, instr->reg);
+        if (instr->src.mode != NG_M68K_EA_NONE) {
+            char src[64];
+            format_ea_operand(&instr->src, instr->size, src, (unsigned)sizeof(src));
+            snprintf(out, out_size, "LEA %s,A%u", src, instr->reg);
+        } else {
+            snprintf(out, out_size, "LEA $%06X,A%u", instr->target & 0xFFFFFFu, instr->reg);
+        }
         break;
     case NG_M68K_MOVEA:
         if (instr->form == NG_M68K_FORM_PC_INDEX_TO_AREG) {

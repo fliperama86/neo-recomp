@@ -44,6 +44,22 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x47, 0xE8, 0x00, 0x10 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_LEA);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.reg == 3);
+        CHECK(instr.src.mode == NG_M68K_EA_ADISP);
+        CHECK(instr.src.reg == 0);
+        CHECK(instr.src.displacement == 0x10);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "LEA ($10,A0),A3") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x23, 0xC8, 0x00, 0x10, 0x6E, 0xA8 };
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_MOVE);

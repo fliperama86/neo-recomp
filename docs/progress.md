@@ -105,7 +105,8 @@ Covered by executable generated-C validation:
   - generic `MOVEA.L <ea>,An` paths covered so far by immediate and
     address-register sources
   - `MOVE.L An,abs`
-  - `LEA`
+  - generic `LEA <ea>,An` control-address loads covered so far by PC-relative
+    and displacement sources
   - `LINK An,#disp` and `UNLK An`
 - arithmetic/logical:
   - `ADD.W Dn,Dn`
@@ -162,6 +163,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized `LEA <ea>,An` onto the reusable effective-address-value
+  helper with generated-exec coverage for displacement addressing.
 - local: Added `EXG` register exchange decode/emission for data, address, and
   mixed register forms with generated-exec coverage for data-register swaps.
 - local: Added signed/unsigned 16x16 multiply (`MULS`/`MULU`) over shared EA
