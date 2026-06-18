@@ -90,6 +90,8 @@ Covered by executable generated-C validation:
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
 - conditional branches: all 68000 `Bcc` condition predicates are emitted;
   generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
+- condition operations: `Scc <ea>` and `DBcc Dn,disp` share the same
+  condition predicate table, with generated-exec coverage for `SMI` and `DBF`
 - flags: `N`/`Z` for covered operations; `C`/`X` for tested byte subtract/extend-add paths
 - data movement:
   - `MOVEQ`
@@ -158,6 +160,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `Scc` and `DBcc` decode/emission using the generalized
+  condition predicates, with generated-exec coverage for byte condition stores
+  and DBF counter fallthrough.
 - local: Generalized `Bcc` emission/oracle predicates to all 16 condition
   codes and added generated-exec coverage for an `N`-flag branch (`BMI`).
 - local: Added stack-frame setup/teardown (`LINK`/`UNLK`) with generated-exec

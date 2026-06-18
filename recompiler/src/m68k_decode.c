@@ -990,6 +990,31 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->reg = 0;
         return 1;
     }
+    if ((op & 0xF000u) == 0x5000u && ((op >> 6) & 3u) == 3u) {
+        uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
+        uint8_t ea_reg = (uint8_t)(op & 7u);
+        out->condition = (uint8_t)((op >> 8) & 0xFu);
+        if (ea_mode == 1u) {
+            out->mnemonic = NG_M68K_DBCC;
+            out->byte_length = 4;
+            out->reg = ea_reg;
+            out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
+            out->target = (uint32_t)((int32_t)(addr + 2u) + (int32_t)out->displacement);
+            return 1;
+        }
+        if (is_data_alterable_ea(ea_mode, ea_reg)) {
+            out->mnemonic = NG_M68K_SCC;
+            out->size = NG_M68K_SIZE_BYTE;
+            out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
+                                                        ea_mode, ea_reg,
+                                                        out->size, &out->dst));
+            if (out->dst.mode == NG_M68K_EA_NONE) {
+                out->mnemonic = NG_M68K_UNKNOWN;
+                out->byte_length = 2;
+            }
+            return 1;
+        }
+    }
     if ((op & 0xF000u) == 0x5000u) {
         uint8_t size_code = (uint8_t)((op >> 6) & 3u);
         uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
@@ -1221,6 +1246,8 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_BRA: return "BRA";
     case NG_M68K_BSR: return "BSR";
     case NG_M68K_BCC: return "BCC";
+    case NG_M68K_SCC: return "SCC";
+    case NG_M68K_DBCC: return "DBCC";
     case NG_M68K_LEA: return "LEA";
     case NG_M68K_MOVEA: return "MOVEA";
     case NG_M68K_MOVEQ: return "MOVEQ";
@@ -1346,6 +1373,19 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
     case NG_M68K_BCC:
         snprintf(out, out_size, "Bcc.%X $%06X",
                  instr->condition, instr->target & 0xFFFFFFu);
+        break;
+    case NG_M68K_SCC:
+        if (instr->dst.mode != NG_M68K_EA_NONE) {
+            char dst[64];
+            format_ea_operand(&instr->dst, instr->size, dst, (unsigned)sizeof(dst));
+            snprintf(out, out_size, "Scc.%X %s", instr->condition, dst);
+        } else {
+            snprintf(out, out_size, "Scc.%X ?", instr->condition);
+        }
+        break;
+    case NG_M68K_DBCC:
+        snprintf(out, out_size, "DBcc.%X D%u,$%06X",
+                 instr->condition, instr->reg, instr->target & 0xFFFFFFu);
         break;
     case NG_M68K_LEA:
         snprintf(out, out_size, "LEA $%06X,A%u", instr->target & 0xFFFFFFu, instr->reg);

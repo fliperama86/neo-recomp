@@ -80,10 +80,45 @@ static void emit_dispatch(FILE *out, const NgFunctionDiscovery *discovery) {
     fprintf(out, "}\n\n");
 }
 
+static const char *ng_condition_expr(uint8_t condition) {
+    switch (condition) {
+    case 2u:
+        return "((g_ng_m68k.sr & (NG_CCR_C | NG_CCR_Z)) == 0)";
+    case 3u:
+        return "((g_ng_m68k.sr & (NG_CCR_C | NG_CCR_Z)) != 0)";
+    case 4u:
+        return "((g_ng_m68k.sr & NG_CCR_C) == 0)";
+    case 5u:
+        return "((g_ng_m68k.sr & NG_CCR_C) != 0)";
+    case 6u:
+        return "((g_ng_m68k.sr & NG_CCR_Z) == 0)";
+    case 7u:
+        return "((g_ng_m68k.sr & NG_CCR_Z) != 0)";
+    case 8u:
+        return "((g_ng_m68k.sr & NG_CCR_V) == 0)";
+    case 9u:
+        return "((g_ng_m68k.sr & NG_CCR_V) != 0)";
+    case 10u:
+        return "((g_ng_m68k.sr & NG_CCR_N) == 0)";
+    case 11u:
+        return "((g_ng_m68k.sr & NG_CCR_N) != 0)";
+    case 12u:
+        return "(((g_ng_m68k.sr & NG_CCR_N) != 0) == ((g_ng_m68k.sr & NG_CCR_V) != 0))";
+    case 13u:
+        return "(((g_ng_m68k.sr & NG_CCR_N) != 0) != ((g_ng_m68k.sr & NG_CCR_V) != 0))";
+    case 14u:
+        return "((g_ng_m68k.sr & NG_CCR_Z) == 0 && (((g_ng_m68k.sr & NG_CCR_N) != 0) == ((g_ng_m68k.sr & NG_CCR_V) != 0)))";
+    case 15u:
+        return "((g_ng_m68k.sr & NG_CCR_Z) != 0 || (((g_ng_m68k.sr & NG_CCR_N) != 0) != ((g_ng_m68k.sr & NG_CCR_V) != 0)))";
+    default:
+        return NULL;
+    }
+}
+
 static int emit_branch_condition(FILE *out,
                                  const NgM68kInstr *instr,
                                  const char *target_label) {
-    const char *expr = NULL;
+    const char *expr = ng_condition_expr(instr->condition);
 
     if (instr->condition == 0u) {
         fprintf(out, "    goto %s;\n", target_label);
@@ -92,53 +127,6 @@ static int emit_branch_condition(FILE *out,
     if (instr->condition == 1u) {
         fprintf(out, "    /* BF never branches. */\n");
         return 1;
-    }
-
-    switch (instr->condition) {
-    case 2u:
-        expr = "((g_ng_m68k.sr & (NG_CCR_C | NG_CCR_Z)) == 0)";
-        break;
-    case 3u:
-        expr = "((g_ng_m68k.sr & (NG_CCR_C | NG_CCR_Z)) != 0)";
-        break;
-    case 4u:
-        expr = "((g_ng_m68k.sr & NG_CCR_C) == 0)";
-        break;
-    case 5u:
-        expr = "((g_ng_m68k.sr & NG_CCR_C) != 0)";
-        break;
-    case 6u:
-        expr = "((g_ng_m68k.sr & NG_CCR_Z) == 0)";
-        break;
-    case 7u:
-        expr = "((g_ng_m68k.sr & NG_CCR_Z) != 0)";
-        break;
-    case 8u:
-        expr = "((g_ng_m68k.sr & NG_CCR_V) == 0)";
-        break;
-    case 9u:
-        expr = "((g_ng_m68k.sr & NG_CCR_V) != 0)";
-        break;
-    case 10u:
-        expr = "((g_ng_m68k.sr & NG_CCR_N) == 0)";
-        break;
-    case 11u:
-        expr = "((g_ng_m68k.sr & NG_CCR_N) != 0)";
-        break;
-    case 12u:
-        expr = "(((g_ng_m68k.sr & NG_CCR_N) != 0) == ((g_ng_m68k.sr & NG_CCR_V) != 0))";
-        break;
-    case 13u:
-        expr = "(((g_ng_m68k.sr & NG_CCR_N) != 0) != ((g_ng_m68k.sr & NG_CCR_V) != 0))";
-        break;
-    case 14u:
-        expr = "((g_ng_m68k.sr & NG_CCR_Z) == 0 && (((g_ng_m68k.sr & NG_CCR_N) != 0) == ((g_ng_m68k.sr & NG_CCR_V) != 0)))";
-        break;
-    case 15u:
-        expr = "((g_ng_m68k.sr & NG_CCR_Z) != 0 || (((g_ng_m68k.sr & NG_CCR_N) != 0) != ((g_ng_m68k.sr & NG_CCR_V) != 0)))";
-        break;
-    default:
-        break;
     }
 
     if (expr) {
@@ -1407,6 +1395,46 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
     case NG_M68K_BCC:
         ng_c_label_for_addr(instr->target, target_label, (unsigned)sizeof(target_label));
         return emit_branch_condition(out, instr, target_label);
+    case NG_M68K_SCC: {
+        const char *expr = ng_condition_expr(instr->condition);
+        char value_expr[512];
+        if (instr->condition == 0u) {
+            snprintf(value_expr, sizeof(value_expr), "0xFFu");
+        } else if (instr->condition == 1u) {
+            snprintf(value_expr, sizeof(value_expr), "0x00u");
+        } else if (expr) {
+            snprintf(value_expr, sizeof(value_expr), "(%s ? 0xFFu : 0x00u)", expr);
+        } else {
+            break;
+        }
+        if (emit_ea_write(out, &instr->dst, 1u, value_expr)) {
+            return 1;
+        }
+        break;
+    }
+    case NG_M68K_DBCC: {
+        const char *expr = ng_condition_expr(instr->condition);
+        ng_c_label_for_addr(instr->target, target_label, (unsigned)sizeof(target_label));
+        if (instr->condition == 0u) {
+            fprintf(out, "    /* DBT condition true; counter unchanged. */\n");
+            return 1;
+        }
+        if (instr->condition != 1u && !expr) {
+            break;
+        }
+        if (instr->condition != 1u) {
+            fprintf(out, "    if (!(%s)) {\n", expr);
+        } else {
+            fprintf(out, "    {\n");
+        }
+        fprintf(out, "      uint16_t ng_counter = (uint16_t)((g_ng_m68k.d[%u] & 0xFFFFu) - 1u);\n",
+                instr->reg);
+        fprintf(out, "      g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFF0000u) | (uint32_t)ng_counter;\n",
+                instr->reg, instr->reg);
+        fprintf(out, "      if (ng_counter != 0xFFFFu) goto %s;\n", target_label);
+        fprintf(out, "    }\n");
+        return 1;
+    }
     case NG_M68K_JSR:
     case NG_M68K_BSR:
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);

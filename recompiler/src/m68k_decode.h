@@ -15,6 +15,8 @@ typedef enum NgM68kMnemonic {
     NG_M68K_BRA,
     NG_M68K_BSR,
     NG_M68K_BCC,
+    NG_M68K_SCC,
+    NG_M68K_DBCC,
     NG_M68K_LEA,
     NG_M68K_MOVEA,
     NG_M68K_MOVEQ,

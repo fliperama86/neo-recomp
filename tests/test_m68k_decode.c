@@ -1148,6 +1148,33 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x5B, 0xD8 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_SCC);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.condition == 11u);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "Scc.B (A0)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x51, 0xCF, 0xFF, 0xEE };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0x000110u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_DBCC);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.condition == 1u);
+        CHECK(instr.reg == 7);
+        CHECK(instr.displacement == -18);
+        CHECK(instr.target == 0x000100u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "DBcc.1 D7,$000100") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x4E, 0x55, 0xFF, 0xFC };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

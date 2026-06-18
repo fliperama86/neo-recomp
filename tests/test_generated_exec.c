@@ -923,6 +923,35 @@ static int oracle_exec(const uint8_t *program,
             pc += 2u;
             continue;
         }
+        if ((op & 0xF000u) == 0x5000u && ((op >> 6) & 3u) == 3u) {
+            uint8_t condition = (uint8_t)((op >> 8) & 0xFu);
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+
+            if (mode == 1u) {
+                int16_t displacement = (int16_t)program_read16(program, size, pc + 2u);
+                uint32_t next_pc = pc + 4u;
+                if (!oracle_condition_true(state->sr, condition)) {
+                    uint16_t counter = (uint16_t)((state->d[reg] & 0xFFFFu) - 1u);
+                    state->d[reg] = (state->d[reg] & 0xFFFF0000u) | (uint32_t)counter;
+                    if (counter != 0xFFFFu) {
+                        next_pc = (uint32_t)((int32_t)(pc + 2u) + (int32_t)displacement);
+                    }
+                }
+                pc = next_pc;
+                continue;
+            }
+            if (mode != 1u && !(mode == 7u && reg >= 2u)) {
+                uint8_t value = oracle_condition_true(state->sr, condition) ? 0xFFu : 0x00u;
+                uint32_t next_pc = pc + 2u;
+                if (!oracle_write_ea(program, size, state, bus, mode, reg,
+                                     1u, &next_pc, value)) {
+                    return 0;
+                }
+                pc = next_pc;
+                continue;
+            }
+        }
         if ((op & 0xF000u) == 0x5000u) {
             uint8_t size_code = (uint8_t)((op >> 6) & 3u);
             uint8_t mode = (uint8_t)((op >> 3) & 7u);
@@ -1359,8 +1388,8 @@ int main(void) {
     CHECK((g_ng_m68k.d[4] & 0xFFu) == 0x0Eu);
     CHECK((g_ng_m68k.d[5] & 0xFFFFu) == 0x1357u);
     CHECK((g_ng_m68k.d[6] & 0xFFFFu) == 0x1357u);
-    CHECK((g_ng_m68k.d[7] & 0xFFu) == 0x0Fu);
-    CHECK(g_ng_m68k.a[0] == 0x00000131u);
+    CHECK((g_ng_m68k.d[7] & 0xFFFFu) == 0xFFFFu);
+    CHECK(g_ng_m68k.a[0] == 0x00000132u);
     CHECK(g_ng_m68k.a[1] == 0x00000125u);
     CHECK(g_ng_m68k.a[2] == 0x00000108u);
     CHECK(g_ng_m68k.a[5] == 0x00000160u);
@@ -1381,6 +1410,7 @@ int main(void) {
     CHECK(ng68k_read8(0x012Eu) == 0x0Fu);
     CHECK(ng68k_read8(0x012Fu) == 0x0Fu);
     CHECK(ng68k_read8(0x0130u) == 0xF1u);
+    CHECK(ng68k_read8(0x0131u) == 0xFFu);
     CHECK(ng68k_read32(0x0138u) == 0x00000160u);
     CHECK(ng68k_read32(0x013Cu) == 0x00000141u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
