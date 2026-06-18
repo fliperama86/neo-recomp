@@ -527,6 +527,36 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0xDF, 0x18 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ADD);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ADD.B D7,(A0)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x9F, 0x18 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_SUB);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "SUB.B D7,(A0)+") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0xD1, 0x01 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

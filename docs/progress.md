@@ -106,8 +106,12 @@ Covered by executable generated-C validation:
   - `ADD.W Dn,Dn`
   - generic `ADD.B/W/L <ea>,Dn` paths covered so far by Dn reads
   - generic `ADDI.B/W/L #imm,<ea>` paths covered so far by Dn destinations
+  - generic `ADD.B/W/L Dn,<ea>` paths covered so far by postincrement memory
+    destinations
   - generic `ADDQ.B/W/L #imm,<ea>` paths covered so far by Dn destinations
   - generic `SUB.B/W/L <ea>,Dn` paths covered so far by Dn reads
+  - generic `SUB.B/W/L Dn,<ea>` paths covered so far by postincrement memory
+    destinations
   - generic `SUBI.B/W/L #imm,<ea>` paths covered so far by postincrement
     memory destinations
   - generic `SUBQ.B/W/L #imm,<ea>` paths covered so far by Dn and
@@ -150,6 +154,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generic `ADD/SUB Dn,<ea>` emission for memory destinations,
+  sharing the same single-address RMW path as logical and immediate ops.
 - local: Added generic register/logical binary operations (`OR`, `AND`, `EOR`)
   over the shared EA read/RMW helpers and raised the generated-exec window to
   keep the growing fixture covered.

@@ -324,7 +324,7 @@ static int oracle_exec(const uint8_t *program,
         return 0;
     }
 
-    for (uint32_t step = 0; step < 128u; ++step) {
+    for (uint32_t step = 0; step < 192u; ++step) {
         uint16_t op = program_read16(program, size, pc);
 
         if (op == 0x4E75u) {
@@ -737,6 +737,49 @@ static int oracle_exec(const uint8_t *program,
                 if (result & 0x80000000u) state->sr |= CCR_N;
                 if (src > dst) state->sr |= CCR_C;
                 if (((dst ^ src) & (dst ^ result) & 0x80000000u) != 0) state->sr |= CCR_V;
+            }
+            pc = next_pc;
+            continue;
+        }
+        if (((op & 0xF000u) == 0xD000u ||
+             (op & 0xF000u) == 0x9000u) &&
+            ((op >> 6) & 7u) >= 4u && ((op >> 6) & 7u) <= 6u &&
+            ((op >> 3) & 7u) >= 2u &&
+            !(((op >> 3) & 7u) == 7u && (op & 7u) >= 2u)) {
+            uint8_t opmode = (uint8_t)((op >> 6) & 7u);
+            uint8_t size_code = (uint8_t)(opmode & 3u);
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint8_t src_reg = (uint8_t)((op >> 9) & 7u);
+            uint8_t bytes = size_code == 2u ? 4u : (size_code == 1u ? 2u : 1u);
+            uint32_t mask = oracle_value_mask(bytes);
+            uint32_t sign_mask = oracle_sign_mask(bytes);
+            uint32_t next_pc = pc + 2u;
+            uint32_t addr;
+            uint32_t src;
+            uint32_t dst;
+            uint32_t result;
+            uint8_t is_add = (uint8_t)((op & 0xF000u) == 0xD000u);
+
+            if (!oracle_ea_memory_addr(program, size, state, mode, reg,
+                                       bytes, &next_pc, &addr)) {
+                return 0;
+            }
+            src = state->d[src_reg] & mask;
+            dst = bus_read_size(bus, addr, bytes) & mask;
+            result = is_add ? ((dst + src) & mask) : ((dst - src) & mask);
+            bus_write_size(bus, addr, result, bytes);
+
+            state->sr = (uint16_t)(state->sr & 0xFFE0u);
+            if (result == 0) state->sr |= CCR_Z;
+            if (result & sign_mask) state->sr |= CCR_N;
+            if (is_add) {
+                uint64_t full = (uint64_t)dst + (uint64_t)src;
+                if (full > mask) state->sr |= CCR_C | CCR_X;
+                if (((~(dst ^ src) & (dst ^ result)) & sign_mask) != 0) state->sr |= CCR_V;
+            } else {
+                if (src > dst) state->sr |= CCR_C | CCR_X;
+                if (((dst ^ src) & (dst ^ result) & sign_mask) != 0) state->sr |= CCR_V;
             }
             pc = next_pc;
             continue;
@@ -1269,7 +1312,7 @@ int main(void) {
     CHECK((g_ng_m68k.d[5] & 0xFFFFu) == 0x1357u);
     CHECK((g_ng_m68k.d[6] & 0xFFFFu) == 0x1357u);
     CHECK((g_ng_m68k.d[7] & 0xFFu) == 0x0Fu);
-    CHECK(g_ng_m68k.a[0] == 0x0000012Fu);
+    CHECK(g_ng_m68k.a[0] == 0x00000131u);
     CHECK(g_ng_m68k.a[1] == 0x00000125u);
     CHECK(g_ng_m68k.a[2] == 0x00000108u);
     CHECK(ng68k_read16(0x0068u) == 0x0000u);
@@ -1286,6 +1329,8 @@ int main(void) {
     CHECK(ng68k_read8(0x012Cu) == 0x0Fu);
     CHECK(ng68k_read8(0x012Du) == 0x00u);
     CHECK(ng68k_read8(0x012Eu) == 0x0Fu);
+    CHECK(ng68k_read8(0x012Fu) == 0x0Fu);
+    CHECK(ng68k_read8(0x0130u) == 0xF1u);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

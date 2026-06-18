@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 
-#define NG_EMIT_MAX_INSTRUCTIONS 128u
+#define NG_EMIT_MAX_INSTRUCTIONS 192u
 #define NG_CCR_C 0x0001u
 #define NG_CCR_V 0x0002u
 #define NG_CCR_Z 0x0004u
@@ -878,6 +878,63 @@ static int emit_logic_binary_generic(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_alu_dreg_to_ea(FILE *out, const NgM68kInstr *instr) {
+    char src_expr[256];
+    char addr_expr[256];
+    const char *ctype = ng_ctype_for_size(instr->size);
+    const char *read_fn = ng_read_fn_for_size(instr->size);
+    const char *write_fn = ng_write_fn_for_size(instr->size);
+    uint32_t value_mask = ng_value_mask(instr->size);
+    uint32_t sign_mask = ng_sign_mask(instr->size);
+
+    if ((instr->mnemonic != NG_M68K_ADD && instr->mnemonic != NG_M68K_SUB) ||
+        instr->src.mode != NG_M68K_EA_DREG ||
+        instr->dst.mode == NG_M68K_EA_NONE ||
+        instr->dst.mode == NG_M68K_EA_DREG ||
+        instr->dst.mode == NG_M68K_EA_AREG) {
+        return 0;
+    }
+    if (!emit_ea_read(out, instr, &instr->src, instr->size,
+                      src_expr, (unsigned)sizeof(src_expr))) {
+        return 0;
+    }
+    if (!emit_ea_address(out, instr, &instr->dst, instr->size,
+                         addr_expr, (unsigned)sizeof(addr_expr))) {
+        return 0;
+    }
+
+    if (instr->mnemonic == NG_M68K_ADD) {
+        fprintf(out,
+                "    { %s ng_src = (%s)(%s); %s ng_dst = %s(%s); uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src; %s ng_result = (%s)ng_full;\n",
+                ctype, ctype, src_expr,
+                ctype, read_fn, addr_expr,
+                ctype, ctype);
+    } else {
+        fprintf(out,
+                "    { %s ng_src = (%s)(%s); %s ng_dst = %s(%s); %s ng_result = (%s)(ng_dst - ng_src);\n",
+                ctype, ctype, src_expr,
+                ctype, read_fn, addr_expr,
+                ctype, ctype);
+    }
+    fprintf(out, "      %s(%s, ng_result);\n", write_fn, addr_expr);
+    fprintf(out, "      g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFE0u);\n");
+    fprintf(out, "      if (ng_result == 0) g_ng_m68k.sr |= NG_CCR_Z;\n");
+    fprintf(out, "      if (ng_result & 0x%08Xu) g_ng_m68k.sr |= NG_CCR_N;\n",
+            sign_mask);
+    if (instr->mnemonic == NG_M68K_ADD) {
+        fprintf(out, "      if (ng_full > 0x%08Xu) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;\n",
+                value_mask);
+        fprintf(out, "      if (((~(ng_dst ^ ng_src) & (ng_dst ^ ng_result)) & 0x%08Xu) != 0) g_ng_m68k.sr |= NG_CCR_V;\n",
+                sign_mask);
+    } else {
+        fprintf(out, "      if (ng_src > ng_dst) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;\n");
+        fprintf(out, "      if (((ng_dst ^ ng_src) & (ng_dst ^ ng_result) & 0x%08Xu) != 0) g_ng_m68k.sr |= NG_CCR_V;\n",
+                sign_mask);
+    }
+    fprintf(out, "    }\n");
+    return 1;
+}
+
 static int emit_alu_ea_to_dreg(FILE *out, const NgM68kInstr *instr) {
     char src_expr[256];
     const char *ctype = ng_ctype_for_size(instr->size);
@@ -1052,6 +1109,9 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
     case NG_M68K_ADD:
     case NG_M68K_SUB:
     case NG_M68K_CMP:
+        if (emit_alu_dreg_to_ea(out, instr)) {
+            return 1;
+        }
         if (emit_alu_ea_to_dreg(out, instr)) {
             return 1;
         }
