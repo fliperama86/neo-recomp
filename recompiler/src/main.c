@@ -1,3 +1,4 @@
+#include "c_emitter.h"
 #include "function_discovery.h"
 #include "m68k_analyze.h"
 #include "m68k_decode.h"
@@ -12,7 +13,7 @@
 
 static void print_usage(const char *argv0) {
     fprintf(stderr,
-            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>)\n",
+            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>) [--emit-c <out.c>]\n",
             argv0);
 }
 
@@ -106,11 +107,32 @@ static void print_function_candidates(const NgProgramRom *rom,
     }
 }
 
+static int emit_c_file(const char *path, const NgFunctionDiscovery *discovery) {
+    FILE *out = fopen(path, "w");
+    if (!out) {
+        fprintf(stderr, "cannot open %s for writing\n", path);
+        return 0;
+    }
+
+    int ok = ng_emit_c_skeleton(out, discovery);
+    if (fclose(out) != 0) {
+        ok = 0;
+    }
+    if (!ok) {
+        fprintf(stderr, "failed to emit %s\n", path);
+        return 0;
+    }
+
+    printf("generated C skeleton: %s\n", path);
+    return 1;
+}
+
 int main(int argc, char **argv) {
     const char *game_path = NULL;
     const char *p1_path = NULL;
     const char *p2_path = NULL;
     const char *neo_path = NULL;
+    const char *emit_c_path = NULL;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--game") == 0 && i + 1 < argc) {
@@ -121,6 +143,8 @@ int main(int argc, char **argv) {
             p2_path = argv[++i];
         } else if (strcmp(argv[i], "--neo") == 0 && i + 1 < argc) {
             neo_path = argv[++i];
+        } else if (strcmp(argv[i], "--emit-c") == 0 && i + 1 < argc) {
+            emit_c_path = argv[++i];
         } else {
             print_usage(argv[0]);
             return 2;
@@ -162,6 +186,10 @@ int main(int argc, char **argv) {
                 NgFunctionDiscovery discovery;
                 if (ng_function_discover_from_entry(&rom, cart_entry, &discovery)) {
                     print_function_candidates(&rom, &discovery);
+                    if (emit_c_path && !emit_c_file(emit_c_path, &discovery)) {
+                        ng_program_rom_free(&rom);
+                        return 1;
+                    }
                 }
             } else {
                 printf("entry preview: entry is outside loaded P-ROM image\n");

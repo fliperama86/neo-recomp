@@ -39,6 +39,7 @@ recompiler code.
 ```powershell
 .\build\Debug\neo-recomp.exe --game .\games\nam1975.toml --p1 path\to\p1.rom
 .\build\Debug\neo-recomp.exe --game .\games\mslug.toml --neo G:\Mister\NEOGEO\mslug.neo
+.\build\Debug\neo-recomp.exe --game .\games\mslug.toml --neo G:\Mister\NEOGEO\mslug.neo --emit-c .\build\mslug_recomp.c
 ```
 
 For now this loads the P-ROM, prints reset vectors, classifies vector target
@@ -46,6 +47,8 @@ regions, extracts the standard `NEO-GEO` cartridge header entry jump, and
 recognizes the first PC-indexed entry dispatch-table pattern. Those dispatch
 targets seed a bounded first-pass call graph that follows direct `JSR`, `BSR`,
 and tail `JMP` targets when they point into the loaded P-ROM.
+With `--emit-c`, the same discovered candidate list is written as a generated C
+skeleton with stable address-derived function symbols and a dispatch switch.
 
 Example real `.neo` smoke output:
 
@@ -80,6 +83,7 @@ function preview $00080C:
   $000812: MOVE.L $10FE80,D0        ; MOVE
   $000818: Bcc.6 $000826            ; BCC
   $00081C: CLR.W $100000            ; CLR
+generated C skeleton: .\build\mslug_recomp.c
 ```
 
 ## Development Style
@@ -165,5 +169,24 @@ The first discovery pass is deliberately conservative:
 This is enough to turn the Metal Slug entry dispatch into 31 candidate
 addresses. It is still not proof of exact function boundaries because unknown
 opcodes are scanned as words until better decode coverage exists.
+
+## C Emission Slice
+
+The current emitter produces a valid C skeleton from the discovered candidates:
+
+```c
+void ng_generated_call(uint32_t addr) {
+    switch (addr & 0x00FFFFFFu) {
+    case 0x000007CCu: ng_func_0007CC(); return;
+    case 0x0000080Cu: ng_func_00080C(); return;
+    default: ng_log_dispatch_miss(addr); return;
+    }
+}
+```
+
+Each generated function body is still a placeholder that calls
+`ng_log_dispatch_miss`. This is intentional: instruction-level C emission should
+be added one decoded operation at a time with tests against small register and
+memory fixtures.
 
 Unknown opcodes are still printed as `DC.W`; they are not executable support.
