@@ -33,6 +33,8 @@ typedef enum NgM68kMnemonic {
     NG_M68K_OR,
     NG_M68K_AND,
     NG_M68K_EOR,
+    NG_M68K_MULU,
+    NG_M68K_MULS,
     NG_M68K_CLR,
     NG_M68K_NEG,
     NG_M68K_NOT,

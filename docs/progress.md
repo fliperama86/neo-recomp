@@ -130,6 +130,7 @@ Covered by executable generated-C validation:
   - generic `OR.B/W/L Dn,<ea>`, `AND.B/W/L Dn,<ea>`, and
     `EOR.B/W/L Dn,<ea>` paths covered so far by data-register and
     postincrement memory destinations
+  - `MULU.W <ea>,Dn` and `MULS.W <ea>,Dn` covered so far by immediate sources
   - `ANDI.B #imm,(d16,An)`
   - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
     displacement, and postincrement destinations
@@ -160,6 +161,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added signed/unsigned 16x16 multiply (`MULS`/`MULU`) over shared EA
+  reads with generated-exec coverage for immediate operands.
 - local: Added `Scc` and `DBcc` decode/emission using the generalized
   condition predicates, with generated-exec coverage for byte condition stores
   and DBF counter fallthrough.

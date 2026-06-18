@@ -1006,6 +1006,32 @@ static int emit_alu_dreg_to_ea(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_multiply(FILE *out, const NgM68kInstr *instr) {
+    char src_expr[256];
+
+    if ((instr->mnemonic != NG_M68K_MULU && instr->mnemonic != NG_M68K_MULS) ||
+        instr->src.mode == NG_M68K_EA_NONE ||
+        instr->dst.mode != NG_M68K_EA_DREG) {
+        return 0;
+    }
+    if (!emit_ea_read(out, instr, &instr->src, 2u,
+                      src_expr, (unsigned)sizeof(src_expr))) {
+        return 0;
+    }
+
+    if (instr->mnemonic == NG_M68K_MULU) {
+        fprintf(out,
+                "    g_ng_m68k.d[%u] = (uint32_t)((uint32_t)(uint16_t)(g_ng_m68k.d[%u] & 0xFFFFu) * (uint32_t)(uint16_t)(%s));\n",
+                instr->dst.reg, instr->dst.reg, src_expr);
+    } else {
+        fprintf(out,
+                "    g_ng_m68k.d[%u] = (uint32_t)((int32_t)(int16_t)(g_ng_m68k.d[%u] & 0xFFFFu) * (int32_t)(int16_t)(%s));\n",
+                instr->dst.reg, instr->dst.reg, src_expr);
+    }
+    fprintf(out, "    ng_set_nz32(g_ng_m68k.d[%u]);\n", instr->dst.reg);
+    return 1;
+}
+
 static int emit_alu_ea_to_dreg(FILE *out, const NgM68kInstr *instr) {
     char src_expr[256];
     const char *ctype = ng_ctype_for_size(instr->size);
@@ -1220,6 +1246,12 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
     case NG_M68K_AND:
     case NG_M68K_EOR:
         if (emit_logic_binary_generic(out, instr)) {
+            return 1;
+        }
+        break;
+    case NG_M68K_MULU:
+    case NG_M68K_MULS:
+        if (emit_multiply(out, instr)) {
             return 1;
         }
         break;
