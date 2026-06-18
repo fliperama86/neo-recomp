@@ -462,6 +462,29 @@ static int oracle_exec(const uint8_t *program,
             pc += 6u;
             continue;
         }
+        if (op == 0x003Cu || op == 0x023Cu || op == 0x0A3Cu ||
+            op == 0x007Cu || op == 0x027Cu || op == 0x0A7Cu) {
+            uint16_t imm = program_read16(program, size, pc + 2u);
+            uint8_t is_ccr = (uint8_t)((op & 0x0040u) == 0u);
+            uint8_t op_class = (uint8_t)((op >> 8) & 0x0Fu);
+            uint16_t value = state->sr;
+
+            if (op_class == 0x0u) {
+                value = (uint16_t)(value | imm);
+            } else if (op_class == 0x2u) {
+                value = (uint16_t)(value & imm);
+            } else {
+                value = (uint16_t)(value ^ imm);
+            }
+
+            if (is_ccr) {
+                state->sr = (uint16_t)((state->sr & 0xFFE0u) | (value & 0x001Fu));
+            } else {
+                state->sr = value;
+            }
+            pc += 4u;
+            continue;
+        }
         if ((op & 0xFF00u) == 0x0000u ||
             (op & 0xFF00u) == 0x0200u ||
             (op & 0xFF00u) == 0x0A00u) {

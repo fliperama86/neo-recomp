@@ -162,7 +162,7 @@ Covered by executable generated-C validation:
   - data-register `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` decode/emission,
     covered so far by generated-exec logical shift pairs
   - `PEA <ea>` control-address pushes covered so far by displacement sources
-  - `ANDI #imm,SR`
+  - `ORI/ANDI/EORI #imm,CCR/SR` immediate status-register operations
 
 Important caveat: this is not a complete 68000 condition-code model. `V` is only
 covered for the tested `ADDX.B` helper path, and `C`/`X` are only trusted where
@@ -170,6 +170,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized immediate status-register operations to cover
+  `ORI/ANDI/EORI #imm,CCR/SR`, with generated-exec coverage preserving CCR
+  state through the existing SR store/check path.
 - local: Added `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` decode/emission over
   the shared EA helpers, with generated-exec coverage for immediate CCR loads
   and absolute SR stores.

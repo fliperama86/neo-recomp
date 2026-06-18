@@ -576,6 +576,42 @@ static int emit_move_sr_ccr(FILE *out, const NgM68kInstr *instr) {
     return 0;
 }
 
+static int emit_immediate_to_sr_ccr(FILE *out, const NgM68kInstr *instr) {
+    uint32_t imm = instr->immediate;
+
+    switch (instr->mnemonic) {
+    case NG_M68K_ORI_TO_CCR:
+        fprintf(out,
+                "    g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((g_ng_m68k.sr | 0x%02Xu) & 0x001Fu));\n",
+                imm & 0xFFu);
+        return 1;
+    case NG_M68K_ANDI_TO_CCR:
+        fprintf(out,
+                "    g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((g_ng_m68k.sr & 0x%02Xu) & 0x001Fu));\n",
+                imm & 0xFFu);
+        return 1;
+    case NG_M68K_EORI_TO_CCR:
+        fprintf(out,
+                "    g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((g_ng_m68k.sr ^ 0x%02Xu) & 0x001Fu));\n",
+                imm & 0xFFu);
+        return 1;
+    case NG_M68K_ORI_TO_SR:
+        fprintf(out, "    g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr | 0x%04Xu);\n",
+                imm & 0xFFFFu);
+        return 1;
+    case NG_M68K_ANDI_TO_SR:
+        fprintf(out, "    g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0x%04Xu);\n",
+                imm & 0xFFFFu);
+        return 1;
+    case NG_M68K_EORI_TO_SR:
+        fprintf(out, "    g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr ^ 0x%04Xu);\n",
+                imm & 0xFFFFu);
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static int emit_tst_generic(FILE *out, const NgM68kInstr *instr) {
     char expr[256];
     if (instr->src.mode == NG_M68K_EA_NONE) {
@@ -1714,9 +1750,16 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         break;
+    case NG_M68K_ORI_TO_CCR:
+    case NG_M68K_ORI_TO_SR:
+    case NG_M68K_ANDI_TO_CCR:
     case NG_M68K_ANDI_TO_SR:
-        fprintf(out, "    g_ng_m68k.sr &= 0x%04Xu;\n", instr->immediate & 0xFFFFu);
-        return 1;
+    case NG_M68K_EORI_TO_CCR:
+    case NG_M68K_EORI_TO_SR:
+        if (emit_immediate_to_sr_ccr(out, instr)) {
+            return 1;
+        }
+        break;
     case NG_M68K_BRA:
         ng_c_label_for_addr(instr->target, target_label, (unsigned)sizeof(target_label));
         fprintf(out, "    goto %s;\n", target_label);

@@ -615,6 +615,49 @@ static int decode_alu_ea_to_dreg(const NgProgramRom *rom,
     return 1;
 }
 
+static int decode_immediate_to_sr_ccr(const NgProgramRom *rom,
+                                      uint32_t addr,
+                                      uint16_t op,
+                                      NgM68kInstr *out) {
+    switch (op) {
+    case 0x003C:
+        out->mnemonic = NG_M68K_ORI_TO_CCR;
+        out->size = NG_M68K_SIZE_BYTE;
+        out->immediate = ng_program_rom_read16(rom, addr + 2u) & 0xFFu;
+        break;
+    case 0x007C:
+        out->mnemonic = NG_M68K_ORI_TO_SR;
+        out->size = NG_M68K_SIZE_WORD;
+        out->immediate = ng_program_rom_read16(rom, addr + 2u);
+        break;
+    case 0x023C:
+        out->mnemonic = NG_M68K_ANDI_TO_CCR;
+        out->size = NG_M68K_SIZE_BYTE;
+        out->immediate = ng_program_rom_read16(rom, addr + 2u) & 0xFFu;
+        break;
+    case 0x027C:
+        out->mnemonic = NG_M68K_ANDI_TO_SR;
+        out->size = NG_M68K_SIZE_WORD;
+        out->immediate = ng_program_rom_read16(rom, addr + 2u);
+        break;
+    case 0x0A3C:
+        out->mnemonic = NG_M68K_EORI_TO_CCR;
+        out->size = NG_M68K_SIZE_BYTE;
+        out->immediate = ng_program_rom_read16(rom, addr + 2u) & 0xFFu;
+        break;
+    case 0x0A7C:
+        out->mnemonic = NG_M68K_EORI_TO_SR;
+        out->size = NG_M68K_SIZE_WORD;
+        out->immediate = ng_program_rom_read16(rom, addr + 2u);
+        break;
+    default:
+        return 0;
+    }
+
+    out->byte_length = 4;
+    return 1;
+}
+
 int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
     memset(out, 0, sizeof(*out));
     out->addr = addr;
@@ -783,10 +826,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->target = (uint32_t)((int32_t)(addr + 2u) + (int32_t)out->displacement);
         return 1;
     }
-    if (op == 0x027Cu) {
-        out->mnemonic = NG_M68K_ANDI_TO_SR;
-        out->byte_length = 4;
-        out->immediate = ng_program_rom_read16(rom, addr + 2u);
+    if (decode_immediate_to_sr_ccr(rom, addr, op, out)) {
         return 1;
     }
     if ((op & 0xFFC0u) == 0x40C0u ||
@@ -1546,8 +1586,44 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_BCHG: return "BCHG";
     case NG_M68K_BCLR: return "BCLR";
     case NG_M68K_BSET: return "BSET";
+    case NG_M68K_ORI_TO_CCR: return "ORI_CCR";
+    case NG_M68K_ORI_TO_SR: return "ORI_SR";
+    case NG_M68K_ANDI_TO_CCR: return "ANDI_CCR";
     case NG_M68K_ANDI_TO_SR: return "ANDI_SR";
+    case NG_M68K_EORI_TO_CCR: return "EORI_CCR";
+    case NG_M68K_EORI_TO_SR: return "EORI_SR";
     default: return "?";
+    }
+}
+
+static const char *imm_sr_ccr_op_name(NgM68kMnemonic mnemonic) {
+    switch (mnemonic) {
+    case NG_M68K_ORI_TO_CCR:
+    case NG_M68K_ORI_TO_SR:
+        return "ORI";
+    case NG_M68K_ANDI_TO_CCR:
+    case NG_M68K_ANDI_TO_SR:
+        return "ANDI";
+    case NG_M68K_EORI_TO_CCR:
+    case NG_M68K_EORI_TO_SR:
+        return "EORI";
+    default:
+        return "?";
+    }
+}
+
+static const char *imm_sr_ccr_dst_name(NgM68kMnemonic mnemonic) {
+    switch (mnemonic) {
+    case NG_M68K_ORI_TO_CCR:
+    case NG_M68K_ANDI_TO_CCR:
+    case NG_M68K_EORI_TO_CCR:
+        return "CCR";
+    case NG_M68K_ORI_TO_SR:
+    case NG_M68K_ANDI_TO_SR:
+    case NG_M68K_EORI_TO_SR:
+        return "SR";
+    default:
+        return "?";
     }
 }
 
@@ -1737,8 +1813,17 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                      instr->absolute_addr & 0xFFFFFFu);
         }
         break;
+    case NG_M68K_ORI_TO_CCR:
+    case NG_M68K_ORI_TO_SR:
+    case NG_M68K_ANDI_TO_CCR:
     case NG_M68K_ANDI_TO_SR:
-        snprintf(out, out_size, "ANDI #$%04X,SR", (unsigned)instr->immediate);
+    case NG_M68K_EORI_TO_CCR:
+    case NG_M68K_EORI_TO_SR:
+        snprintf(out, out_size, "%s #$%0*X,%s",
+                 imm_sr_ccr_op_name(instr->mnemonic),
+                 instr->size == NG_M68K_SIZE_BYTE ? 2 : 4,
+                 (unsigned)instr->immediate,
+                 imm_sr_ccr_dst_name(instr->mnemonic));
         break;
     case NG_M68K_MOVE:
         if (instr->form == NG_M68K_FORM_IMM_TO_ABS) {

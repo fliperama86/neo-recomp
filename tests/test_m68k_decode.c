@@ -202,10 +202,74 @@ int main(void) {
 
     {
         const unsigned char bytes[] = { 0x02, 0x7C, 0xF8, 0xFF };
+        char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_ANDI_TO_SR);
         CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
         CHECK(instr.immediate == 0xF8FFu);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ANDI #$F8FF,SR") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x00, 0x3C, 0x00, 0x04 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ORI_TO_CCR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 1);
+        CHECK(instr.immediate == 0x04u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ORI #$04,CCR") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x00, 0x7C, 0x01, 0x00 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ORI_TO_SR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
+        CHECK(instr.immediate == 0x0100u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ORI #$0100,SR") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x02, 0x3C, 0x00, 0x1F };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ANDI_TO_CCR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 1);
+        CHECK(instr.immediate == 0x1Fu);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ANDI #$1F,CCR") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x0A, 0x3C, 0x00, 0x04 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_EORI_TO_CCR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 1);
+        CHECK(instr.immediate == 0x04u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "EORI #$04,CCR") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x0A, 0x7C, 0x01, 0x00 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_EORI_TO_SR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
+        CHECK(instr.immediate == 0x0100u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "EORI #$0100,SR") == 0);
     }
 
     {

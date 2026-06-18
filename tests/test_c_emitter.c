@@ -110,7 +110,7 @@ int main(void) {
     }
 
     {
-        NgProgramRom rom = make_rom(0x15Cu);
+        NgProgramRom rom = make_rom(0x174u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x41FAu); /* LEA $000008,A0 */
         write16(&rom, 0x02u, 0x0004u);
@@ -262,9 +262,21 @@ int main(void) {
         write16(&rom, 0x14Eu, 0x0003u);
         write16(&rom, 0x150u, 0x44FCu); /* MOVE #$001B,CCR */
         write16(&rom, 0x152u, 0x001Bu);
-        write16(&rom, 0x154u, 0x40F9u); /* MOVE SR,$00000188 */
-        write32(&rom, 0x156u, 0x00000188u);
-        write16(&rom, 0x15Au, 0x4E75u);
+        write16(&rom, 0x154u, 0x003Cu); /* ORI #$04,CCR */
+        write16(&rom, 0x156u, 0x0004u);
+        write16(&rom, 0x158u, 0x0A3Cu); /* EORI #$04,CCR */
+        write16(&rom, 0x15Au, 0x0004u);
+        write16(&rom, 0x15Cu, 0x023Cu); /* ANDI #$1F,CCR */
+        write16(&rom, 0x15Eu, 0x001Fu);
+        write16(&rom, 0x160u, 0x007Cu); /* ORI #$0100,SR */
+        write16(&rom, 0x162u, 0x0100u);
+        write16(&rom, 0x164u, 0x0A7Cu); /* EORI #$0100,SR */
+        write16(&rom, 0x166u, 0x0100u);
+        write16(&rom, 0x168u, 0x027Cu); /* ANDI #$FFFF,SR */
+        write16(&rom, 0x16Au, 0xFFFFu);
+        write16(&rom, 0x16Cu, 0x40F9u); /* MOVE SR,$00000188 */
+        write32(&rom, 0x16Eu, 0x00000188u);
+        write16(&rom, 0x172u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -441,7 +453,19 @@ int main(void) {
         CHECK(strstr(text, "g_ng_m68k.d[0] = ng68k_read32(ng_addr); ng_addr += 4u;") != NULL);
         CHECK(strstr(text, "/* $000150: MOVE #$1B,CCR */") != NULL);
         CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((0x001Bu) & 0x001Fu));") != NULL);
-        CHECK(strstr(text, "/* $000154: MOVE SR,$000188 */") != NULL);
+        CHECK(strstr(text, "/* $000154: ORI #$04,CCR */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((g_ng_m68k.sr | 0x04u) & 0x001Fu));") != NULL);
+        CHECK(strstr(text, "/* $000158: EORI #$04,CCR */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((g_ng_m68k.sr ^ 0x04u) & 0x001Fu));") != NULL);
+        CHECK(strstr(text, "/* $00015C: ANDI #$1F,CCR */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((g_ng_m68k.sr & 0x1Fu) & 0x001Fu));") != NULL);
+        CHECK(strstr(text, "/* $000160: ORI #$0100,SR */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr | 0x0100u);") != NULL);
+        CHECK(strstr(text, "/* $000164: EORI #$0100,SR */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr ^ 0x0100u);") != NULL);
+        CHECK(strstr(text, "/* $000168: ANDI #$FFFF,SR */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFFFu);") != NULL);
+        CHECK(strstr(text, "/* $00016C: MOVE SR,$000188 */") != NULL);
         CHECK(strstr(text, "ng68k_write16(0x00000188u, (uint16_t)(g_ng_m68k.sr));") != NULL);
 
         ng_program_rom_free(&rom);
@@ -473,7 +497,7 @@ int main(void) {
         CHECK(strstr(text, "/* $000000: BCLR #7,$10FD80 */") != NULL);
         CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << (7u)); uint8_t ng_value = ng68k_read8(0x0010FD80u);") != NULL);
         CHECK(strstr(text, "ng68k_write8(0x0010FD80u, (uint8_t)(ng_value & (uint8_t)~ng_mask));") != NULL);
-        CHECK(strstr(text, "g_ng_m68k.sr &= 0xF8FFu;") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xF8FFu);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | ng68k_read8(0x0010FDAEu);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[0] = ng68k_read32(0x00000018u + (uint32_t)(int16_t)(g_ng_m68k.d[0] & 0xFFFFu));") != NULL);
         CHECK(strstr(text, "ng_generated_call(g_ng_m68k.a[0]);") != NULL);

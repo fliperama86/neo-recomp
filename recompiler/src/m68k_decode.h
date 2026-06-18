@@ -66,7 +66,12 @@ typedef enum NgM68kMnemonic {
     NG_M68K_BCHG,
     NG_M68K_BCLR,
     NG_M68K_BSET,
+    NG_M68K_ORI_TO_CCR,
+    NG_M68K_ORI_TO_SR,
+    NG_M68K_ANDI_TO_CCR,
     NG_M68K_ANDI_TO_SR,
+    NG_M68K_EORI_TO_CCR,
+    NG_M68K_EORI_TO_SR,
 } NgM68kMnemonic;
 
 typedef enum NgM68kOperandForm {
