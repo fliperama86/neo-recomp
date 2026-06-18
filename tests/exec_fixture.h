@@ -71,7 +71,7 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
     ng_exec_fixture_write32(data, 0x9Cu, 0x00001018u);
     ng_exec_fixture_write16(data, 0xA0u, 0x0C02u); /* CMPI.B #$7F,D2 */
     ng_exec_fixture_write16(data, 0xA2u, 0x007Fu);
-    ng_exec_fixture_write16(data, 0xA4u, 0x6708u); /* BEQ $0000AE, taken */
+    ng_exec_fixture_write16(data, 0xA4u, 0x6408u); /* BCC $0000AE, taken */
     ng_exec_fixture_write16(data, 0xA6u, 0x13FCu); /* skipped */
     ng_exec_fixture_write16(data, 0xA8u, 0x0066u);
     ng_exec_fixture_write32(data, 0xAAu, 0x00001019u);

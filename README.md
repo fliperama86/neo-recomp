@@ -236,9 +236,10 @@ instruction-level C emission to grow one decoded operation at a time with tests
 against small register and memory fixtures.
 
 Condition-code support is still intentionally partial. The emitter updates
-`N`/`Z` for the operations covered by tests and supports only `BNE`/`BEQ`
-branch decisions today. `V`/`C` and the rest of the 68k branch condition table
-still need explicit tests before they are trusted.
+`N`/`Z` for the operations covered by tests, and it updates `C` for tested
+`CMPI.B` paths. Branch emission currently trusts `BNE`/`BEQ` and carry-based
+`BCC`/`BCS` only in those covered cases. `V` and the rest of the 68k branch
+condition table still need explicit tests before they are trusted.
 
 Unknown opcodes are still printed as `DC.W`; they are not executable support.
 
@@ -260,6 +261,6 @@ stream; the useful invariant is behavior. The current behavior check covers
 `MOVEQ`, `MOVE.B/W #imm,Dn`, `ADD.W`, direct `JSR`, tail `JMP`,
 `MOVE.W #imm,abs`, `MOVE.B #imm,abs`, `MOVE.B Dn,abs`, `CMPI.B #imm,Dn`,
 `CLR.B/W/L abs`, `CLR.B Dn`, `TST.B abs`, `LEA`, and `MOVE.L An,abs` through
-the same generated dispatch shape used by real ROMs. It also covers both
-not-taken and taken `BNE`/`BEQ` paths, comparing generated C behavior against
-the tiny interpreter oracle.
+the same generated dispatch shape used by real ROMs. It also covers not-taken
+and taken `BNE`/`BEQ`/`BCC` paths, comparing generated C behavior against the
+tiny interpreter oracle.

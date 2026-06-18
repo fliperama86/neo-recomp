@@ -12,6 +12,7 @@
 } while (0)
 
 #define BUS_SIZE 0x2000u
+#define CCR_C 0x0001u
 #define CCR_Z 0x0004u
 #define CCR_N 0x0008u
 
@@ -137,8 +138,12 @@ static int oracle_exec(const uint8_t *program,
         if ((op & 0xFFF8u) == 0x0C00u) {
             uint8_t reg = (uint8_t)(op & 7u);
             uint8_t value = (uint8_t)program_read16(program, size, pc + 2u);
-            uint8_t result = (uint8_t)((state->d[reg] & 0xFFu) - value);
+            uint8_t dst = (uint8_t)(state->d[reg] & 0xFFu);
+            uint8_t result = (uint8_t)(dst - value);
             oracle_set_nz8(state, result);
+            if (dst < value) {
+                state->sr |= CCR_C;
+            }
             pc += 4u;
             continue;
         }
@@ -155,7 +160,11 @@ static int oracle_exec(const uint8_t *program,
             int8_t displacement = (int8_t)(op & 0xFFu);
             uint32_t next_pc = pc + 2u;
             int take;
-            if (condition == 6u) {
+            if (condition == 4u) {
+                take = (state->sr & CCR_C) == 0;
+            } else if (condition == 5u) {
+                take = (state->sr & CCR_C) != 0;
+            } else if (condition == 6u) {
                 take = (state->sr & CCR_Z) == 0;
             } else if (condition == 7u) {
                 take = (state->sr & CCR_Z) != 0;
