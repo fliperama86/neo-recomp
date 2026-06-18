@@ -110,6 +110,8 @@ Covered by executable generated-C validation:
   - `ADDX.B Dn,Dn`
   - `SUBQ.B #imm,Dn`
   - `ANDI.B #imm,(d16,An)`
+  - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
+    displacement, and postincrement destinations
   - `CMPI.B #imm,Dn`
   - generic `CMPI.B/W/L #imm,<ea>` paths covered so far by Dn,
     postincrement, and indexed memory destinations
@@ -129,6 +131,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a reusable read-modify-write EA address helper and generalized
+  `ANDI #imm,<ea>` without double-applying postincrement/predecrement effects.
 - local: Generalized `CMPI #imm,<ea>` decode/emission with compare flag logic
   for non-register EA targets and generated-exec postincrement coverage.
 - local: Generalized `TST <ea>` decode/emission onto the shared EA read helper,

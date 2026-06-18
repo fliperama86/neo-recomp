@@ -316,6 +316,56 @@ static int emit_ea_write(FILE *out,
     }
 }
 
+static int emit_ea_address(FILE *out,
+                           const NgM68kInstr *instr,
+                           const NgM68kEa *ea,
+                           uint8_t size,
+                           char *expr,
+                           unsigned expr_size) {
+    char tmp[48];
+
+    switch (ea->mode) {
+    case NG_M68K_EA_AIND:
+        snprintf(expr, expr_size, "g_ng_m68k.a[%u]", ea->reg);
+        return 1;
+    case NG_M68K_EA_APOST:
+        snprintf(tmp, sizeof(tmp), "ng_addr_%06X", instr->addr & 0x00FFFFFFu);
+        fprintf(out, "    uint32_t %s = g_ng_m68k.a[%u];\n", tmp, ea->reg);
+        fprintf(out, "    g_ng_m68k.a[%u] += %uu;\n",
+                ea->reg, (unsigned)ng_ea_step_bytes(ea, size));
+        snprintf(expr, expr_size, "%s", tmp);
+        return 1;
+    case NG_M68K_EA_APRE:
+        fprintf(out, "    g_ng_m68k.a[%u] -= %uu;\n",
+                ea->reg, (unsigned)ng_ea_step_bytes(ea, size));
+        snprintf(expr, expr_size, "g_ng_m68k.a[%u]", ea->reg);
+        return 1;
+    case NG_M68K_EA_ADISP:
+        snprintf(expr, expr_size, "(uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d)",
+                 ea->reg, ea->displacement);
+        return 1;
+    case NG_M68K_EA_ABS_W:
+    case NG_M68K_EA_ABS_L:
+        snprintf(expr, expr_size, "0x%08Xu", ea->absolute_addr & 0x00FFFFFFu);
+        return 1;
+    case NG_M68K_EA_AINDEX: {
+        char index_expr[64];
+        ng_format_index_expr(ea, index_expr, (unsigned)sizeof(index_expr));
+        snprintf(expr, expr_size, "(uint32_t)(g_ng_m68k.a[%u] + %s + (int32_t)%d)",
+                 ea->reg, index_expr, ea->displacement);
+        return 1;
+    }
+    case NG_M68K_EA_NONE:
+    case NG_M68K_EA_DREG:
+    case NG_M68K_EA_AREG:
+    case NG_M68K_EA_PC_DISP:
+    case NG_M68K_EA_PC_INDEX:
+    case NG_M68K_EA_IMM:
+    default:
+        return 0;
+    }
+}
+
 static void emit_set_nz_for_size(FILE *out, uint8_t size, const char *expr) {
     if (size == 4u) {
         fprintf(out, "    ng_set_nz32((uint32_t)(%s));\n", expr);
@@ -409,6 +459,49 @@ static int emit_cmpi_generic(FILE *out, const NgM68kInstr *instr) {
             "      if (((ng_dst ^ ng_src) & (ng_dst ^ ng_result) & 0x%08Xu) != 0) g_ng_m68k.sr |= NG_CCR_V;\n"
             "    }\n",
             sign_mask, sign_mask);
+    return 1;
+}
+
+static int emit_andi_generic(FILE *out, const NgM68kInstr *instr) {
+    const char *ctype = ng_ctype_for_size(instr->size);
+    const char *read_fn = ng_read_fn_for_size(instr->size);
+    const char *write_fn = ng_write_fn_for_size(instr->size);
+    uint32_t mask = ng_value_mask(instr->size);
+    char expr[256];
+    char addr_expr[256];
+
+    if (instr->dst.mode == NG_M68K_EA_NONE) {
+        return 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        if (!emit_ea_read(out, instr, &instr->dst, instr->size,
+                          expr, (unsigned)sizeof(expr))) {
+            return 0;
+        }
+        fprintf(out, "    { %s ng_result = (%s)((%s) & 0x%0*Xu);\n",
+                ctype, ctype, expr,
+                instr->size == 4u ? 8 : (instr->size == 1u ? 2 : 4),
+                instr->immediate & mask);
+        emit_ea_write(out, &instr->dst, instr->size, "ng_result");
+        emit_set_nz_for_size(out, instr->size, "ng_result");
+        fprintf(out, "    }\n");
+        return 1;
+    }
+
+    if (!emit_ea_address(out, instr, &instr->dst, instr->size,
+                         addr_expr, (unsigned)sizeof(addr_expr))) {
+        return 0;
+    }
+    fprintf(out,
+            "    { %s ng_value = %s(%s); %s ng_result = (%s)(ng_value & 0x%0*Xu);\n",
+            ctype, read_fn, addr_expr,
+            ctype, ctype,
+            instr->size == 4u ? 8 : (instr->size == 1u ? 2 : 4),
+            instr->immediate & mask);
+    fprintf(out, "      %s(%s, ng_result);\n", write_fn, addr_expr);
+    emit_set_nz_for_size(out, instr->size, "ng_result");
+    fprintf(out, "    }\n");
     return 1;
 }
 
@@ -698,6 +791,9 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             fprintf(out,
                     "    ng_set_nz8(ng68k_read8((uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d)));\n",
                     instr->reg, instr->displacement);
+            return 1;
+        }
+        if (emit_andi_generic(out, instr)) {
             return 1;
         }
         break;

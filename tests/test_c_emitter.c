@@ -172,7 +172,11 @@ int main(void) {
         write16(&rom, 0x88u, 0x0CB0u); /* CMPI.L #$12345678,($0C,A0,A2.L) */
         write32(&rom, 0x8Au, 0x12345678u);
         write16(&rom, 0x8Eu, 0xA80Cu);
-        write16(&rom, 0x90u, 0x4E75u);
+        write16(&rom, 0x90u, 0x0242u); /* ANDI.W #$0F0F,D2 */
+        write16(&rom, 0x92u, 0x0F0Fu);
+        write16(&rom, 0x94u, 0x0218u); /* ANDI.B #$0F,(A0)+ */
+        write16(&rom, 0x96u, 0x000Fu);
+        write16(&rom, 0x98u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -244,6 +248,13 @@ int main(void) {
         CHECK(strstr(text, "/* $000088: CMPI.L #$12345678,($C,A0,A2.L) */") != NULL);
         CHECK(strstr(text, "uint32_t ng_ea_000088 = ng68k_read32((uint32_t)(g_ng_m68k.a[0] + (int32_t)g_ng_m68k.a[2] + (int32_t)12));") != NULL);
         CHECK(strstr(text, "{ uint32_t ng_src = (uint32_t)(0x12345678u); uint32_t ng_dst = (uint32_t)(ng_ea_000088); uint32_t ng_result = (uint32_t)(ng_dst - ng_src);") != NULL);
+        CHECK(strstr(text, "/* $000090: ANDI.W #$F0F,D2 */") != NULL);
+        CHECK(strstr(text, "{ uint16_t ng_result = (uint16_t)(((uint16_t)(g_ng_m68k.d[2] & 0xFFFFu)) & 0x0F0Fu);") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.d[2] = (g_ng_m68k.d[2] & 0xFFFF0000u) | (uint32_t)((uint16_t)(ng_result));") != NULL);
+        CHECK(strstr(text, "/* $000094: ANDI.B #$F,(A0)+ */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_addr_000094 = g_ng_m68k.a[0];") != NULL);
+        CHECK(strstr(text, "uint8_t ng_value = ng68k_read8(ng_addr_000094); uint8_t ng_result = (uint8_t)(ng_value & 0x0Fu);") != NULL);
+        CHECK(strstr(text, "ng68k_write8(ng_addr_000094, ng_result);") != NULL);
 
         ng_program_rom_free(&rom);
     }

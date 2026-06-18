@@ -114,6 +114,7 @@ int main(void) {
 
     {
         const unsigned char bytes[] = { 0x02, 0x2E, 0x00, 0x0F, 0x0F, 0x7A };
+        char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_ANDI);
         CHECK(instr.byte_length == 6);
@@ -122,6 +123,40 @@ int main(void) {
         CHECK(instr.reg == 6);
         CHECK(instr.immediate == 0x0Fu);
         CHECK(instr.displacement == 0x0F7A);
+        CHECK(instr.dst.mode == NG_M68K_EA_ADISP);
+        CHECK(instr.dst.reg == 6);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ANDI.B #$F,($F7A,A6)") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x02, 0x42, 0x0F, 0x0F };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ANDI);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
+        CHECK(instr.form == NG_M68K_FORM_IMM_TO_DREG);
+        CHECK(instr.reg == 2);
+        CHECK(instr.immediate == 0x0F0Fu);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ANDI.W #$F0F,D2") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x02, 0x18, 0x00, 0x0F };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ANDI);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 1);
+        CHECK(instr.immediate == 0x0Fu);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ANDI.B #$F,(A0)+") == 0);
     }
 
     {
