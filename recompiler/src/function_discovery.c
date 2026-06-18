@@ -56,6 +56,14 @@ static void add_jump_table_targets(const NgProgramRom *rom,
     }
 }
 
+static int is_direct_function_target(const NgM68kInstr *instr) {
+    if (instr->mnemonic == NG_M68K_JSR || instr->mnemonic == NG_M68K_BSR) {
+        return 1;
+    }
+    return instr->mnemonic == NG_M68K_JMP &&
+           instr->form != NG_M68K_FORM_AREG_INDIRECT;
+}
+
 static void scan_function_candidate(const NgProgramRom *rom,
                                     uint32_t start_addr,
                                     NgFunctionDiscovery *out) {
@@ -74,6 +82,10 @@ static void scan_function_candidate(const NgProgramRom *rom,
             if (ng_m68k_match_pc_index_jump_table(&previous, &instr, &pattern)) {
                 add_jump_table_targets(rom, &pattern, out);
             }
+        }
+
+        if (is_direct_function_target(&instr)) {
+            ng_function_discovery_add(out, rom, instr.target);
         }
 
         if (instr.byte_length == 0 ||

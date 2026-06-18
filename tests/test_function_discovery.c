@@ -84,5 +84,29 @@ int main(void) {
         ng_program_rom_free(&rom);
     }
 
+    {
+        NgProgramRom rom = make_rom(0xC0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x10u, 0x4EB9u); /* JSR $00000080 */
+        write32(&rom, 0x12u, 0x00000080u);
+        write16(&rom, 0x16u, 0x6100u); /* BSR $00000030 */
+        write16(&rom, 0x18u, 0x0018u);
+        write16(&rom, 0x1Au, 0x4EFAu); /* JMP $00000050 */
+        write16(&rom, 0x1Cu, 0x0034u);
+        write16(&rom, 0x30u, 0x4E75u);
+        write16(&rom, 0x50u, 0x4E75u);
+        write16(&rom, 0x80u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x10u, &discovery));
+        CHECK(discovery.count == 4u);
+        CHECK(discovery.addrs[0] == 0x10u);
+        CHECK(discovery.addrs[1] == 0x80u);
+        CHECK(discovery.addrs[2] == 0x30u);
+        CHECK(discovery.addrs[3] == 0x50u);
+
+        ng_program_rom_free(&rom);
+    }
+
     return 0;
 }

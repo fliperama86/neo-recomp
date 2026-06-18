@@ -160,6 +160,47 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x4E, 0xFA, 0x00, 0x2A };
+        CHECK(decode_one(bytes, sizeof(bytes), 0x000832u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_JMP);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.form == NG_M68K_FORM_PC_RELATIVE);
+        CHECK(instr.displacement == 0x2A);
+        CHECK(instr.target == 0x00085Eu);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4E, 0xBA, 0x01, 0x42 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0x000836u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_JSR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.form == NG_M68K_FORM_PC_RELATIVE);
+        CHECK(instr.displacement == 0x0142);
+        CHECK(instr.target == 0x00097Au);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x20, 0x39, 0x00, 0x10, 0xFE, 0x80 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0x000812u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 4);
+        CHECK(instr.form == NG_M68K_FORM_ABS_TO_DREG);
+        CHECK(instr.reg == 0);
+        CHECK(instr.absolute_addr == 0x0010FE80u);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x42, 0x79, 0x00, 0x10, 0xFE, 0x80 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0x00081Cu, &instr));
+        CHECK(instr.mnemonic == NG_M68K_CLR);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 2);
+        CHECK(instr.form == NG_M68K_FORM_ABS);
+        CHECK(instr.absolute_addr == 0x0010FE80u);
+    }
+
+    {
         const unsigned char bytes[] = { 0x61, 0x00, 0x00, 0x0E };
         CHECK(decode_one(bytes, sizeof(bytes), 0x000852u, &instr));
         CHECK(instr.mnemonic == NG_M68K_BSR);
