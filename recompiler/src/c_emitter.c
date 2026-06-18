@@ -695,6 +695,44 @@ static int emit_cmpi_generic(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_cmpm(FILE *out, const NgM68kInstr *instr) {
+    const char *ctype = ng_ctype_for_size(instr->size);
+    const char *read_fn = ng_read_fn_for_size(instr->size);
+    uint32_t value_mask = ng_value_mask(instr->size);
+    uint32_t sign_mask = ng_sign_mask(instr->size);
+    uint8_t step = instr->size;
+
+    if (instr->mnemonic != NG_M68K_CMPM ||
+        instr->src.mode != NG_M68K_EA_APOST ||
+        instr->dst.mode != NG_M68K_EA_APOST) {
+        return 0;
+    }
+    if (instr->src.reg == 7u && instr->size == 1u) {
+        step = 2u;
+    }
+
+    fprintf(out, "    { uint32_t ng_src_addr = g_ng_m68k.a[%u]; g_ng_m68k.a[%u] += %uu;\n",
+            instr->src.reg, instr->src.reg, (unsigned)step);
+    step = instr->size;
+    if (instr->dst.reg == 7u && instr->size == 1u) {
+        step = 2u;
+    }
+    fprintf(out, "      uint32_t ng_dst_addr = g_ng_m68k.a[%u]; g_ng_m68k.a[%u] += %uu;\n",
+            instr->dst.reg, instr->dst.reg, (unsigned)step);
+    fprintf(out, "      %s ng_src = %s(ng_src_addr); %s ng_dst = %s(ng_dst_addr); %s ng_result = (%s)(ng_dst - ng_src);\n",
+            ctype, read_fn, ctype, read_fn, ctype, ctype);
+    fprintf(out, "      g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
+    fprintf(out, "      if (ng_result == 0) g_ng_m68k.sr |= NG_CCR_Z;\n");
+    fprintf(out, "      if (ng_result & 0x%08Xu) g_ng_m68k.sr |= NG_CCR_N;\n",
+            sign_mask);
+    fprintf(out, "      if ((uint32_t)ng_src > (uint32_t)ng_dst) g_ng_m68k.sr |= NG_CCR_C;\n");
+    fprintf(out, "      if ((((uint32_t)ng_dst ^ (uint32_t)ng_src) & ((uint32_t)ng_dst ^ (uint32_t)ng_result) & 0x%08Xu) != 0) g_ng_m68k.sr |= NG_CCR_V;\n",
+            sign_mask);
+    fprintf(out, "    }\n");
+    (void)value_mask;
+    return 1;
+}
+
 static int emit_logical_imm_generic(FILE *out, const NgM68kInstr *instr) {
     const char *ctype = ng_ctype_for_size(instr->size);
     const char *read_fn = ng_read_fn_for_size(instr->size);
@@ -1858,6 +1896,11 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         if (emit_cmpi_generic(out, instr)) {
+            return 1;
+        }
+        break;
+    case NG_M68K_CMPM:
+        if (emit_cmpm(out, instr)) {
             return 1;
         }
         break;

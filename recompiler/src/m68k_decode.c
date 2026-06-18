@@ -649,6 +649,25 @@ static int decode_alu_ea_to_dreg(const NgProgramRom *rom,
     return 1;
 }
 
+static int decode_cmpm(uint16_t op, NgM68kInstr *out) {
+    uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+
+    if ((op & 0xF138u) != 0xB108u || size_code == 3u) {
+        return 0;
+    }
+
+    out->mnemonic = NG_M68K_CMPM;
+    out->size = size_from_opcode_bits(size_code);
+    out->byte_length = 2;
+    out->src.mode = NG_M68K_EA_APOST;
+    out->src.reg = (uint8_t)(op & 7u);
+    out->dst.mode = NG_M68K_EA_APOST;
+    out->dst.reg = (uint8_t)((op >> 9) & 7u);
+    out->src_reg = out->src.reg;
+    out->reg = out->dst.reg;
+    return 1;
+}
+
 static int decode_immediate_to_sr_ccr(const NgProgramRom *rom,
                                       uint32_t addr,
                                       uint16_t op,
@@ -732,6 +751,9 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         return 1;
     }
     if (decode_alu_ea_to_dreg(rom, addr, op, out)) {
+        return 1;
+    }
+    if (decode_cmpm(op, out)) {
         return 1;
     }
 
@@ -1642,6 +1664,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_SUBQ: return "SUBQ";
     case NG_M68K_CMP: return "CMP";
     case NG_M68K_CMPA: return "CMPA";
+    case NG_M68K_CMPM: return "CMPM";
     case NG_M68K_OR: return "OR";
     case NG_M68K_AND: return "AND";
     case NG_M68K_EOR: return "EOR";
@@ -2050,6 +2073,12 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                      (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
                      instr->src_reg, instr->reg);
         }
+        break;
+    case NG_M68K_CMPM:
+        snprintf(out, out_size, "CMPM.%c (A%u)+,(A%u)+",
+                 instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                 (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                 instr->src.reg, instr->dst.reg);
         break;
     case NG_M68K_ADDX:
         snprintf(out, out_size, "ADDX.%c D%u,D%u",

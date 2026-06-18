@@ -1283,6 +1283,21 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0xBD, 0x4D };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_CMPM);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_APOST);
+        CHECK(instr.src.reg == 5);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 6);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "CMPM.W (A5)+,(A6)+") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x44, 0x42 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

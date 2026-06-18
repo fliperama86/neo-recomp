@@ -772,6 +772,26 @@ static int oracle_exec(const uint8_t *program,
         if ((op & 0xF000u) == 0x8000u ||
             (op & 0xF000u) == 0xB000u ||
             (op & 0xF000u) == 0xC000u) {
+            if ((op & 0xF138u) == 0xB108u && ((op >> 6) & 3u) != 3u) {
+                uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+                uint8_t bytes = size_code == 2u ? 4u : (size_code == 1u ? 2u : 1u);
+                uint8_t src_reg = (uint8_t)(op & 7u);
+                uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
+                uint32_t mask = oracle_value_mask(bytes);
+                uint32_t sign_mask = oracle_sign_mask(bytes);
+                uint32_t src = bus_read_size(bus, state->a[src_reg], bytes) & mask;
+                uint32_t dst = bus_read_size(bus, state->a[dst_reg], bytes) & mask;
+                uint32_t result = (dst - src) & mask;
+                state->a[src_reg] += (src_reg == 7u && bytes == 1u) ? 2u : bytes;
+                state->a[dst_reg] += (dst_reg == 7u && bytes == 1u) ? 2u : bytes;
+                state->sr = (uint16_t)(state->sr & 0xFFF0u);
+                if (result == 0) state->sr |= CCR_Z;
+                if (result & sign_mask) state->sr |= CCR_N;
+                if (src > dst) state->sr |= CCR_C;
+                if (((dst ^ src) & (dst ^ result) & sign_mask) != 0) state->sr |= CCR_V;
+                pc += 2u;
+                continue;
+            }
             uint8_t top = (uint8_t)((op >> 12) & 0xFu);
             uint8_t opmode = (uint8_t)((op >> 6) & 7u);
             uint8_t size_code = (uint8_t)(opmode & 3u);
@@ -1791,7 +1811,8 @@ int main(void) {
     CHECK(g_ng_m68k.a[2] == 0x00000108u);
     CHECK(g_ng_m68k.a[3] == 0x00000142u);
     CHECK(g_ng_m68k.a[4] == 0x00000180u);
-    CHECK(g_ng_m68k.a[5] == 0x00000160u);
+    CHECK(g_ng_m68k.a[5] == 0x00000190u);
+    CHECK(g_ng_m68k.a[6] == 0x00000192u);
     CHECK(g_ng_m68k.a[7] == 0x0000013Cu);
     CHECK(ng68k_read16(0x0068u) == 0x0000u);
     CHECK(ng68k_read16(0x00ACu) == 0x0000u);

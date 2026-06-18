@@ -130,6 +130,8 @@ Covered by executable generated-C validation:
   - generic `CMP.B/W/L <ea>,Dn` paths covered so far by Dn and abs reads
   - generic `ADDA.W/L <ea>,An`, `SUBA.W/L <ea>,An`, and
     `CMPA.W/L <ea>,An` paths covered so far by immediate sources
+  - `CMPM.B/W/L (Ay)+,(Ax)+` covered so far by word postincrement memory
+    comparisons
   - `ADDX.B Dn,Dn`
   - generic `OR.B/W/L <ea>,Dn` and `AND.B/W/L <ea>,Dn` paths covered so far
     by data-register sources
@@ -176,6 +178,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `CMPM (Ay)+,(Ax)+` decode/emission with postincrement compare
+  flag behavior and generated-exec word coverage.
 - local: Added `TAS <ea>` decode/emission with test-and-set byte semantics
   and generated-exec absolute-memory coverage.
 - local: Added `NEGX <ea>` decode/emission on the existing unary RMW path,
