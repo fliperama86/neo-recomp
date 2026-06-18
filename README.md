@@ -15,10 +15,24 @@ This is not an emulator yet, and it is not a working recompiler yet.
 
 ## Build
 
+Windows with Visual Studio Build Tools:
+
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Debug
 ```
+
+macOS or Linux with the default CMake generator:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+The codebase is intended to support Windows, macOS, and Linux. Keep platform
+code behind small runtime interfaces, and prefer portable C11/CMake for core
+recompiler code.
 
 ## Current CLI
 

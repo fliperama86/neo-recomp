@@ -99,3 +99,18 @@ uint32_t ng_program_rom_read32(const NgProgramRom *rom, uint32_t addr) {
     return (hi << 16) | lo;
 }
 
+uint32_t ng_program_rom_initial_ssp(const NgProgramRom *rom) {
+    return ng_program_rom_read32(rom, 0);
+}
+
+uint32_t ng_program_rom_initial_pc(const NgProgramRom *rom) {
+    return ng_program_rom_read32(rom, 4);
+}
+
+int ng_program_rom_addr_is_mapped(const NgProgramRom *rom, uint32_t addr) {
+    return addr < rom->size;
+}
+
+int ng_program_rom_initial_pc_is_mapped(const NgProgramRom *rom) {
+    return ng_program_rom_addr_is_mapped(rom, ng_program_rom_initial_pc(rom));
+}

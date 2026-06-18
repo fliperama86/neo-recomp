@@ -42,14 +42,16 @@ int main(int argc, char **argv) {
     printf("game config: %s\n", game_path);
     printf("program image: %u bytes\n", rom.size);
     if (rom.size >= 8) {
-        uint32_t initial_ssp = ng_program_rom_read32(&rom, 0);
-        uint32_t initial_pc = ng_program_rom_read32(&rom, 4);
+        uint32_t initial_ssp = ng_program_rom_initial_ssp(&rom);
+        uint32_t initial_pc = ng_program_rom_initial_pc(&rom);
         printf("vector initial_ssp=$%08X initial_pc=$%08X\n",
                initial_ssp, initial_pc);
+        if (!ng_program_rom_initial_pc_is_mapped(&rom)) {
+            printf("warning: initial PC is outside the loaded program image\n");
+        }
     }
     m68k_stub_print_scope();
 
     ng_program_rom_free(&rom);
     return 0;
 }
-
