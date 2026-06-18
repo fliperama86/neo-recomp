@@ -88,6 +88,207 @@ static void bus_write32(uint8_t *bus, uint32_t addr, uint32_t value) {
     bus_write16(bus, addr + 2u, (uint16_t)value);
 }
 
+static uint16_t program_read16(const uint8_t *program, uint32_t size, uint32_t addr);
+static uint32_t program_read32(const uint8_t *program, uint32_t size, uint32_t addr);
+
+static uint8_t oracle_ea_step_bytes(uint8_t reg, uint8_t bytes) {
+    if (reg == 7u && bytes == 1u) {
+        return 2u;
+    }
+    return bytes;
+}
+
+static uint32_t oracle_value_mask(uint8_t bytes) {
+    if (bytes == 4u) {
+        return 0xFFFFFFFFu;
+    }
+    return bytes == 1u ? 0x000000FFu : 0x0000FFFFu;
+}
+
+static uint32_t oracle_sign_extend_abs_w(uint16_t value) {
+    return (uint32_t)(int32_t)(int16_t)value;
+}
+
+static int32_t oracle_index_value(const NgM68kState *state, uint16_t ext) {
+    uint8_t is_addr = (uint8_t)((ext >> 15) & 1u);
+    uint8_t reg = (uint8_t)((ext >> 12) & 7u);
+    uint8_t is_long = (uint8_t)((ext >> 11) & 1u);
+    uint32_t value = is_addr ? state->a[reg] : state->d[reg];
+
+    if (is_long) {
+        return (int32_t)value;
+    }
+    return (int32_t)(int16_t)(value & 0xFFFFu);
+}
+
+static uint32_t bus_read_size(const uint8_t *bus, uint32_t addr, uint8_t bytes) {
+    if (bytes == 4u) {
+        return bus_read32(bus, addr);
+    }
+    return bytes == 1u ? bus_read8(bus, addr) : bus_read16(bus, addr);
+}
+
+static void bus_write_size(uint8_t *bus, uint32_t addr, uint32_t value, uint8_t bytes) {
+    if (bytes == 4u) {
+        bus_write32(bus, addr, value);
+    } else if (bytes == 1u) {
+        bus_write8(bus, addr, (uint8_t)value);
+    } else {
+        bus_write16(bus, addr, (uint16_t)value);
+    }
+}
+
+static void oracle_set_nz_size(NgM68kState *state, uint32_t value, uint8_t bytes) {
+    if (bytes == 4u) {
+        oracle_set_nz32(state, value);
+    } else if (bytes == 1u) {
+        oracle_set_nz8(state, (uint8_t)value);
+    } else {
+        oracle_set_nz16(state, (uint16_t)value);
+    }
+}
+
+static int oracle_ea_memory_addr(const uint8_t *program,
+                                 uint32_t size,
+                                 NgM68kState *state,
+                                 uint8_t mode,
+                                 uint8_t reg,
+                                 uint8_t bytes,
+                                 uint32_t *pc_ext,
+                                 uint32_t *out_addr) {
+    switch (mode) {
+    case 2:
+        *out_addr = state->a[reg];
+        return 1;
+    case 3:
+        *out_addr = state->a[reg];
+        state->a[reg] += oracle_ea_step_bytes(reg, bytes);
+        return 1;
+    case 4:
+        state->a[reg] -= oracle_ea_step_bytes(reg, bytes);
+        *out_addr = state->a[reg];
+        return 1;
+    case 5: {
+        int16_t displacement = (int16_t)program_read16(program, size, *pc_ext);
+        *pc_ext += 2u;
+        *out_addr = (uint32_t)((int32_t)state->a[reg] + (int32_t)displacement);
+        return 1;
+    }
+    case 6: {
+        uint16_t ext = program_read16(program, size, *pc_ext);
+        int8_t displacement = (int8_t)(ext & 0xFFu);
+        *pc_ext += 2u;
+        *out_addr = (uint32_t)((int32_t)state->a[reg] +
+                               oracle_index_value(state, ext) +
+                               (int32_t)displacement);
+        return 1;
+    }
+    case 7:
+        if (reg == 0u) {
+            *out_addr = oracle_sign_extend_abs_w(program_read16(program, size, *pc_ext));
+            *pc_ext += 2u;
+            return 1;
+        }
+        if (reg == 1u) {
+            *out_addr = program_read32(program, size, *pc_ext);
+            *pc_ext += 4u;
+            return 1;
+        }
+        if (reg == 2u) {
+            int16_t displacement = (int16_t)program_read16(program, size, *pc_ext);
+            *out_addr = (uint32_t)((int32_t)(*pc_ext) + (int32_t)displacement);
+            *pc_ext += 2u;
+            return 1;
+        }
+        if (reg == 3u) {
+            uint16_t ext = program_read16(program, size, *pc_ext);
+            int8_t displacement = (int8_t)(ext & 0xFFu);
+            *out_addr = (uint32_t)((int32_t)(*pc_ext) +
+                                   (int32_t)displacement +
+                                   oracle_index_value(state, ext));
+            *pc_ext += 2u;
+            return 1;
+        }
+        return 0;
+    default:
+        return 0;
+    }
+}
+
+static int oracle_read_ea(const uint8_t *program,
+                          uint32_t size,
+                          NgM68kState *state,
+                          uint8_t *bus,
+                          uint8_t mode,
+                          uint8_t reg,
+                          uint8_t bytes,
+                          uint32_t *pc_ext,
+                          uint32_t *out_value) {
+    if (mode == 0u) {
+        *out_value = state->d[reg] & oracle_value_mask(bytes);
+        return 1;
+    }
+    if (mode == 1u) {
+        *out_value = state->a[reg];
+        return 1;
+    }
+    if (mode == 7u && reg == 4u) {
+        if (bytes == 4u) {
+            *out_value = program_read32(program, size, *pc_ext);
+            *pc_ext += 4u;
+        } else {
+            *out_value = program_read16(program, size, *pc_ext);
+            *pc_ext += 2u;
+            if (bytes == 1u) {
+                *out_value &= 0xFFu;
+            }
+        }
+        return 1;
+    }
+
+    {
+        uint32_t addr;
+        if (!oracle_ea_memory_addr(program, size, state, mode, reg,
+                                   bytes, pc_ext, &addr)) {
+            return 0;
+        }
+        *out_value = bus_read_size(bus, addr, bytes);
+        return 1;
+    }
+}
+
+static int oracle_write_ea(const uint8_t *program,
+                           uint32_t size,
+                           NgM68kState *state,
+                           uint8_t *bus,
+                           uint8_t mode,
+                           uint8_t reg,
+                           uint8_t bytes,
+                           uint32_t *pc_ext,
+                           uint32_t value) {
+    uint32_t mask = oracle_value_mask(bytes);
+    value &= mask;
+
+    if (mode == 0u) {
+        state->d[reg] = (state->d[reg] & ~mask) | value;
+        return 1;
+    }
+    if (mode == 1u) {
+        state->a[reg] = value;
+        return 1;
+    }
+
+    {
+        uint32_t addr;
+        if (!oracle_ea_memory_addr(program, size, state, mode, reg,
+                                   bytes, pc_ext, &addr)) {
+            return 0;
+        }
+        bus_write_size(bus, addr, value, bytes);
+        return 1;
+    }
+}
+
 static uint8_t program_read8(const uint8_t *program, uint32_t size, uint32_t addr) {
     return addr < size ? program[addr] : 0xFFu;
 }
@@ -466,52 +667,27 @@ static int oracle_exec(const uint8_t *program,
             uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
             uint32_t next_pc = pc + 2u;
             uint32_t value = 0;
+            uint8_t is_movea = (uint8_t)(dst_mode == 1u);
 
-            if (src_mode == 0u) {
-                value = state->d[src_reg];
-            } else if (src_mode == 7u && src_reg == 4u) {
-                if (move_size == 4u) {
-                    value = program_read32(program, size, next_pc);
-                    next_pc += 4u;
-                } else {
-                    value = program_read16(program, size, next_pc);
-                    next_pc += 2u;
-                }
-            } else {
+            if (!oracle_read_ea(program, size, state, bus, src_mode, src_reg,
+                                move_size, &next_pc, &value)) {
                 return 0;
             }
 
-            if (move_size == 1u) {
-                value &= 0xFFu;
-            } else if (move_size == 2u) {
-                value &= 0xFFFFu;
+            if (is_movea) {
+                if (move_size == 1u) {
+                    return 0;
+                }
+                state->a[dst_reg] = (move_size == 2u) ?
+                    (uint32_t)(int32_t)(int16_t)value : value;
+            } else {
+                if (!oracle_write_ea(program, size, state, bus, dst_mode, dst_reg,
+                                     move_size, &next_pc, value)) {
+                    return 0;
+                }
+                oracle_set_nz_size(state, value, move_size);
             }
 
-            if (dst_mode == 0u) {
-                if (move_size == 4u) {
-                    state->d[dst_reg] = value;
-                    oracle_set_nz32(state, value);
-                } else if (move_size == 1u) {
-                    state->d[dst_reg] = (state->d[dst_reg] & 0xFFFFFF00u) | value;
-                    oracle_set_nz8(state, (uint8_t)value);
-                } else {
-                    state->d[dst_reg] = (state->d[dst_reg] & 0xFFFF0000u) | value;
-                    oracle_set_nz16(state, (uint16_t)value);
-                }
-            } else if (dst_mode == 2u) {
-                if (move_size == 4u) {
-                    bus_write32(bus, state->a[dst_reg], value);
-                    oracle_set_nz32(state, value);
-                } else if (move_size == 1u) {
-                    bus_write8(bus, state->a[dst_reg], (uint8_t)value);
-                    oracle_set_nz8(state, (uint8_t)value);
-                } else {
-                    bus_write16(bus, state->a[dst_reg], (uint16_t)value);
-                    oracle_set_nz16(state, (uint16_t)value);
-                }
-            } else {
-                return 0;
-            }
             pc = next_pc;
             continue;
         }
@@ -591,8 +767,12 @@ int main(void) {
     CHECK((g_ng_m68k.d[4] & 0xFFu) == 0x0Eu);
     CHECK((g_ng_m68k.d[5] & 0xFFFFu) == 0x1357u);
     CHECK((g_ng_m68k.d[6] & 0xFFFFu) == 0x1357u);
+    CHECK(g_ng_m68k.a[0] == 0x00000121u);
+    CHECK(g_ng_m68k.a[1] == 0x00000125u);
     CHECK(ng68k_read16(0x0068u) == 0x0000u);
     CHECK(ng68k_read16(0x00ACu) == 0x0000u);
+    CHECK(ng68k_read8(0x0120u) == 0x5Au);
+    CHECK(ng68k_read8(0x0124u) == 0x5Au);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

@@ -110,7 +110,7 @@ int main(void) {
     }
 
     {
-        NgProgramRom rom = make_rom(0x70u);
+        NgProgramRom rom = make_rom(0x90u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x41FAu); /* LEA $000008,A0 */
         write16(&rom, 0x02u, 0x0004u);
@@ -155,7 +155,17 @@ int main(void) {
         write16(&rom, 0x62u, 0x4268u); /* CLR.W ($44,A0) */
         write16(&rom, 0x64u, 0x0044u);
         write16(&rom, 0x66u, 0x4298u); /* CLR.L (A0)+ */
-        write16(&rom, 0x68u, 0x4E75u);
+        write16(&rom, 0x68u, 0x207Cu); /* MOVEA.L #$00000120,A0 */
+        write32(&rom, 0x6Au, 0x00000120u);
+        write16(&rom, 0x6Eu, 0x2248u); /* MOVEA.L A0,A1 */
+        write16(&rom, 0x70u, 0x10C1u); /* MOVE.B D1,(A0)+ */
+        write16(&rom, 0x72u, 0x20C1u); /* MOVE.L D1,(A0)+ */
+        write16(&rom, 0x74u, 0x32C0u); /* MOVE.W D0,(A1)+ */
+        write16(&rom, 0x76u, 0x12D8u); /* MOVE.B (A0)+,(A1)+ */
+        write16(&rom, 0x78u, 0x21BCu); /* MOVE.L #$12345678,($0C,A0,A2.L) */
+        write32(&rom, 0x7Au, 0x12345678u);
+        write16(&rom, 0x7Eu, 0xA80Cu);
+        write16(&rom, 0x80u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -198,6 +208,22 @@ int main(void) {
         CHECK(strstr(text, "/* $000066: CLR.L (A0)+ */") != NULL);
         CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[0], (uint32_t)(0));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[0] += 4u;") != NULL);
+        CHECK(strstr(text, "/* $000068: MOVEA.L #$120,A0 */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[0] = (uint32_t)(0x00000120u);") != NULL);
+        CHECK(strstr(text, "/* $00006E: MOVEA.L A0,A1 */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[1] = (uint32_t)(g_ng_m68k.a[0]);") != NULL);
+        CHECK(strstr(text, "/* $000070: MOVE.B D1,(A0)+ */") != NULL);
+        CHECK(strstr(text, "ng68k_write8(g_ng_m68k.a[0], (uint8_t)((uint8_t)(g_ng_m68k.d[1] & 0xFFu)));") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[0] += 1u;") != NULL);
+        CHECK(strstr(text, "/* $000072: MOVE.L D1,(A0)+ */") != NULL);
+        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[0], (uint32_t)(g_ng_m68k.d[1]));") != NULL);
+        CHECK(strstr(text, "/* $000074: MOVE.W D0,(A1)+ */") != NULL);
+        CHECK(strstr(text, "ng68k_write16(g_ng_m68k.a[1], (uint16_t)((uint16_t)(g_ng_m68k.d[0] & 0xFFFFu)));") != NULL);
+        CHECK(strstr(text, "/* $000076: MOVE.B (A0)+,(A1)+ */") != NULL);
+        CHECK(strstr(text, "uint8_t ng_ea_000076 = ng68k_read8(g_ng_m68k.a[0]);") != NULL);
+        CHECK(strstr(text, "ng68k_write8(g_ng_m68k.a[1], (uint8_t)(ng_ea_000076));") != NULL);
+        CHECK(strstr(text, "/* $000078: MOVE.L #$12345678,($C,A0,A2.L) */") != NULL);
+        CHECK(strstr(text, "ng68k_write32((uint32_t)(g_ng_m68k.a[0] + (int32_t)g_ng_m68k.a[2] + (int32_t)12), (uint32_t)(0x12345678u));") != NULL);
 
         ng_program_rom_free(&rom);
     }

@@ -9,7 +9,7 @@ project orientation; update this file after each meaningful green slice.
 
 - Repository: `https://github.com/fliperama86/neo-recomp.git`
 - Branch: `main`
-- Latest pushed commit: `9455d09 Add live progress tracker`
+- Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
 - Current test status: 5/5 passing
 - Real smoke input: `G:\Mister\NEOGEO\mslug.neo`
@@ -65,7 +65,8 @@ $00067E: DC.W $D101
 locally with generated-exec coverage. The real `.neo` smoke needs to be rerun to
 find the next Metal Slug frontier.
 
-Other visible real-output frontiers include:
+Previously visible real-output frontiers, now covered locally by the generic EA
+decode/emission path and/or generated-exec tests, include:
 
 - `$097748: DC.W $12D8`
 - `$00089C: DC.W $10C1`
@@ -77,6 +78,9 @@ Other visible real-output frontiers include:
 - `$05DC20: DC.W $21BC`
 - `$05DC34: DC.W $4268`
 - `$024FF2: DC.W $4298`
+
+The real `.neo` smoke needs to be rerun to replace this now-stale frontier list
+with the next set of generated-code misses.
 
 ## Supported Generated Behavior
 
@@ -92,6 +96,10 @@ Covered by executable generated-C validation:
   - `MOVE.B #imm,abs`
   - `MOVE.B Dn,abs`
   - `MOVE.B (d16,An),Dn`
+  - generic `MOVE.B/W/L <ea>,<ea>` paths covered so far by data-register,
+    immediate, postincrement, address-indirect, and indexed destination forms
+  - generic `MOVEA.L <ea>,An` paths covered so far by immediate and
+    address-register sources
   - `MOVE.L An,abs`
   - `LEA`
 - arithmetic/logical:
@@ -117,6 +125,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Covered the generic MOVE/MOVEA frontier cluster (`$12D8`, `$10C1`,
+  `$20C1`, `$207C`, `$2248`, `$32C0`, `$21BC`) with decode/emitter tests and
+  expanded generated-exec oracle EA helpers.
 - local: Added a generic 68k effective-address model and generic MOVE emission fallback.
 - local: Added generic EA-to-data-register `ADD`, `SUB`, and `CMP` decode/emission.
 - local: Added generic `CLR <ea>` decode/emission for address-register memory targets.

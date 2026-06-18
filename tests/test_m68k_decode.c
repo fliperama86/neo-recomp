@@ -259,6 +259,117 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x12, 0xD8 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_APOST);
+        CHECK(instr.src.reg == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 1);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE.B (A0)+,(A1)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x10, 0xC1 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE.B D1,(A0)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x20, 0xC1 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE.L D1,(A0)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x20, 0x7C, 0x12, 0x34, 0x56, 0x78 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVEA);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_IMM);
+        CHECK(instr.src.immediate == 0x12345678u);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVEA.L #$12345678,A0") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x22, 0x48 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVEA);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_AREG);
+        CHECK(instr.src.reg == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 1);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVEA.L A0,A1") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x32, 0xC0 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 1);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE.W D0,(A1)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = {
+            0x21, 0xBC, 0x12, 0x34, 0x56, 0x78, 0xA8, 0x0C
+        };
+        char text[80];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE);
+        CHECK(instr.byte_length == 8);
+        CHECK(instr.size == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_IMM);
+        CHECK(instr.src.immediate == 0x12345678u);
+        CHECK(instr.dst.mode == NG_M68K_EA_AINDEX);
+        CHECK(instr.dst.reg == 0);
+        CHECK(instr.dst.index_is_addr == 1);
+        CHECK(instr.dst.index_reg == 2);
+        CHECK(instr.dst.index_is_long == 1);
+        CHECK(instr.dst.displacement == 0x0C);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE.L #$12345678,($C,A0,A2.L)") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x59, 0x04 };
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_SUBQ);
