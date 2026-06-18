@@ -6,6 +6,9 @@ The first goal is deliberately small: load Neo Geo P-ROM bytes, discover a few c
 
 This is not an emulator yet, and it is not a working recompiler yet.
 
+For the current implementation status, latest real-ROM frontier, and next
+TDD slices, see [`docs/progress.md`](docs/progress.md).
+
 ## Shape
 
 - `recompiler/` owns ROM loading, 68000 decoding, function discovery, and C emission.
