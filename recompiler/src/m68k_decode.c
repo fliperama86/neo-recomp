@@ -250,6 +250,25 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->reg = 0;
         return 1;
     }
+    if ((op & 0xF138u) == 0x5100u) {
+        uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+        out->mnemonic = NG_M68K_SUBQ;
+        out->byte_length = 2;
+        out->form = NG_M68K_FORM_DREG;
+        out->reg = (uint8_t)(op & 7u);
+        out->immediate = (uint8_t)((op >> 9) & 7u);
+        if (out->immediate == 0) {
+            out->immediate = 8;
+        }
+        if (size_code == 2u) {
+            out->size = NG_M68K_SIZE_LONG;
+        } else if (size_code == 1u) {
+            out->size = NG_M68K_SIZE_WORD;
+        } else {
+            out->size = NG_M68K_SIZE_BYTE;
+        }
+        return 1;
+    }
     if (op == 0x4239u || op == 0x4279u || op == 0x42B9u) {
         out->mnemonic = NG_M68K_CLR;
         out->byte_length = 6;
@@ -321,6 +340,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_MOVEQ: return "MOVEQ";
     case NG_M68K_MOVE: return "MOVE";
     case NG_M68K_ADD: return "ADD";
+    case NG_M68K_SUBQ: return "SUBQ";
     case NG_M68K_CLR: return "CLR";
     case NG_M68K_TST: return "TST";
     case NG_M68K_CMPI: return "CMPI";
@@ -415,6 +435,12 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                  instr->size == NG_M68K_SIZE_BYTE ? 'B' :
                  (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
                  instr->src_reg, instr->reg);
+        break;
+    case NG_M68K_SUBQ:
+        snprintf(out, out_size, "SUBQ.%c #%u,D%u",
+                 instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                 (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                 (unsigned)instr->immediate, instr->reg);
         break;
     case NG_M68K_CLR:
         if (instr->form == NG_M68K_FORM_DREG) {

@@ -205,6 +205,15 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         break;
+    case NG_M68K_SUBQ:
+        if (instr->form == NG_M68K_FORM_DREG && instr->size == 1u) {
+            fprintf(out,
+                    "    { uint8_t ng_old = (uint8_t)(g_ng_m68k.d[%u] & 0x00FFu); uint8_t ng_result = (uint8_t)(ng_old - %uu); g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFFFF00u) | ng_result; ng_set_nz8(ng_result); if (ng_old < %uu) g_ng_m68k.sr |= NG_CCR_C; }\n",
+                    instr->reg, (unsigned)instr->immediate, instr->reg, instr->reg,
+                    (unsigned)instr->immediate);
+            return 1;
+        }
+        break;
     case NG_M68K_CLR:
         if (instr->form == NG_M68K_FORM_ABS) {
             if (instr->size == 4u) {

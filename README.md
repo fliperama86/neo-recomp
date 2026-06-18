@@ -261,7 +261,8 @@ stream; the useful invariant is behavior. The current behavior check covers
 `MOVEQ`, `MOVE.B/W #imm,Dn`, `ADD.W`, direct `JSR`, tail `JMP`,
 `MOVE.W #imm,abs`, `MOVE.B #imm,abs`, `MOVE.B Dn,abs`,
 `MOVE.B (d16,An),Dn`, `CMPI.B #imm,Dn`, `ANDI.B #imm,(d16,An)`,
-`CLR.B/W/L abs`, `CLR.B Dn`, `TST.B abs`, `TST.B (d16,An)`, `LEA`, and
-`MOVE.L An,abs` through the same generated dispatch shape used by real ROMs.
-It also covers not-taken and taken `BNE`/`BEQ`/`BCC` paths, comparing generated
-C behavior against the tiny interpreter oracle.
+`SUBQ.B #imm,Dn`, `CLR.B/W/L abs`, `CLR.B Dn`, `TST.B abs`,
+`TST.B (d16,An)`, `LEA`, and `MOVE.L An,abs` through the same generated
+dispatch shape used by real ROMs. It also covers not-taken and taken
+`BNE`/`BEQ`/`BCC` paths, comparing generated C behavior against the tiny
+interpreter oracle.
