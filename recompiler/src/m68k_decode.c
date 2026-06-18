@@ -212,6 +212,15 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->immediate = ng_program_rom_read16(rom, addr + 2u) & 0xFFu;
         return 1;
     }
+    if ((op & 0xFFF8u) == 0x0C00u) {
+        out->mnemonic = NG_M68K_CMPI;
+        out->byte_length = 4;
+        out->size = NG_M68K_SIZE_BYTE;
+        out->form = NG_M68K_FORM_IMM_TO_DREG;
+        out->reg = (uint8_t)(op & 7u);
+        out->immediate = ng_program_rom_read16(rom, addr + 2u) & 0xFFu;
+        return 1;
+    }
     if (op == 0xD040u) {
         out->mnemonic = NG_M68K_ADD;
         out->byte_length = 2;
@@ -285,6 +294,7 @@ const char *ng_m68k_mnemonic_name(NgM68kMnemonic mnemonic) {
     case NG_M68K_ADD: return "ADD";
     case NG_M68K_CLR: return "CLR";
     case NG_M68K_TST: return "TST";
+    case NG_M68K_CMPI: return "CMPI";
     case NG_M68K_BCLR: return "BCLR";
     case NG_M68K_ANDI_TO_SR: return "ANDI_SR";
     default: return "?";
@@ -388,6 +398,12 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
                  instr->size == NG_M68K_SIZE_BYTE ? 'B' :
                  (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
                  instr->absolute_addr & 0xFFFFFFu);
+        break;
+    case NG_M68K_CMPI:
+        snprintf(out, out_size, "CMPI.%c #$%X,D%u",
+                 instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                 (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                 (unsigned)instr->immediate, instr->reg);
         break;
     case NG_M68K_UNKNOWN:
         snprintf(out, out_size, "DC.W $%04X", instr->opcode);
