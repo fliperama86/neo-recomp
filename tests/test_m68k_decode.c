@@ -872,6 +872,20 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x48, 0xE7, 0x80, 0x00 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVEM);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 4);
+        CHECK(instr.immediate == 0x8000u);
+        CHECK(instr.dst.mode == NG_M68K_EA_APRE);
+        CHECK(instr.dst.reg == 7);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVEM.L #$8000,-(A7)") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x44, 0xFC, 0x00, 0x1B };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
@@ -1050,6 +1064,20 @@ int main(void) {
         CHECK(instr.dst.reg == 2);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "ADDQ.W #2,D2") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x52, 0x88 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ADDQ);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.immediate == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ADDQ.L #1,A0") == 0);
     }
 
     {
@@ -1744,6 +1772,36 @@ int main(void) {
         CHECK(instr.byte_length == 2);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "ILLEGAL") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x15, 0xC0 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_UNKNOWN);
+        CHECK(instr.byte_length == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "DC.W $15C0") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x40, 0xFA };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_UNKNOWN);
+        CHECK(instr.byte_length == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "DC.W $40FA") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x42, 0x3A };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_UNKNOWN);
+        CHECK(instr.byte_length == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "DC.W $423A") == 0);
     }
 
     {

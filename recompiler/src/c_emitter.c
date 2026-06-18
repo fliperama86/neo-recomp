@@ -487,6 +487,30 @@ static int emit_movem(FILE *out, const NgM68kInstr *instr) {
     char addr_expr[256];
 
     if (instr->dst.mode != NG_M68K_EA_NONE) {
+        if (instr->dst.mode == NG_M68K_EA_APRE) {
+            fprintf(out, "    { uint32_t ng_addr = g_ng_m68k.a[%u];\n",
+                    instr->dst.reg);
+            for (uint8_t bit = 0; bit < 16u; ++bit) {
+                uint8_t is_addr;
+                uint8_t reg;
+                if ((mask & (uint16_t)(1u << bit)) == 0) {
+                    continue;
+                }
+                is_addr = bit < 8u;
+                reg = is_addr ? (uint8_t)(7u - bit) : (uint8_t)(15u - bit);
+                fprintf(out, "      ng_addr -= %uu;\n", (unsigned)instr->size);
+                if (is_addr) {
+                    fprintf(out, "      %s(ng_addr, (%s)(g_ng_m68k.a[%u]));\n",
+                            write_fn, ng_ctype_for_size(instr->size), reg);
+                } else {
+                    fprintf(out, "      %s(ng_addr, (%s)(g_ng_m68k.d[%u]));\n",
+                            write_fn, ng_ctype_for_size(instr->size), reg);
+                }
+            }
+            fprintf(out, "      g_ng_m68k.a[%u] = ng_addr;\n", instr->dst.reg);
+            fprintf(out, "    }\n");
+            return 1;
+        }
         if (!emit_ea_address_value(&instr->dst, addr_expr, (unsigned)sizeof(addr_expr))) {
             return 0;
         }
@@ -1094,6 +1118,17 @@ static int emit_quick_generic(FILE *out, const NgM68kInstr *instr) {
         return 0;
     }
 
+    if (instr->dst.mode == NG_M68K_EA_AREG) {
+        if (instr->mnemonic == NG_M68K_ADDQ) {
+            fprintf(out, "    g_ng_m68k.a[%u] += %uu;\n",
+                    instr->dst.reg, (unsigned)instr->immediate);
+        } else {
+            fprintf(out, "    g_ng_m68k.a[%u] -= %uu;\n",
+                    instr->dst.reg, (unsigned)instr->immediate);
+        }
+        return 1;
+    }
+
     if (instr->dst.mode == NG_M68K_EA_DREG) {
         if (!emit_ea_read(out, instr, &instr->dst, instr->size,
                           dst_expr, (unsigned)sizeof(dst_expr))) {
@@ -1508,8 +1543,15 @@ static int emit_divide(FILE *out, const NgM68kInstr *instr) {
 
     if (instr->mnemonic == NG_M68K_DIVU) {
         fprintf(out, "    { uint16_t ng_divisor = (uint16_t)(%s);\n", src_expr);
-        fprintf(out, "      if (ng_divisor == 0) { ng_log_dispatch_miss(0x%08Xu); return; }\n",
-                instr->addr & 0x00FFFFFFu);
+        fprintf(out, "      if (ng_divisor == 0) {\n");
+        fprintf(out, "        g_ng_m68k.a[7] -= 4u;\n");
+        fprintf(out, "        ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+                (instr->addr + instr->byte_length) & 0x00FFFFFFu);
+        fprintf(out, "        g_ng_m68k.a[7] -= 2u;\n");
+        fprintf(out, "        ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
+        fprintf(out, "        ng_generated_call(ng68k_read32(0x00000014u));\n");
+        fprintf(out, "        return;\n");
+        fprintf(out, "      }\n");
         fprintf(out, "      uint32_t ng_dividend = g_ng_m68k.d[%u]; uint32_t ng_quotient = ng_dividend / ng_divisor; uint16_t ng_remainder = (uint16_t)(ng_dividend %% ng_divisor);\n",
                 instr->dst.reg);
         fprintf(out, "      g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
@@ -1519,8 +1561,15 @@ static int emit_divide(FILE *out, const NgM68kInstr *instr) {
         fprintf(out, "    }\n");
     } else {
         fprintf(out, "    { int16_t ng_divisor = (int16_t)(%s);\n", src_expr);
-        fprintf(out, "      if (ng_divisor == 0) { ng_log_dispatch_miss(0x%08Xu); return; }\n",
-                instr->addr & 0x00FFFFFFu);
+        fprintf(out, "      if (ng_divisor == 0) {\n");
+        fprintf(out, "        g_ng_m68k.a[7] -= 4u;\n");
+        fprintf(out, "        ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+                (instr->addr + instr->byte_length) & 0x00FFFFFFu);
+        fprintf(out, "        g_ng_m68k.a[7] -= 2u;\n");
+        fprintf(out, "        ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
+        fprintf(out, "        ng_generated_call(ng68k_read32(0x00000014u));\n");
+        fprintf(out, "        return;\n");
+        fprintf(out, "      }\n");
         fprintf(out, "      int32_t ng_dividend = (int32_t)g_ng_m68k.d[%u]; int32_t ng_quotient = ng_dividend / ng_divisor; int16_t ng_remainder = (int16_t)(ng_dividend %% ng_divisor);\n",
                 instr->dst.reg);
         fprintf(out, "      g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
@@ -1804,7 +1853,8 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         return 1;
     case NG_M68K_STOP:
         fprintf(out, "    g_ng_m68k.sr = 0x%04Xu;\n", instr->immediate & 0xFFFFu);
-        fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n", instr->addr & 0x00FFFFFFu);
+        fprintf(out, "    ng_m68k_stop_until_interrupt(0x%04Xu);\n",
+                instr->immediate & 0xFFFFu);
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_ILLEGAL:
@@ -2385,7 +2435,6 @@ static void emit_function_body(FILE *out, const NgProgramRom *rom, uint32_t star
             instr.mnemonic == NG_M68K_STOP ||
             instr.mnemonic == NG_M68K_ILLEGAL ||
             instr.mnemonic == NG_M68K_TRAP ||
-            instr.mnemonic == NG_M68K_TRAPV ||
             instr.mnemonic == NG_M68K_RTE ||
             instr.mnemonic == NG_M68K_RTR ||
             instr.mnemonic == NG_M68K_UNKNOWN ||

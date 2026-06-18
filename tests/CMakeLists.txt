@@ -18,6 +18,11 @@ add_executable(test_c_emitter
 )
 target_link_libraries(test_c_emitter PRIVATE neo_recompiler_core)
 
+add_executable(test_opcode_sweep
+    test_opcode_sweep.c
+)
+target_link_libraries(test_opcode_sweep PRIVATE neo_recompiler_core)
+
 add_executable(generate_exec_fixture
     generate_exec_fixture.c
 )
@@ -44,6 +49,7 @@ if(MSVC)
     target_compile_options(test_m68k_decode PRIVATE /W4)
     target_compile_options(test_function_discovery PRIVATE /W4)
     target_compile_options(test_c_emitter PRIVATE /W4)
+    target_compile_options(test_opcode_sweep PRIVATE /W4)
     target_compile_options(generate_exec_fixture PRIVATE /W4)
     target_compile_options(test_generated_exec PRIVATE /W4)
 else()
@@ -51,6 +57,7 @@ else()
     target_compile_options(test_m68k_decode PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_function_discovery PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_c_emitter PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(test_opcode_sweep PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(generate_exec_fixture PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_generated_exec PRIVATE -Wall -Wextra -Wpedantic)
 endif()
@@ -59,4 +66,5 @@ add_test(NAME test_p_rom COMMAND test_p_rom)
 add_test(NAME test_m68k_decode COMMAND test_m68k_decode)
 add_test(NAME test_function_discovery COMMAND test_function_discovery)
 add_test(NAME test_c_emitter COMMAND test_c_emitter)
+add_test(NAME test_opcode_sweep COMMAND test_opcode_sweep)
 add_test(NAME test_generated_exec COMMAND test_generated_exec)

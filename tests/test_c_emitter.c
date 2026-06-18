@@ -680,6 +680,121 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x04u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x4E76u); /* TRAPV */
+        write16(&rom, 0x02u, 0x4E75u); /* fall-through when V clear */
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: TRAPV */") != NULL);
+        CHECK(strstr(text, "ng_generated_call(ng68k_read32(0x0000001Cu));") != NULL);
+        CHECK(strstr(text, "/* $000002: RTS */") != NULL);
+        CHECK(strstr(text, "ng_log_dispatch_miss(0x00000000u);") == NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x04u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x4E72u); /* STOP #$2700 */
+        write16(&rom, 0x02u, 0x2700u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: STOP #$2700 */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.sr = 0x2700u;") != NULL);
+        CHECK(strstr(text, "ng_m68k_stop_until_interrupt(0x2700u);") != NULL);
+        CHECK(strstr(text, "ng_log_dispatch_miss(0x00000000u);") == NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x04u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x5288u); /* ADDQ.L #1,A0 */
+        write16(&rom, 0x02u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: ADDQ.L #1,A0 */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[0] += 1u;") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x06u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x48E7u); /* MOVEM.L mask,-(A7) */
+        write16(&rom, 0x02u, 0x8000u); /* D0 in predecrement mask order */
+        write16(&rom, 0x04u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: MOVEM.L #$8000,-(A7) */") != NULL);
+        CHECK(strstr(text, "{ uint32_t ng_addr = g_ng_m68k.a[7];") != NULL);
+        CHECK(strstr(text, "ng_addr -= 4u;") != NULL);
+        CHECK(strstr(text, "ng68k_write32(ng_addr, (uint32_t)(g_ng_m68k.d[0]));") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[7] = ng_addr;") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x06u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x8EFCu); /* DIVU.W #0,D7 */
+        write16(&rom, 0x02u, 0x0000u);
+        write16(&rom, 0x04u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: DIVU.W #$0,D7 */") != NULL);
+        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x00000004u);") != NULL);
+        CHECK(strstr(text, "ng_generated_call(ng68k_read32(0x00000014u));") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x06u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x4E73u); /* RTE */

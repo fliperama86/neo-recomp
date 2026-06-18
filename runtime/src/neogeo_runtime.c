@@ -44,3 +44,6 @@ void ng_log_dispatch_miss(uint32_t addr) {
     fprintf(stderr, "dispatch miss at $%06X\n", addr & 0xFFFFFFu);
 }
 
+void ng_m68k_stop_until_interrupt(uint16_t sr) {
+    fprintf(stderr, "m68k STOP until interrupt sr=$%04X\n", sr);
+}

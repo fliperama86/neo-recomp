@@ -11,7 +11,9 @@ project orientation; update this file after each meaningful green slice.
 - Branch: `main`
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
-- Current test status: 5/5 passing
+- Current test status: 6/6 passing
+- Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
+  an unsupported-dispatch stub in the current synthetic sweep
 - Real smoke input: `G:\Mister\NEOGEO\mslug.neo`
 - Real smoke command:
 
@@ -91,9 +93,10 @@ Covered by executable generated-C validation:
 - system/exception-control paths: `TRAP`, `TRAPV`, `ILLEGAL`, A-line,
   F-line, `RESET`, `STOP`, `RTE`, and `RTR` are recognized. `TRAP`,
   `TRAPV`, `ILLEGAL`, A-line, F-line, and failed `CHK` now push 68000-style
-  SR/PC exception frames and dispatch through the vector table; `RTE`/`RTR`
-  pop stack frames back into SR/CCR and PC. `STOP` still yields through a host
-  dispatch miss, and full privilege/device/interrupt timing remains pending.
+  SR/PC exception frames and dispatch through the vector table; divide-by-zero
+  vectors through vector 5; `RTE`/`RTR` pop stack frames back into SR/CCR and
+  PC. `STOP` installs the immediate SR and yields through the runtime stop
+  hook. Full privilege/device/interrupt timing remains pending.
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
 - conditional branches: all 68000 `Bcc` condition predicates are emitted;
   generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
@@ -115,7 +118,7 @@ Covered by executable generated-C validation:
   - generic `LEA <ea>,An` control-address loads covered so far by PC-relative
     and displacement sources
   - `MOVEM.W/L` register-list transfers covered so far by long Dn masks to/from
-    address-indirect memory
+    address-indirect memory and predecrement register-to-memory masks
   - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
     source and absolute SR destination forms
@@ -128,6 +131,7 @@ Covered by executable generated-C validation:
   - generic `ADD.B/W/L Dn,<ea>` paths covered so far by postincrement memory
     destinations
   - generic `ADDQ.B/W/L #imm,<ea>` paths covered so far by Dn destinations
+    and address-register destinations
   - generic `SUB.B/W/L <ea>,Dn` paths covered so far by Dn reads
   - generic `SUB.B/W/L Dn,<ea>` paths covered so far by postincrement memory
     destinations
@@ -153,6 +157,7 @@ Covered by executable generated-C validation:
     postincrement memory destinations
   - `MULU.W <ea>,Dn` and `MULS.W <ea>,Dn` covered so far by immediate sources
   - `DIVU.W <ea>,Dn` and `DIVS.W <ea>,Dn` covered so far by immediate sources
+    and divide-by-zero exception-vector emission
   - `EXG` register exchanges covered so far by data-register pairs
   - `ANDI.B #imm,(d16,An)`
   - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
@@ -191,6 +196,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Closed the synthetic opcode-sweep emission gap: all currently
+  decoder-recognized non-`UNKNOWN` opcodes now emit without unsupported stubs.
+  This tightened illegal effective-address filtering, added address-register
+  `ADDQ/SUBQ`, predecrement `MOVEM` stores, divide-by-zero vectoring, `TRAPV`
+  fall-through, and a runtime STOP hook.
 - local: Added 68000-style exception vector stack semantics for `TRAP`,
   `TRAPV`, `ILLEGAL`, A-line/F-line emulator traps, and failed `CHK`, plus
   `RTE`/`RTR` stack unwinding back into generated dispatch.
