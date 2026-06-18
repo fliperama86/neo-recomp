@@ -1016,6 +1016,32 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         break;
+    case NG_M68K_EXT:
+        if (instr->size == 2u) {
+            fprintf(out,
+                    "    { uint16_t ng_result = (uint16_t)(int16_t)(int8_t)(g_ng_m68k.d[%u] & 0xFFu);\n",
+                    instr->reg);
+            fprintf(out,
+                    "      g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFF0000u) | (uint32_t)ng_result;\n",
+                    instr->reg, instr->reg);
+            fprintf(out, "      ng_set_nz16(ng_result);\n");
+            fprintf(out, "    }\n");
+            return 1;
+        }
+        if (instr->size == 4u) {
+            fprintf(out,
+                    "    g_ng_m68k.d[%u] = (uint32_t)(int32_t)(int16_t)(g_ng_m68k.d[%u] & 0xFFFFu);\n",
+                    instr->reg, instr->reg);
+            fprintf(out, "    ng_set_nz32(g_ng_m68k.d[%u]);\n", instr->reg);
+            return 1;
+        }
+        break;
+    case NG_M68K_SWAP:
+        fprintf(out,
+                "    g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] << 16) | (g_ng_m68k.d[%u] >> 16);\n",
+                instr->reg, instr->reg, instr->reg);
+        fprintf(out, "    ng_set_nz32(g_ng_m68k.d[%u]);\n", instr->reg);
+        return 1;
     case NG_M68K_TST:
         if (instr->form == NG_M68K_FORM_ABS) {
             if (instr->size == 4u) {

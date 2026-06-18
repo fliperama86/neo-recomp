@@ -994,6 +994,28 @@ static int oracle_exec(const uint8_t *program,
             pc = next_pc;
             continue;
         }
+        if ((op & 0xFFF8u) == 0x4880u) {
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint16_t result = (uint16_t)(int16_t)(int8_t)(state->d[reg] & 0xFFu);
+            state->d[reg] = (state->d[reg] & 0xFFFF0000u) | (uint32_t)result;
+            oracle_set_nz16(state, result);
+            pc += 2u;
+            continue;
+        }
+        if ((op & 0xFFF8u) == 0x48C0u) {
+            uint8_t reg = (uint8_t)(op & 7u);
+            state->d[reg] = (uint32_t)(int32_t)(int16_t)(state->d[reg] & 0xFFFFu);
+            oracle_set_nz32(state, state->d[reg]);
+            pc += 2u;
+            continue;
+        }
+        if ((op & 0xFFF8u) == 0x4840u) {
+            uint8_t reg = (uint8_t)(op & 7u);
+            state->d[reg] = (state->d[reg] << 16) | (state->d[reg] >> 16);
+            oracle_set_nz32(state, state->d[reg]);
+            pc += 2u;
+            continue;
+        }
         if ((op & 0xFF00u) == 0x4A00u) {
             uint8_t size_code = (uint8_t)((op >> 6) & 3u);
             uint8_t mode = (uint8_t)((op >> 3) & 7u);
@@ -1130,8 +1152,8 @@ int main(void) {
     CHECK(g_ng_m68k.sr == expected_state.sr);
     CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
     CHECK(g_ng_m68k.d[0] == 0u);
-    CHECK((g_ng_m68k.d[2] & 0xFFFFu) == 0xFEFFu);
-    CHECK((g_ng_m68k.d[3] & 0xFFu) == 0x00u);
+    CHECK(g_ng_m68k.d[2] == 0xFEFF0000u);
+    CHECK(g_ng_m68k.d[3] == 0xFFFFFF80u);
     CHECK((g_ng_m68k.d[4] & 0xFFu) == 0x0Eu);
     CHECK((g_ng_m68k.d[5] & 0xFFFFu) == 0x1357u);
     CHECK((g_ng_m68k.d[6] & 0xFFFFu) == 0x1357u);

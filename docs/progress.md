@@ -134,6 +134,7 @@ Covered by executable generated-C validation:
     paths covered so far by abs, Dn, and postincrement memory destinations
   - generic `NEG.B/W/L <ea>` and `NOT.B/W/L <ea>` paths covered so far by Dn,
     abs, and postincrement memory destinations
+  - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
   - `ANDI #imm,SR`
 
 Important caveat: this is not a complete 68000 condition-code model. `V` is only
@@ -142,6 +143,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added data-register transform ops `EXT.W`, `EXT.L`, and `SWAP` with
+  decode/format/emission coverage and generated-exec sign-extension/register
+  swap validation.
 - local: Generalized unary read-modify-write `NEG <ea>` and `NOT <ea>` with
   correct flag behavior and generated-exec Dn/postincrement coverage.
 - local: Added dynamic bit operations (`BTST/BCHG/BCLR/BSET Dn,<ea>`) on the

@@ -849,6 +849,51 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x48, 0x83 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_EXT);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.form == NG_M68K_FORM_DREG);
+        CHECK(instr.reg == 3);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "EXT.W D3") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x48, 0xC3 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_EXT);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.form == NG_M68K_FORM_DREG);
+        CHECK(instr.reg == 3);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "EXT.L D3") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x48, 0x42 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_SWAP);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.form == NG_M68K_FORM_DREG);
+        CHECK(instr.reg == 2);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "SWAP D2") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x4A, 0x39, 0x00, 0x10, 0xFE, 0x80 };
         CHECK(decode_one(bytes, sizeof(bytes), 0x000996u, &instr));
         CHECK(instr.mnemonic == NG_M68K_TST);
