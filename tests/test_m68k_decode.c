@@ -1270,6 +1270,19 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x4A, 0xF9, 0x00, 0x00, 0x01, 0x8D };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_TAS);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_ABS_L);
+        CHECK(instr.dst.absolute_addr == 0x0000018Du);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "TAS $00018D") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x44, 0x42 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

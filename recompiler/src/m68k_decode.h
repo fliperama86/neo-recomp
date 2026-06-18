@@ -57,6 +57,7 @@ typedef enum NgM68kMnemonic {
     NG_M68K_ROR,
     NG_M68K_PEA,
     NG_M68K_TST,
+    NG_M68K_TAS,
     NG_M68K_ADDI,
     NG_M68K_SUBI,
     NG_M68K_CMPI,

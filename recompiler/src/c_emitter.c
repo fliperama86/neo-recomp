@@ -624,6 +624,35 @@ static int emit_tst_generic(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_tas_generic(FILE *out, const NgM68kInstr *instr) {
+    char addr_expr[256];
+
+    if (instr->dst.mode == NG_M68K_EA_NONE || instr->size != 1u) {
+        return 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        fprintf(out, "    { uint8_t ng_value = (uint8_t)(g_ng_m68k.d[%u] & 0xFFu);\n",
+                instr->dst.reg);
+        fprintf(out, "      ng_set_nz8(ng_value);\n");
+        fprintf(out, "      g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFFFF00u) | (uint32_t)(uint8_t)(ng_value | 0x80u);\n",
+                instr->dst.reg, instr->dst.reg);
+        fprintf(out, "    }\n");
+        return 1;
+    }
+
+    if (!emit_ea_address(out, instr, &instr->dst, 1u,
+                         addr_expr, (unsigned)sizeof(addr_expr))) {
+        return 0;
+    }
+    fprintf(out, "    { uint32_t ng_addr = %s; uint8_t ng_value = ng68k_read8(ng_addr);\n",
+            addr_expr);
+    fprintf(out, "      ng_set_nz8(ng_value);\n");
+    fprintf(out, "      ng68k_write8(ng_addr, (uint8_t)(ng_value | 0x80u));\n");
+    fprintf(out, "    }\n");
+    return 1;
+}
+
 static uint32_t ng_sign_mask(uint8_t size) {
     if (size == 4u) {
         return 0x80000000u;
@@ -1804,6 +1833,11 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         if (emit_tst_generic(out, instr)) {
+            return 1;
+        }
+        break;
+    case NG_M68K_TAS:
+        if (emit_tas_generic(out, instr)) {
             return 1;
         }
         break;

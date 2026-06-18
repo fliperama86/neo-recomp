@@ -152,6 +152,7 @@ Covered by executable generated-C validation:
   - `TST.B (d16,An)`
   - generic `TST.B/W/L <ea>` paths covered so far by data-register and
     postincrement sources
+  - `TAS <ea>` covered so far by absolute byte memory destinations
   - `CLR.B/W/L abs`
   - `CLR.B/W/L Dn`
   - generic `CLR.B/W/L <ea>` paths covered so far by `(d16,An)` and `(An)+`
@@ -175,6 +176,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `TAS <ea>` decode/emission with test-and-set byte semantics
+  and generated-exec absolute-memory coverage.
 - local: Added `NEGX <ea>` decode/emission on the existing unary RMW path,
   preserving the extend-aware Z behavior and adding generated-exec byte
   absolute-memory coverage.
