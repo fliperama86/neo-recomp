@@ -437,6 +437,96 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x86, 0x07 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_OR);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "OR.B D7,D3") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xC6, 0x07 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_AND);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "AND.B D7,D3") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xBF, 0x03 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_EOR);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "EOR.B D7,D3") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x8F, 0x18 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_OR);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "OR.B D7,(A0)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xCF, 0x18 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_AND);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "AND.B D7,(A0)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xBF, 0x18 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_EOR);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 7);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "EOR.B D7,(A0)+") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0xD1, 0x01 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

@@ -116,6 +116,11 @@ Covered by executable generated-C validation:
   - generic `ADDA.W/L <ea>,An`, `SUBA.W/L <ea>,An`, and
     `CMPA.W/L <ea>,An` paths covered so far by immediate sources
   - `ADDX.B Dn,Dn`
+  - generic `OR.B/W/L <ea>,Dn` and `AND.B/W/L <ea>,Dn` paths covered so far
+    by data-register sources
+  - generic `OR.B/W/L Dn,<ea>`, `AND.B/W/L Dn,<ea>`, and
+    `EOR.B/W/L Dn,<ea>` paths covered so far by data-register and
+    postincrement memory destinations
   - `ANDI.B #imm,(d16,An)`
   - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
     displacement, and postincrement destinations
@@ -145,6 +150,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generic register/logical binary operations (`OR`, `AND`, `EOR`)
+  over the shared EA read/RMW helpers and raised the generated-exec window to
+  keep the growing fixture covered.
 - local: Added address-register arithmetic/compare (`ADDA`, `SUBA`, `CMPA`)
   over the shared EA reader, including generated-exec coverage for
   sign-extended word and long immediate sources.
