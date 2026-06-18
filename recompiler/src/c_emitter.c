@@ -1032,6 +1032,45 @@ static int emit_multiply(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_divide(FILE *out, const NgM68kInstr *instr) {
+    char src_expr[256];
+
+    if ((instr->mnemonic != NG_M68K_DIVU && instr->mnemonic != NG_M68K_DIVS) ||
+        instr->src.mode == NG_M68K_EA_NONE ||
+        instr->dst.mode != NG_M68K_EA_DREG) {
+        return 0;
+    }
+    if (!emit_ea_read(out, instr, &instr->src, 2u,
+                      src_expr, (unsigned)sizeof(src_expr))) {
+        return 0;
+    }
+
+    if (instr->mnemonic == NG_M68K_DIVU) {
+        fprintf(out, "    { uint16_t ng_divisor = (uint16_t)(%s);\n", src_expr);
+        fprintf(out, "      if (ng_divisor == 0) { ng_log_dispatch_miss(0x%08Xu); return; }\n",
+                instr->addr & 0x00FFFFFFu);
+        fprintf(out, "      uint32_t ng_dividend = g_ng_m68k.d[%u]; uint32_t ng_quotient = ng_dividend / ng_divisor; uint16_t ng_remainder = (uint16_t)(ng_dividend %% ng_divisor);\n",
+                instr->dst.reg);
+        fprintf(out, "      g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
+        fprintf(out, "      if (ng_quotient > 0xFFFFu) { g_ng_m68k.sr |= NG_CCR_V; }\n");
+        fprintf(out, "      else { g_ng_m68k.d[%u] = ((uint32_t)ng_remainder << 16) | (uint32_t)(uint16_t)ng_quotient; if ((uint16_t)ng_quotient == 0) g_ng_m68k.sr |= NG_CCR_Z; if (ng_quotient & 0x8000u) g_ng_m68k.sr |= NG_CCR_N; }\n",
+                instr->dst.reg);
+        fprintf(out, "    }\n");
+    } else {
+        fprintf(out, "    { int16_t ng_divisor = (int16_t)(%s);\n", src_expr);
+        fprintf(out, "      if (ng_divisor == 0) { ng_log_dispatch_miss(0x%08Xu); return; }\n",
+                instr->addr & 0x00FFFFFFu);
+        fprintf(out, "      int32_t ng_dividend = (int32_t)g_ng_m68k.d[%u]; int32_t ng_quotient = ng_dividend / ng_divisor; int16_t ng_remainder = (int16_t)(ng_dividend %% ng_divisor);\n",
+                instr->dst.reg);
+        fprintf(out, "      g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
+        fprintf(out, "      if (ng_quotient < -32768 || ng_quotient > 32767) { g_ng_m68k.sr |= NG_CCR_V; }\n");
+        fprintf(out, "      else { g_ng_m68k.d[%u] = ((uint32_t)(uint16_t)ng_remainder << 16) | (uint32_t)(uint16_t)ng_quotient; if ((int16_t)ng_quotient == 0) g_ng_m68k.sr |= NG_CCR_Z; if (ng_quotient < 0) g_ng_m68k.sr |= NG_CCR_N; }\n",
+                instr->dst.reg);
+        fprintf(out, "    }\n");
+    }
+    return 1;
+}
+
 static int emit_exchange(FILE *out, const NgM68kInstr *instr) {
     if (instr->mnemonic != NG_M68K_EXG ||
         instr->src.mode == NG_M68K_EA_NONE ||
@@ -1290,6 +1329,12 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
     case NG_M68K_MULU:
     case NG_M68K_MULS:
         if (emit_multiply(out, instr)) {
+            return 1;
+        }
+        break;
+    case NG_M68K_DIVU:
+    case NG_M68K_DIVS:
+        if (emit_divide(out, instr)) {
             return 1;
         }
         break;

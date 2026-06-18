@@ -702,6 +702,50 @@ static int oracle_exec(const uint8_t *program,
             pc += 2u;
             continue;
         }
+        if ((op & 0xF000u) == 0x8000u &&
+            (((op >> 6) & 7u) == 3u || ((op >> 6) & 7u) == 7u)) {
+            uint8_t opmode = (uint8_t)((op >> 6) & 7u);
+            uint8_t mode = (uint8_t)((op >> 3) & 7u);
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint8_t dst_reg = (uint8_t)((op >> 9) & 7u);
+            uint32_t next_pc = pc + 2u;
+            uint32_t src;
+
+            if (mode == 1u ||
+                !oracle_read_ea(program, size, state, bus, mode, reg,
+                                2u, &next_pc, &src)) {
+                return 0;
+            }
+            if (src == 0u) {
+                return 0;
+            }
+            state->sr = (uint16_t)(state->sr & 0xFFF0u);
+            if (opmode == 3u) {
+                uint32_t quotient = state->d[dst_reg] / (uint16_t)src;
+                uint16_t remainder = (uint16_t)(state->d[dst_reg] % (uint16_t)src);
+                if (quotient > 0xFFFFu) {
+                    state->sr |= CCR_V;
+                } else {
+                    state->d[dst_reg] = ((uint32_t)remainder << 16) | (uint32_t)(uint16_t)quotient;
+                    if ((uint16_t)quotient == 0) state->sr |= CCR_Z;
+                    if (quotient & 0x8000u) state->sr |= CCR_N;
+                }
+            } else {
+                int32_t dividend = (int32_t)state->d[dst_reg];
+                int16_t divisor = (int16_t)src;
+                int32_t quotient = dividend / divisor;
+                int16_t remainder = (int16_t)(dividend % divisor);
+                if (quotient < -32768 || quotient > 32767) {
+                    state->sr |= CCR_V;
+                } else {
+                    state->d[dst_reg] = ((uint32_t)(uint16_t)remainder << 16) | (uint32_t)(uint16_t)quotient;
+                    if ((int16_t)quotient == 0) state->sr |= CCR_Z;
+                    if (quotient < 0) state->sr |= CCR_N;
+                }
+            }
+            pc = next_pc;
+            continue;
+        }
         if ((op & 0xF000u) == 0x8000u ||
             (op & 0xF000u) == 0xB000u ||
             (op & 0xF000u) == 0xC000u) {
@@ -1463,7 +1507,7 @@ int main(void) {
     CHECK((g_ng_m68k.d[4] & 0xFFu) == 0x0Eu);
     CHECK((g_ng_m68k.d[5] & 0xFFFFu) == 0x1357u);
     CHECK((g_ng_m68k.d[6] & 0xFFFFu) == 0x1357u);
-    CHECK(g_ng_m68k.d[7] == 0xFFFFFFE8u);
+    CHECK(g_ng_m68k.d[7] == 0x00000005u);
     CHECK(g_ng_m68k.a[0] == 0x00000132u);
     CHECK(g_ng_m68k.a[1] == 0x00000125u);
     CHECK(g_ng_m68k.a[2] == 0x00000108u);

@@ -132,6 +132,7 @@ Covered by executable generated-C validation:
     `EOR.B/W/L Dn,<ea>` paths covered so far by data-register and
     postincrement memory destinations
   - `MULU.W <ea>,Dn` and `MULS.W <ea>,Dn` covered so far by immediate sources
+  - `DIVU.W <ea>,Dn` and `DIVS.W <ea>,Dn` covered so far by immediate sources
   - `EXG` register exchanges covered so far by data-register pairs
   - `ANDI.B #imm,(d16,An)`
   - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
@@ -163,6 +164,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added signed/unsigned 32-by-16 divide (`DIVS`/`DIVU`) over shared EA
+  reads with generated-exec coverage for immediate operands and quotient flags.
 - local: Generalized `LEA <ea>,An` onto the reusable effective-address-value
   helper with generated-exec coverage for displacement addressing.
 - local: Added `EXG` register exchange decode/emission for data, address, and
