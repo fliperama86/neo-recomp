@@ -54,6 +54,16 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x23, 0xCE, 0x00, 0x10, 0x00, 0x80 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.form == NG_M68K_FORM_AREG_TO_ABS);
+        CHECK(instr.reg == 6);
+        CHECK(instr.absolute_addr == 0x00100080u);
+    }
+
+    {
         const unsigned char bytes[] = { 0x08, 0xB9, 0x00, 0x07, 0x00, 0x10, 0xFD, 0x80 };
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_BCLR);

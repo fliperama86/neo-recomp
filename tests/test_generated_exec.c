@@ -204,10 +204,11 @@ static int oracle_exec(const uint8_t *program,
             pc += 4u;
             continue;
         }
-        if (op == 0x23C8u) {
+        if ((op & 0xFFF8u) == 0x23C8u) {
+            uint8_t reg = (uint8_t)(op & 7u);
             uint32_t addr = program_read32(program, size, pc + 2u);
-            bus_write32(bus, addr, state->a[0]);
-            oracle_set_nz32(state, state->a[0]);
+            bus_write32(bus, addr, state->a[reg]);
+            oracle_set_nz32(state, state->a[reg]);
             pc += 6u;
             continue;
         }
@@ -288,6 +289,7 @@ int main(void) {
     CHECK(ng68k_read8(0x100Eu) == 0x80u);
     CHECK(ng68k_read8(0x100Fu) == 0x00u);
     CHECK(ng68k_read32(0x1010u) == 0x00000000u);
+    CHECK(ng68k_read32(0x1014u) == 0x000000A0u);
     CHECK((g_ng_m68k.sr & CCR_N) != 0);
 
     ng_generated_call(0x00DEADu);

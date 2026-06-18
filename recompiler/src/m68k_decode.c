@@ -140,11 +140,11 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->immediate = ng_program_rom_read16(rom, addr + 2u);
         return 1;
     }
-    if (op == 0x23C8u) {
+    if ((op & 0xFFF8u) == 0x23C8u) {
         out->mnemonic = NG_M68K_MOVE;
         out->byte_length = 6;
         out->size = NG_M68K_SIZE_LONG;
-        out->reg = 0;
+        out->reg = (uint8_t)(op & 7u);
         out->form = NG_M68K_FORM_AREG_TO_ABS;
         out->absolute_addr = ng_program_rom_read32(rom, addr + 2u);
         return 1;
