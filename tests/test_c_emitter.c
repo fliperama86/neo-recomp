@@ -165,7 +165,9 @@ int main(void) {
         write16(&rom, 0x78u, 0x21BCu); /* MOVE.L #$12345678,($0C,A0,A2.L) */
         write32(&rom, 0x7Au, 0x12345678u);
         write16(&rom, 0x7Eu, 0xA80Cu);
-        write16(&rom, 0x80u, 0x4E75u);
+        write16(&rom, 0x80u, 0x4A81u); /* TST.L D1 */
+        write16(&rom, 0x82u, 0x4A58u); /* TST.W (A0)+ */
+        write16(&rom, 0x84u, 0x4E75u);
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
@@ -224,6 +226,12 @@ int main(void) {
         CHECK(strstr(text, "ng68k_write8(g_ng_m68k.a[1], (uint8_t)(ng_ea_000076));") != NULL);
         CHECK(strstr(text, "/* $000078: MOVE.L #$12345678,($C,A0,A2.L) */") != NULL);
         CHECK(strstr(text, "ng68k_write32((uint32_t)(g_ng_m68k.a[0] + (int32_t)g_ng_m68k.a[2] + (int32_t)12), (uint32_t)(0x12345678u));") != NULL);
+        CHECK(strstr(text, "/* $000080: TST.L D1 */") != NULL);
+        CHECK(strstr(text, "ng_set_nz32((uint32_t)(g_ng_m68k.d[1]));") != NULL);
+        CHECK(strstr(text, "/* $000082: TST.W (A0)+ */") != NULL);
+        CHECK(strstr(text, "uint16_t ng_ea_000082 = ng68k_read16(g_ng_m68k.a[0]);") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[0] += 2u;") != NULL);
+        CHECK(strstr(text, "ng_set_nz16((uint16_t)(ng_ea_000082));") != NULL);
 
         ng_program_rom_free(&rom);
     }

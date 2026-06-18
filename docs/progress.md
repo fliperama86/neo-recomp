@@ -113,6 +113,8 @@ Covered by executable generated-C validation:
   - `CMPI.B #imm,Dn`
   - `TST.B abs`
   - `TST.B (d16,An)`
+  - generic `TST.B/W/L <ea>` paths covered so far by data-register and
+    postincrement sources
   - `CLR.B/W/L abs`
   - `CLR.B/W/L Dn`
   - generic `CLR.B/W/L <ea>` paths covered so far by `(d16,An)` and `(An)+`
@@ -125,6 +127,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized `TST <ea>` decode/emission onto the shared EA read helper,
+  with generated-exec coverage for data-register and postincrement forms.
 - local: Covered the generic MOVE/MOVEA frontier cluster (`$12D8`, `$10C1`,
   `$20C1`, `$207C`, `$2248`, `$32C0`, `$21BC`) with decode/emitter tests and
   expanded generated-exec oracle EA helpers.

@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define NG_EXEC_FIXTURE_SIZE 0x142u
+#define NG_EXEC_FIXTURE_SIZE 0x146u
 #define NG_EXEC_FIXTURE_ADDR_COUNT 3u
 
 static void ng_exec_fixture_write16(uint8_t *data, uint32_t addr, uint16_t value) {
@@ -129,16 +129,18 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
     ng_exec_fixture_write16(data, 0x122u, 0x227Cu); /* MOVEA.L #$00000124,A1 */
     ng_exec_fixture_write32(data, 0x124u, 0x00000124u);
     ng_exec_fixture_write16(data, 0x128u, 0x12D8u); /* MOVE.B (A0)+,(A1)+ */
-    ng_exec_fixture_write16(data, 0x12Au, 0x7000u); /* MOVEQ #0,D0 */
-    ng_exec_fixture_write16(data, 0x12Cu, 0x7200u); /* MOVEQ #0,D1 */
-    ng_exec_fixture_write16(data, 0x12Eu, 0x5300u); /* SUBQ.B #1,D0, sets X */
-    ng_exec_fixture_write16(data, 0x130u, 0xD101u); /* ADDX.B D1,D0 */
-    ng_exec_fixture_write16(data, 0x132u, 0x13C0u); /* MOVE.B D0,$00101C */
-    ng_exec_fixture_write32(data, 0x134u, 0x0000101Cu);
-    ng_exec_fixture_write16(data, 0x138u, 0x13FCu); /* MOVE.B #$80,$00100E */
-    ng_exec_fixture_write16(data, 0x13Au, 0x0080u);
-    ng_exec_fixture_write32(data, 0x13Cu, 0x0000100Eu);
-    ng_exec_fixture_write16(data, 0x140u, 0x4E75u); /* RTS */
+    ng_exec_fixture_write16(data, 0x12Au, 0x4A81u); /* TST.L D1 */
+    ng_exec_fixture_write16(data, 0x12Cu, 0x4A58u); /* TST.W (A0)+ */
+    ng_exec_fixture_write16(data, 0x12Eu, 0x7000u); /* MOVEQ #0,D0 */
+    ng_exec_fixture_write16(data, 0x130u, 0x7200u); /* MOVEQ #0,D1 */
+    ng_exec_fixture_write16(data, 0x132u, 0x5300u); /* SUBQ.B #1,D0, sets X */
+    ng_exec_fixture_write16(data, 0x134u, 0xD101u); /* ADDX.B D1,D0 */
+    ng_exec_fixture_write16(data, 0x136u, 0x13C0u); /* MOVE.B D0,$00101C */
+    ng_exec_fixture_write32(data, 0x138u, 0x0000101Cu);
+    ng_exec_fixture_write16(data, 0x13Cu, 0x13FCu); /* MOVE.B #$80,$00100E */
+    ng_exec_fixture_write16(data, 0x13Eu, 0x0080u);
+    ng_exec_fixture_write32(data, 0x140u, 0x0000100Eu);
+    ng_exec_fixture_write16(data, 0x144u, 0x4E75u); /* RTS */
 }
 
 static uint32_t ng_exec_fixture_addr(uint32_t index) {

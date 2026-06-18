@@ -591,6 +591,33 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x4A, 0x81 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_TST);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.form == NG_M68K_FORM_DREG);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 1);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "TST.L D1") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x4A, 0x58 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_TST);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_APOST);
+        CHECK(instr.src.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "TST.W (A0)+") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x61, 0x00, 0x00, 0x0E };
         CHECK(decode_one(bytes, sizeof(bytes), 0x000852u, &instr));
         CHECK(instr.mnemonic == NG_M68K_BSR);

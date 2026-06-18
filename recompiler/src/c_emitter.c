@@ -358,6 +358,18 @@ static int emit_movea_generic(FILE *out, const NgM68kInstr *instr) {
     return 1;
 }
 
+static int emit_tst_generic(FILE *out, const NgM68kInstr *instr) {
+    char expr[256];
+    if (instr->src.mode == NG_M68K_EA_NONE) {
+        return 0;
+    }
+    if (!emit_ea_read(out, instr, &instr->src, instr->size, expr, (unsigned)sizeof(expr))) {
+        return 0;
+    }
+    emit_set_nz_for_size(out, instr->size, expr);
+    return 1;
+}
+
 static uint32_t ng_sign_mask(uint8_t size) {
     if (size == 4u) {
         return 0x80000000u;
@@ -626,6 +638,9 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             fprintf(out,
                     "    ng_set_nz8(ng68k_read8((uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d)));\n",
                     instr->reg, instr->displacement);
+            return 1;
+        }
+        if (emit_tst_generic(out, instr)) {
             return 1;
         }
         break;

@@ -580,6 +580,37 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
             return 1;
         }
     }
+    if ((op & 0xFF00u) == 0x4A00u) {
+        uint8_t size_code = (uint8_t)((op >> 6) & 3u);
+        uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
+        uint8_t ea_reg = (uint8_t)(op & 7u);
+        if (size_code != 3u && ea_mode != 1u &&
+            !(ea_mode == 7u && ea_reg >= 2u)) {
+            out->mnemonic = NG_M68K_TST;
+            out->size = size_from_opcode_bits(size_code);
+            out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
+                                                        ea_mode, ea_reg,
+                                                        out->size, &out->src));
+            if (out->src.mode == NG_M68K_EA_NONE) {
+                out->mnemonic = NG_M68K_UNKNOWN;
+                out->byte_length = 2;
+                return 1;
+            }
+            if (out->src.mode == NG_M68K_EA_DREG) {
+                out->form = NG_M68K_FORM_DREG;
+                out->reg = out->src.reg;
+            } else if (out->src.mode == NG_M68K_EA_ABS_W ||
+                       out->src.mode == NG_M68K_EA_ABS_L) {
+                out->form = NG_M68K_FORM_ABS;
+                out->absolute_addr = out->src.absolute_addr;
+            } else if (out->src.mode == NG_M68K_EA_ADISP) {
+                out->form = NG_M68K_FORM_AREG_DISP;
+                out->reg = out->src.reg;
+                out->displacement = out->src.displacement;
+            }
+            return 1;
+        }
+    }
     if (op == 0x4239u || op == 0x4279u || op == 0x42B9u) {
         out->mnemonic = NG_M68K_CLR;
         out->byte_length = 6;
@@ -875,7 +906,14 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         }
         break;
     case NG_M68K_TST:
-        if (instr->form == NG_M68K_FORM_AREG_DISP) {
+        if (instr->src.mode != NG_M68K_EA_NONE) {
+            char src[64];
+            format_ea_operand(&instr->src, instr->size, src, (unsigned)sizeof(src));
+            snprintf(out, out_size, "TST.%c %s",
+                     instr->size == NG_M68K_SIZE_BYTE ? 'B' :
+                     (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
+                     src);
+        } else if (instr->form == NG_M68K_FORM_AREG_DISP) {
             snprintf(out, out_size, "TST.%c ($%X,A%u)",
                      instr->size == NG_M68K_SIZE_BYTE ? 'B' :
                      (instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W'),
