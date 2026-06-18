@@ -185,6 +185,15 @@ static int oracle_exec(const uint8_t *program,
             pc += 8u;
             continue;
         }
+        if ((op & 0xFFF8u) == 0x13C0u) {
+            uint8_t reg = (uint8_t)(op & 7u);
+            uint8_t value = (uint8_t)(state->d[reg] & 0xFFu);
+            uint32_t addr = program_read32(program, size, pc + 2u);
+            bus_write8(bus, addr, value);
+            oracle_set_nz8(state, value);
+            pc += 6u;
+            continue;
+        }
         if (op == 0x4239u) {
             uint32_t addr = program_read32(program, size, pc + 2u);
             bus_write8(bus, addr, 0);
@@ -316,6 +325,7 @@ int main(void) {
     CHECK(ng68k_read8(0x100Fu) == 0x00u);
     CHECK(ng68k_read32(0x1010u) == 0x00000000u);
     CHECK(ng68k_read32(0x1014u) == 0x000000A0u);
+    CHECK(ng68k_read8(0x1018u) == 0x7Fu);
     CHECK((g_ng_m68k.sr & CCR_N) != 0);
 
     ng_generated_call(0x00DEADu);
