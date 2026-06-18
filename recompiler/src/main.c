@@ -107,14 +107,16 @@ static void print_function_candidates(const NgProgramRom *rom,
     }
 }
 
-static int emit_c_file(const char *path, const NgFunctionDiscovery *discovery) {
+static int emit_c_file(const char *path,
+                       const NgProgramRom *rom,
+                       const NgFunctionDiscovery *discovery) {
     FILE *out = fopen(path, "w");
     if (!out) {
         fprintf(stderr, "cannot open %s for writing\n", path);
         return 0;
     }
 
-    int ok = ng_emit_c_skeleton(out, discovery);
+    int ok = ng_emit_c(out, rom, discovery);
     if (fclose(out) != 0) {
         ok = 0;
     }
@@ -123,7 +125,7 @@ static int emit_c_file(const char *path, const NgFunctionDiscovery *discovery) {
         return 0;
     }
 
-    printf("generated C skeleton: %s\n", path);
+    printf("generated C: %s\n", path);
     return 1;
 }
 
@@ -186,7 +188,7 @@ int main(int argc, char **argv) {
                 NgFunctionDiscovery discovery;
                 if (ng_function_discover_from_entry(&rom, cart_entry, &discovery)) {
                     print_function_candidates(&rom, &discovery);
-                    if (emit_c_path && !emit_c_file(emit_c_path, &discovery)) {
+                    if (emit_c_path && !emit_c_file(emit_c_path, &rom, &discovery)) {
                         ng_program_rom_free(&rom);
                         return 1;
                     }

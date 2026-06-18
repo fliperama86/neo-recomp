@@ -48,7 +48,8 @@ recognizes the first PC-indexed entry dispatch-table pattern. Those dispatch
 targets seed a bounded first-pass call graph that follows direct `JSR`, `BSR`,
 and tail `JMP` targets when they point into the loaded P-ROM.
 With `--emit-c`, the same discovered candidate list is written as a generated C
-skeleton with stable address-derived function symbols and a dispatch switch.
+file with stable address-derived function symbols, a dispatch switch, and
+statements for supported decoded instructions.
 
 Example real `.neo` smoke output:
 
@@ -83,7 +84,7 @@ function preview $00080C:
   $000812: MOVE.L $10FE80,D0        ; MOVE
   $000818: Bcc.6 $000826            ; BCC
   $00081C: CLR.W $100000            ; CLR
-generated C skeleton: .\build\mslug_recomp.c
+generated C: .\build\mslug_recomp.c
 ```
 
 ## Development Style
@@ -172,7 +173,8 @@ opcodes are scanned as words until better decode coverage exists.
 
 ## C Emission Slice
 
-The current emitter produces a valid C skeleton from the discovered candidates:
+The current emitter produces C from the discovered candidates. It emits a
+dispatch switch plus decoded statements for the supported instruction subset:
 
 ```c
 void ng_generated_call(uint32_t addr) {
@@ -184,9 +186,22 @@ void ng_generated_call(uint32_t addr) {
 }
 ```
 
-Each generated function body is still a placeholder that calls
-`ng_log_dispatch_miss`. This is intentional: instruction-level C emission should
-be added one decoded operation at a time with tests against small register and
-memory fixtures.
+For the Metal Slug entry, the generated body now starts like this:
+
+```c
+static void ng_func_0007CC(void) {
+    /* $0007CC: LEA $0008F4,A0 */
+    g_ng_m68k.a[0] = 0x000008F4u;
+    /* $0007D0: MOVE.L A0,$106EA8 */
+    ng68k_write32(0x00106EA8u, g_ng_m68k.a[0]);
+    /* $0007D6: BCLR #7,$10FD80 */
+    ng68k_write8(0x0010FD80u, (uint8_t)(ng68k_read8(0x0010FD80u) & (uint8_t)~0x80u));
+}
+```
+
+Unsupported instructions stop the generated function with
+`ng_log_dispatch_miss`. This keeps unsupported behavior visible while allowing
+instruction-level C emission to grow one decoded operation at a time with tests
+against small register and memory fixtures.
 
 Unknown opcodes are still printed as `DC.W`; they are not executable support.
