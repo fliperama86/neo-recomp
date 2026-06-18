@@ -43,6 +43,7 @@ typedef enum NgM68kMnemonic {
     NG_M68K_EXG,
     NG_M68K_CLR,
     NG_M68K_NEG,
+    NG_M68K_NEGX,
     NG_M68K_NOT,
     NG_M68K_EXT,
     NG_M68K_SWAP,

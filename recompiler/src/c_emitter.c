@@ -943,6 +943,11 @@ static int emit_unary_rmw_generic(FILE *out, const NgM68kInstr *instr) {
         if (instr->mnemonic == NG_M68K_NOT) {
             fprintf(out, "    { %s ng_value = (%s)(%s); %s ng_result = (%s)~ng_value;\n",
                     ctype, ctype, dst_expr, ctype, ctype);
+        } else if (instr->mnemonic == NG_M68K_NEGX) {
+            fprintf(out, "    { %s ng_value = (%s)(%s); uint8_t ng_x = (g_ng_m68k.sr & NG_CCR_X) ? 1u : 0u; %s ng_src = (%s)((ng_value + ng_x) & 0x%08Xu); %s ng_result = (%s)(0u - ng_value - ng_x);\n",
+                    ctype, ctype, dst_expr,
+                    ctype, ctype, value_mask,
+                    ctype, ctype);
         } else {
             fprintf(out, "    { %s ng_value = (%s)(%s); %s ng_result = (%s)(0u - ng_value);\n",
                     ctype, ctype, dst_expr, ctype, ctype);
@@ -956,6 +961,11 @@ static int emit_unary_rmw_generic(FILE *out, const NgM68kInstr *instr) {
         if (instr->mnemonic == NG_M68K_NOT) {
             fprintf(out, "    { %s ng_value = %s(%s); %s ng_result = (%s)~ng_value;\n",
                     ctype, read_fn, addr_expr, ctype, ctype);
+        } else if (instr->mnemonic == NG_M68K_NEGX) {
+            fprintf(out, "    { %s ng_value = %s(%s); uint8_t ng_x = (g_ng_m68k.sr & NG_CCR_X) ? 1u : 0u; %s ng_src = (%s)((ng_value + ng_x) & 0x%08Xu); %s ng_result = (%s)(0u - ng_value - ng_x);\n",
+                    ctype, read_fn, addr_expr,
+                    ctype, ctype, value_mask,
+                    ctype, ctype);
         } else {
             fprintf(out, "    { %s ng_value = %s(%s); %s ng_result = (%s)(0u - ng_value);\n",
                     ctype, read_fn, addr_expr, ctype, ctype);
@@ -965,6 +975,15 @@ static int emit_unary_rmw_generic(FILE *out, const NgM68kInstr *instr) {
 
     if (instr->mnemonic == NG_M68K_NOT) {
         emit_set_nz_for_size(out, instr->size, "ng_result");
+    } else if (instr->mnemonic == NG_M68K_NEGX) {
+        fprintf(out, "      uint16_t ng_sr = (uint16_t)(g_ng_m68k.sr & 0xFFE4u);\n");
+        fprintf(out, "      if (ng_result != 0) ng_sr = (uint16_t)(ng_sr & (uint16_t)~NG_CCR_Z);\n");
+        fprintf(out, "      if (ng_result & 0x%08Xu) ng_sr |= NG_CCR_N;\n",
+                sign_mask);
+        fprintf(out, "      if (ng_value != 0 || ng_x) ng_sr |= NG_CCR_C | NG_CCR_X;\n");
+        fprintf(out, "      if (((ng_src) & (ng_result) & 0x%08Xu) != 0) ng_sr |= NG_CCR_V;\n",
+                sign_mask);
+        fprintf(out, "      g_ng_m68k.sr = ng_sr;\n");
     } else {
         fprintf(out, "      g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFE0u);\n");
         fprintf(out, "      if (ng_result == 0) g_ng_m68k.sr |= NG_CCR_Z;\n");
@@ -1722,6 +1741,7 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         }
         break;
     case NG_M68K_NEG:
+    case NG_M68K_NEGX:
     case NG_M68K_NOT:
         if (emit_unary_rmw_generic(out, instr)) {
             return 1;

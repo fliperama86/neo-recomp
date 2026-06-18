@@ -1469,7 +1469,8 @@ static int oracle_exec(const uint8_t *program,
             pc = next_pc;
             continue;
         }
-        if ((op & 0xFF00u) == 0x4400u ||
+        if ((op & 0xFF00u) == 0x4000u ||
+            (op & 0xFF00u) == 0x4400u ||
             (op & 0xFF00u) == 0x4600u) {
             uint8_t size_code = (uint8_t)((op >> 6) & 3u);
             uint8_t mode = (uint8_t)((op >> 3) & 7u);
@@ -1480,7 +1481,10 @@ static int oracle_exec(const uint8_t *program,
             uint32_t next_pc = pc + 2u;
             uint32_t value;
             uint32_t result;
+            uint32_t src;
             uint8_t is_not = (uint8_t)((op & 0xFF00u) == 0x4600u);
+            uint8_t is_negx = (uint8_t)((op & 0xFF00u) == 0x4000u);
+            uint8_t x = (state->sr & CCR_X) ? 1u : 0u;
 
             if (size_code == 3u || mode == 1u ||
                 (mode == 7u && reg >= 2u)) {
@@ -1488,7 +1492,9 @@ static int oracle_exec(const uint8_t *program,
             }
             if (mode == 0u) {
                 value = state->d[reg] & mask;
-                result = is_not ? ((~value) & mask) : ((0u - value) & mask);
+                src = (value + (is_negx ? x : 0u)) & mask;
+                result = is_not ? ((~value) & mask) :
+                    ((0u - value - (is_negx ? x : 0u)) & mask);
                 state->d[reg] = (state->d[reg] & ~mask) | result;
             } else {
                 uint32_t addr;
@@ -1497,12 +1503,21 @@ static int oracle_exec(const uint8_t *program,
                     return 0;
                 }
                 value = bus_read_size(bus, addr, bytes) & mask;
-                result = is_not ? ((~value) & mask) : ((0u - value) & mask);
+                src = (value + (is_negx ? x : 0u)) & mask;
+                result = is_not ? ((~value) & mask) :
+                    ((0u - value - (is_negx ? x : 0u)) & mask);
                 bus_write_size(bus, addr, result, bytes);
             }
 
             if (is_not) {
                 oracle_set_nz_size(state, result, bytes);
+            } else if (is_negx) {
+                uint16_t sr = (uint16_t)(state->sr & 0xFFE4u);
+                if (result != 0) sr = (uint16_t)(sr & (uint16_t)~CCR_Z);
+                if (result & sign_mask) sr |= CCR_N;
+                if (value != 0 || x) sr |= CCR_C | CCR_X;
+                if ((src & result & sign_mask) != 0) sr |= CCR_V;
+                state->sr = sr;
             } else {
                 state->sr = (uint16_t)(state->sr & 0xFFE0u);
                 if (result == 0) state->sr |= CCR_Z;
@@ -1777,6 +1792,7 @@ int main(void) {
     CHECK(ng68k_read32(0x0184u) == 0x00000012u);
     CHECK(ng68k_read16(0x0188u) == 0x001Bu);
     CHECK(ng68k_read16(0x018Au) == 0x0006u);
+    CHECK(ng68k_read8(0x018Cu) == 0xFDu);
     CHECK(ng68k_read16(0x1000u) == 0x1234u);
     CHECK(ng68k_read32(0x1004u) == 0x00000068u);
     CHECK(ng68k_read16(0x1008u) == 0x2222u);

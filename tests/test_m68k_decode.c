@@ -1257,6 +1257,19 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x40, 0x39, 0x00, 0x00, 0x01, 0x8C };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_NEGX);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 1);
+        CHECK(instr.form == NG_M68K_FORM_ABS);
+        CHECK(instr.absolute_addr == 0x0000018Cu);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "NEGX.B $00018C") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x44, 0x42 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

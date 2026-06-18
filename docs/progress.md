@@ -159,6 +159,8 @@ Covered by executable generated-C validation:
     paths covered so far by abs, Dn, and postincrement memory destinations
   - generic `NEG.B/W/L <ea>` and `NOT.B/W/L <ea>` paths covered so far by Dn,
     abs, and postincrement memory destinations
+  - generic `NEGX.B/W/L <ea>` paths covered so far by absolute byte memory
+    destinations
   - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
   - data-register `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` decode/emission,
     covered so far by generated-exec logical shift pairs
@@ -173,6 +175,9 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Added `NEGX <ea>` decode/emission on the existing unary RMW path,
+  preserving the extend-aware Z behavior and adding generated-exec byte
+  absolute-memory coverage.
 - local: Generalized `JSR`/`JMP` decode/emission over control effective
   addresses, while keeping static target discovery constrained to absolute and
   PC-relative forms.
