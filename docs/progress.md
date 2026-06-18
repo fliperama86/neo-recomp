@@ -111,6 +111,8 @@ Covered by executable generated-C validation:
   - `SUBQ.B #imm,Dn`
   - `ANDI.B #imm,(d16,An)`
   - `CMPI.B #imm,Dn`
+  - generic `CMPI.B/W/L #imm,<ea>` paths covered so far by Dn,
+    postincrement, and indexed memory destinations
   - `TST.B abs`
   - `TST.B (d16,An)`
   - generic `TST.B/W/L <ea>` paths covered so far by data-register and
@@ -127,6 +129,8 @@ tests cover them.
 
 ## Recent Green Slices
 
+- local: Generalized `CMPI #imm,<ea>` decode/emission with compare flag logic
+  for non-register EA targets and generated-exec postincrement coverage.
 - local: Generalized `TST <ea>` decode/emission onto the shared EA read helper,
   with generated-exec coverage for data-register and postincrement forms.
 - local: Covered the generic MOVE/MOVEA frontier cluster (`$12D8`, `$10C1`,

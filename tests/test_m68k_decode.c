@@ -483,6 +483,7 @@ int main(void) {
 
     {
         const unsigned char bytes[] = { 0x0C, 0x02, 0x00, 0x7F };
+        char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0x000812u, &instr));
         CHECK(instr.mnemonic == NG_M68K_CMPI);
         CHECK(instr.byte_length == 4);
@@ -490,6 +491,44 @@ int main(void) {
         CHECK(instr.form == NG_M68K_FORM_IMM_TO_DREG);
         CHECK(instr.reg == 2);
         CHECK(instr.immediate == 0x7Fu);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 2);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "CMPI.B #$7F,D2") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x0C, 0x58, 0x00, 0x5A };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_CMPI);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
+        CHECK(instr.immediate == 0x005Au);
+        CHECK(instr.dst.mode == NG_M68K_EA_APOST);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "CMPI.W #$5A,(A0)+") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = {
+            0x0C, 0xB0, 0x12, 0x34, 0x56, 0x78, 0xA8, 0x0C
+        };
+        char text[80];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_CMPI);
+        CHECK(instr.byte_length == 8);
+        CHECK(instr.size == 4);
+        CHECK(instr.immediate == 0x12345678u);
+        CHECK(instr.dst.mode == NG_M68K_EA_AINDEX);
+        CHECK(instr.dst.reg == 0);
+        CHECK(instr.dst.index_is_addr == 1);
+        CHECK(instr.dst.index_reg == 2);
+        CHECK(instr.dst.index_is_long == 1);
+        CHECK(instr.dst.displacement == 0x0C);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "CMPI.L #$12345678,($C,A0,A2.L)") == 0);
     }
 
     {
