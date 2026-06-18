@@ -188,6 +188,21 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
             return 1;
         }
         break;
+    case NG_M68K_TST:
+        if (instr->form == NG_M68K_FORM_ABS) {
+            if (instr->size == 4u) {
+                fprintf(out, "    ng_set_nz32(ng68k_read32(0x%08Xu));\n",
+                        instr->absolute_addr & 0x00FFFFFFu);
+            } else if (instr->size == 1u) {
+                fprintf(out, "    ng_set_nz8(ng68k_read8(0x%08Xu));\n",
+                        instr->absolute_addr & 0x00FFFFFFu);
+            } else {
+                fprintf(out, "    ng_set_nz16(ng68k_read16(0x%08Xu));\n",
+                        instr->absolute_addr & 0x00FFFFFFu);
+            }
+            return 1;
+        }
+        break;
     case NG_M68K_BCLR:
         fprintf(out,
                 "    ng68k_write8(0x%08Xu, (uint8_t)(ng68k_read8(0x%08Xu) & (uint8_t)~0x%02Xu));\n",
