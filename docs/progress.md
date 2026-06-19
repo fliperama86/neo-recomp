@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked privileged MC68000 `MOVE USP,An` / `MOVE An,USP`
+  against the Motorola/NXP Programmer's Reference Manual. The validator now
+  requires exact long-sized address-register payloads, the architectural
+  direction encoded by the populated source or destination operand, an empty
+  opposite operand, and no stray immediate/count/condition/form/target/
+  absolute/displacement metadata. `test_m68k_validate` covered malformed
+  AREG payloads, non-empty opposite operands, and stray target metadata red
+  first.
 - local: Fact-checked MC68000 `ADDQ`/`SUBQ` immediate 1-8 quick
   operations against the Motorola/NXP Programmer's Reference Manual,
   including word/long-only address-register destinations. The validator now

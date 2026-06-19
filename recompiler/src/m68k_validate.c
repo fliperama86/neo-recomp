@@ -234,18 +234,25 @@ static int valid_control_immediate_fields(const NgM68kInstr *instr) {
 static int validate_move_usp(const NgM68kInstr *instr) {
     if (instr->byte_length != 2u ||
         instr->size != 4u ||
-        instr->reg >= 8u) {
+        instr->reg >= 8u ||
+        instr->immediate != 0u ||
+        instr->src_reg != 0u ||
+        instr->condition != 0u ||
+        instr->form != NG_M68K_FORM_NONE ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->displacement != 0) {
         return 0;
     }
     if (instr->src.mode == NG_M68K_EA_AREG &&
         instr->src.reg == instr->reg &&
-        instr->dst.mode == NG_M68K_EA_NONE) {
-        return 1;
+        ea_simple_register_payload(&instr->src)) {
+        return ea_is_empty(&instr->dst);
     }
     if (instr->dst.mode == NG_M68K_EA_AREG &&
         instr->dst.reg == instr->reg &&
-        instr->src.mode == NG_M68K_EA_NONE) {
-        return 1;
+        ea_simple_register_payload(&instr->dst)) {
+        return ea_is_empty(&instr->src);
     }
     return 0;
 }
