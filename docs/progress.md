@@ -212,16 +212,18 @@ wall-clock timeout, and it gets far enough to write headless VRAM:
 ```text
 starting cart entry $0007CC ssp=$0010F300
 returned pc=$C11646 sr=$2100 sp=$0010F2EE
-smoke summary: dispatches=500000 cart=13547 bios=486453 last=$C00438 pc=$C11646 sr=$2100 sp=$0010F2EE polls=2655844 watchdog=13587 vblank=10060 frame=10060 timer_irq=0 irqack=9290 irq_pending=$0004 scanline=4 sound=$03 port=$00 wram_nonzero=606 wram_sum=$0000FB79 vram_nonzero=2304 vram_sum=$019C9E00 recent_loop=0
+smoke summary: dispatches=500000 cart=13547 bios=486453 unique=288 hot_overflow=0 last=$C00438 pc=$C11646 sr=$2100 sp=$0010F2EE polls=2655844 watchdog=13587 vblank=10060 frame=10060 timer_irq=0 irqack=9290 irq_pending=$0004 scanline=4 sound=$03 port=$00 wram_nonzero=606 wram_sum=$0000FB79 vram_nonzero=2304 vram_sum=$019C9E00 recent_loop=0
+dispatch hot: unique=288 overflow=0 top0=$C18500:74304 top1=$C184FC:18578 top2=$C184F8:18577 top3=$C184F4:18573 top4=$C1866C:18570
 smoke budget reached at $C11646 after 500000 dispatches
-progress oracle: ok budgets=10000,50000,100000,500000 final_pc=$C11646 cart=13547 bios=486453 polls=2655844 vblank=10060 frame=10060 scanline=4 irqack=9290 watchdog=13587 wram_nonzero=606 wram_sum=$0000FB79 vram_nonzero=2304 vram_sum=$019C9E00 final_recent_loop=0 max_recent_loop=50
+progress oracle: ok budgets=10000,50000,100000,500000 final_pc=$C11646 cart=13547 bios=486453 unique=288 polls=2655844 vblank=10060 frame=10060 scanline=4 irqack=9290 watchdog=13587 wram_nonzero=606 wram_sum=$0000FB79 vram_nonzero=2304 vram_sum=$019C9E00 final_recent_loop=0 max_recent_loop=50
 ```
 
 That is the first controlled "keeps running headless" checkpoint: no dispatch
 or bus miss before the budget. It is not yet a boot/attract correctness proof:
 the expanded BIOS probe still reports `BIOS candidates: 8192 (truncated)`, and
 the harness only has a first-pass state oracle (multi-budget dispatch counts,
-cart/BIOS dispatch growth, RAM/VRAM checksums,
+cart/BIOS dispatch growth, unique dispatch coverage, hot dispatch rankings,
+RAM/VRAM checksums,
 watchdog/poll/VBlank/frame/IRQACK growth, pending-IRQ state, current scanline,
 and a short recent-dispatch loop detector), not a boot/attract-mode success
 oracle. The 50k checkpoint can stop in a short BIOS polling loop, but the 500k
@@ -232,8 +234,9 @@ A manual single-budget deep probe also reaches its guard without a dispatch or
 bus miss:
 
 ```text
-smoke summary: dispatches=5000000 cart=943807 bios=4056193 last=$C116A4 pc=$C116C8 sr=$2108 sp=$0010F2B2 polls=23700433 watchdog=19149 vblank=89774 frame=89774 timer_irq=0 irqack=77854 irq_pending=$0004 scanline=97 sound=$04 port=$00 wram_nonzero=20380 wram_sum=$004BE705 vram_nonzero=2304 vram_sum=$01A0C140 recent_loop=0
-progress oracle: ok budgets=5000000 final_pc=$C116C8 cart=943807 bios=4056193 polls=23700433 vblank=89774 frame=89774 scanline=97 irqack=77854 watchdog=19149 wram_nonzero=20380 wram_sum=$004BE705 vram_nonzero=2304 vram_sum=$01A0C140 final_recent_loop=0 max_recent_loop=0
+smoke summary: dispatches=5000000 cart=943807 bios=4056193 unique=369 hot_overflow=0 last=$C116A4 pc=$C116C8 sr=$2108 sp=$0010F2B2 polls=23700433 watchdog=19149 vblank=89774 frame=89774 timer_irq=0 irqack=77854 irq_pending=$0004 scanline=97 sound=$04 port=$00 wram_nonzero=20380 wram_sum=$004BE705 vram_nonzero=2304 vram_sum=$01A0C140 recent_loop=0
+dispatch hot: unique=369 overflow=0 top0=$C18500:622816 top1=$C184FC:155706 top2=$C184F8:155705 top3=$C184F4:155701 top4=$C1866C:155698
+progress oracle: ok budgets=5000000 final_pc=$C116C8 cart=943807 bios=4056193 unique=369 polls=23700433 vblank=89774 frame=89774 scanline=97 irqack=77854 watchdog=19149 wram_nonzero=20380 wram_sum=$004BE705 vram_nonzero=2304 vram_sum=$01A0C140 final_recent_loop=0 max_recent_loop=0
 ```
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
@@ -1187,6 +1190,9 @@ and `V` are only trusted where generated-exec tests cover them.
   progress oracle requires cart/BIOS dispatch growth and frame growth across
   the default 10k/50k/100k/500k budgets plus late VRAM writes at the 500k
   checkpoint.
+- local: Added unique-dispatch coverage and hot-dispatch ranking telemetry to
+  the headless smoke. This makes long CPU-only probes easier to interpret when
+  they do not hit a dispatch/bus miss or a short exact loop.
 - local: Connected the LSPC timer model to NTSC frame/scanline advancement:
   runtime tests now cover 384-pixel scanlines, 264-scanline frame wrap,
   VBlank requests on frame start/wrap, and timer interrupts firing from

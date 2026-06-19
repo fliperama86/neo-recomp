@@ -14,6 +14,8 @@ void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches);
 uint64_t ng_generated_smoke_dispatch_count(void);
 uint64_t ng_generated_smoke_cart_dispatch_count(void);
 uint64_t ng_generated_smoke_bios_dispatch_count(void);
+uint32_t ng_generated_smoke_unique_dispatch_count(void);
+int ng_generated_smoke_dispatch_hot_overflow(void);
 int ng_generated_smoke_dispatch_budget_hit(void);
 uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void);
 uint32_t ng_generated_smoke_recent_loop_period(void);
@@ -85,6 +87,8 @@ int main(void) {
     CHECK(ng_generated_smoke_dispatch_count() == 34u);
     CHECK(ng_generated_smoke_cart_dispatch_count() == 33u);
     CHECK(ng_generated_smoke_bios_dispatch_count() == 1u);
+    CHECK(ng_generated_smoke_unique_dispatch_count() == 34u);
+    CHECK(!ng_generated_smoke_dispatch_hot_overflow());
     CHECK(!ng_generated_smoke_dispatch_budget_hit());
     CHECK(ng_generated_smoke_recent_loop_period() == 0u);
 
@@ -103,6 +107,8 @@ int main(void) {
     CHECK(ng_generated_smoke_dispatch_count() == 4u);
     CHECK(ng_generated_smoke_cart_dispatch_count() == 3u);
     CHECK(ng_generated_smoke_bios_dispatch_count() == 1u);
+    CHECK(ng_generated_smoke_unique_dispatch_count() == 4u);
+    CHECK(!ng_generated_smoke_dispatch_hot_overflow());
     CHECK(ng_generated_smoke_dispatch_budget_hit());
     CHECK(ng_generated_smoke_dispatch_budget_stop_addr() == 0x00000106u);
     CHECK(ng_generated_smoke_recent_loop_period() == 0u);
@@ -118,6 +124,8 @@ int main(void) {
     CHECK(ng_generated_smoke_dispatch_count() == 8u);
     CHECK(ng_generated_smoke_cart_dispatch_count() == 8u);
     CHECK(ng_generated_smoke_bios_dispatch_count() == 0u);
+    CHECK(ng_generated_smoke_unique_dispatch_count() == 2u);
+    CHECK(!ng_generated_smoke_dispatch_hot_overflow());
     CHECK(ng_generated_smoke_dispatch_budget_hit());
     CHECK(ng_generated_smoke_dispatch_budget_stop_addr() == 0x00000200u);
     CHECK(ng_generated_smoke_recent_loop_period() == 2u);

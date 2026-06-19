@@ -8,6 +8,8 @@
 
 #define NG_GENERATED_SMOKE_RECENT_DISPATCHES 256u
 #define NG_GENERATED_SMOKE_LOOP_MAX_PERIOD 64u
+#define NG_GENERATED_SMOKE_HOT_SLOTS 32768u
+#define NG_GENERATED_SMOKE_HOT_TOP 5u
 
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
 void ng_bios_generated_call(uint32_t addr);
@@ -33,6 +35,10 @@ static uint64_t g_ng_generated_smoke_cart_dispatch_count;
 static uint64_t g_ng_generated_smoke_bios_dispatch_count;
 static uint32_t g_ng_generated_smoke_last_dispatch_addr;
 static uint32_t g_ng_generated_smoke_recent_dispatches[NG_GENERATED_SMOKE_RECENT_DISPATCHES];
+static uint32_t g_ng_generated_smoke_hot_addr[NG_GENERATED_SMOKE_HOT_SLOTS];
+static uint64_t g_ng_generated_smoke_hot_count[NG_GENERATED_SMOKE_HOT_SLOTS];
+static uint32_t g_ng_generated_smoke_unique_dispatch_count;
+static int g_ng_generated_smoke_hot_overflow;
 static uint32_t g_ng_generated_smoke_budget_stop_addr;
 static int g_ng_generated_smoke_budget_hit;
 
@@ -44,6 +50,14 @@ void ng_generated_smoke_reset_dispatch_stats(void) {
     memset(g_ng_generated_smoke_recent_dispatches,
            0,
            sizeof(g_ng_generated_smoke_recent_dispatches));
+    memset(g_ng_generated_smoke_hot_addr,
+           0,
+           sizeof(g_ng_generated_smoke_hot_addr));
+    memset(g_ng_generated_smoke_hot_count,
+           0,
+           sizeof(g_ng_generated_smoke_hot_count));
+    g_ng_generated_smoke_unique_dispatch_count = 0;
+    g_ng_generated_smoke_hot_overflow = 0;
     g_ng_generated_smoke_budget_stop_addr = 0;
     g_ng_generated_smoke_budget_hit = 0;
 }
@@ -63,6 +77,14 @@ uint64_t ng_generated_smoke_cart_dispatch_count(void) {
 
 uint64_t ng_generated_smoke_bios_dispatch_count(void) {
     return g_ng_generated_smoke_bios_dispatch_count;
+}
+
+uint32_t ng_generated_smoke_unique_dispatch_count(void) {
+    return g_ng_generated_smoke_unique_dispatch_count;
+}
+
+int ng_generated_smoke_dispatch_hot_overflow(void) {
+    return g_ng_generated_smoke_hot_overflow;
 }
 
 int ng_generated_smoke_dispatch_budget_hit(void) {
@@ -111,6 +133,32 @@ uint32_t ng_generated_smoke_recent_loop_period(void) {
     return 0;
 }
 
+static uint32_t ng_generated_smoke_hot_slot(uint32_t addr) {
+    addr &= 0x00FFFFFFu;
+    addr ^= addr >> 12;
+    addr *= 2654435761u;
+    return addr & (NG_GENERATED_SMOKE_HOT_SLOTS - 1u);
+}
+
+static void ng_generated_smoke_note_dispatch(uint32_t addr) {
+    addr &= 0x00FFFFFFu;
+    uint32_t slot = ng_generated_smoke_hot_slot(addr);
+    for (uint32_t probe = 0; probe < NG_GENERATED_SMOKE_HOT_SLOTS; ++probe) {
+        uint32_t idx = (slot + probe) & (NG_GENERATED_SMOKE_HOT_SLOTS - 1u);
+        if (g_ng_generated_smoke_hot_count[idx] == 0u) {
+            g_ng_generated_smoke_hot_addr[idx] = addr;
+            g_ng_generated_smoke_hot_count[idx] = 1u;
+            ++g_ng_generated_smoke_unique_dispatch_count;
+            return;
+        }
+        if (g_ng_generated_smoke_hot_addr[idx] == addr) {
+            ++g_ng_generated_smoke_hot_count[idx];
+            return;
+        }
+    }
+    g_ng_generated_smoke_hot_overflow = 1;
+}
+
 static void ng_generated_smoke_dispatch_one(uint32_t addr) {
     addr &= 0x00FFFFFFu;
     if (addr >= 0x00C00000u && addr <= 0x00CFFFFFu) {
@@ -151,6 +199,7 @@ void ng_generated_call(uint32_t addr) {
             (g_ng_generated_smoke_dispatch_count - 1u) %
             NG_GENERATED_SMOKE_RECENT_DISPATCHES] =
             g_ng_generated_smoke_last_dispatch_addr;
+        ng_generated_smoke_note_dispatch(g_ng_generated_smoke_last_dispatch_addr);
         ng_generated_smoke_dispatch_one(next_addr);
     }
     g_ng_generated_smoke_dispatch_active = 0;
@@ -177,6 +226,14 @@ uint64_t ng_generated_smoke_bios_dispatch_count(void) {
     return 0;
 }
 
+uint32_t ng_generated_smoke_unique_dispatch_count(void) {
+    return 0;
+}
+
+int ng_generated_smoke_dispatch_hot_overflow(void) {
+    return 0;
+}
+
 int ng_generated_smoke_dispatch_budget_hit(void) {
     return 0;
 }
@@ -191,6 +248,52 @@ uint32_t ng_generated_smoke_last_dispatch_addr(void) {
 
 uint32_t ng_generated_smoke_recent_loop_period(void) {
     return 0;
+}
+#endif
+
+#ifdef NG_GENERATED_SMOKE_COMBINED_DISPATCH
+static void ng_generated_smoke_hot_rank(uint32_t rank,
+                                        uint32_t *out_addr,
+                                        uint64_t *out_count) {
+    uint32_t top_addr[NG_GENERATED_SMOKE_HOT_TOP] = {0};
+    uint64_t top_count[NG_GENERATED_SMOKE_HOT_TOP] = {0};
+
+    for (uint32_t i = 0; i < NG_GENERATED_SMOKE_HOT_SLOTS; ++i) {
+        uint64_t count = g_ng_generated_smoke_hot_count[i];
+        if (count == 0u) {
+            continue;
+        }
+        for (uint32_t j = 0; j < NG_GENERATED_SMOKE_HOT_TOP; ++j) {
+            if (count > top_count[j]) {
+                for (uint32_t k = NG_GENERATED_SMOKE_HOT_TOP - 1u; k > j; --k) {
+                    top_count[k] = top_count[k - 1u];
+                    top_addr[k] = top_addr[k - 1u];
+                }
+                top_count[j] = count;
+                top_addr[j] = g_ng_generated_smoke_hot_addr[i];
+                break;
+            }
+        }
+    }
+
+    if (out_addr) {
+        *out_addr = rank < NG_GENERATED_SMOKE_HOT_TOP ? top_addr[rank] : 0u;
+    }
+    if (out_count) {
+        *out_count = rank < NG_GENERATED_SMOKE_HOT_TOP ? top_count[rank] : 0u;
+    }
+}
+#else
+static void ng_generated_smoke_hot_rank(uint32_t rank,
+                                        uint32_t *out_addr,
+                                        uint64_t *out_count) {
+    (void)rank;
+    if (out_addr) {
+        *out_addr = 0u;
+    }
+    if (out_count) {
+        *out_count = 0u;
+    }
 }
 #endif
 
@@ -282,13 +385,16 @@ static void ng_generated_smoke_print_summary(void) {
     uint32_t recent_loop_period = ng_generated_smoke_recent_loop_period();
     fprintf(stderr,
             "smoke summary: dispatches=%llu cart=%llu bios=%llu "
-            "last=$%06X pc=$%06X sr=$%04X sp=$%08X polls=%u watchdog=%u "
-            "vblank=%u frame=%u timer_irq=%u irqack=%u irq_pending=$%04X "
-            "scanline=%u sound=$%02X port=$%02X wram_nonzero=%u "
+            "unique=%u hot_overflow=%u last=$%06X pc=$%06X sr=$%04X "
+            "sp=$%08X polls=%u watchdog=%u vblank=%u frame=%u timer_irq=%u "
+            "irqack=%u irq_pending=$%04X scanline=%u sound=$%02X "
+            "port=$%02X wram_nonzero=%u "
             "wram_sum=$%08X vram_nonzero=%u vram_sum=$%08X recent_loop=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             (unsigned long long)ng_generated_smoke_cart_dispatch_count(),
             (unsigned long long)ng_generated_smoke_bios_dispatch_count(),
+            ng_generated_smoke_unique_dispatch_count(),
+            ng_generated_smoke_dispatch_hot_overflow(),
             ng_generated_smoke_last_dispatch_addr() & 0x00FFFFFFu,
             g_ng_m68k.pc & 0x00FFFFFFu,
             g_ng_m68k.sr,
@@ -308,6 +414,24 @@ static void ng_generated_smoke_print_summary(void) {
             ng_neogeo_vram_nonzero_words(),
             ng_neogeo_vram_checksum(),
             recent_loop_period);
+    fprintf(stderr,
+            "dispatch hot: unique=%u overflow=%u",
+            ng_generated_smoke_unique_dispatch_count(),
+            ng_generated_smoke_dispatch_hot_overflow());
+    for (uint32_t i = 0; i < NG_GENERATED_SMOKE_HOT_TOP; ++i) {
+        uint32_t addr = 0;
+        uint64_t count = 0;
+        ng_generated_smoke_hot_rank(i, &addr, &count);
+        if (count == 0u) {
+            break;
+        }
+        fprintf(stderr,
+                " top%u=$%06X:%llu",
+                i,
+                addr & 0x00FFFFFFu,
+                (unsigned long long)count);
+    }
+    fprintf(stderr, "\n");
     if (ng_generated_smoke_dispatch_budget_hit()) {
         fprintf(stderr,
                 "smoke budget reached at $%06X after %llu dispatches\n",

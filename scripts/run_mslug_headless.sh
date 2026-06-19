@@ -94,6 +94,7 @@ if not budgets or any(b <= 0 for b in budgets):
 summary_re = re.compile(
     r"smoke summary: dispatches=(?P<dispatches>\d+) "
     r"cart=(?P<cart>\d+) bios=(?P<bios>\d+) "
+    r"unique=(?P<unique>\d+) hot_overflow=(?P<hot_overflow>\d+) "
     r"last=\$(?P<last>[0-9A-Fa-f]+) pc=\$(?P<pc>[0-9A-Fa-f]+) "
     r"sr=\$(?P<sr>[0-9A-Fa-f]+) sp=\$(?P<sp>[0-9A-Fa-f]+) "
     r"polls=(?P<polls>\d+) watchdog=(?P<watchdog>\d+) "
@@ -145,6 +146,9 @@ if (final["polls"] == 0 or final["watchdog"] == 0 or final["vblank"] == 0 or
 if final["cart"] == 0 or final["bios"] == 0:
     print("headless smoke did not dispatch through both cart and BIOS code", file=sys.stderr)
     raise SystemExit(1)
+if final["unique"] == 0 or final["hot_overflow"] != 0:
+    print("headless smoke dispatch coverage telemetry failed", file=sys.stderr)
+    raise SystemExit(1)
 if final["dispatches"] >= 500000 and final["vram_nonzero"] == 0:
     print("late headless smoke did not reach VRAM writes", file=sys.stderr)
     raise SystemExit(1)
@@ -169,6 +173,7 @@ print(
     "progress oracle: ok "
     f"budgets={','.join(str(b) for b in budgets)} "
     f"final_pc=${final['pc']:06X} cart={final['cart']} bios={final['bios']} "
+    f"unique={final['unique']} "
     f"polls={final['polls']} vblank={final['vblank']} frame={final['frame']} "
     f"scanline={final['scanline']} irqack={final['irqack']} "
     f"watchdog={final['watchdog']} wram_nonzero={final['wram_nonzero']} "
