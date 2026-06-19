@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `JMP`/`JSR`/`PEA`/`LEA` validation so
+  opcode family, source EA bits, and `LEA` destination register bits
+  must match decoded metadata. `test_m68k_validate` covered mismatched
+  `JMP`/`JSR` opcode-family plus `PEA`/`LEA` EA/register opcode metadata
+  red first.
 - local: Tightened `CMPM` validation so opcode size, source
   postincrement register, and destination postincrement register bits
   must match decoded metadata. `test_m68k_validate` covered mismatched

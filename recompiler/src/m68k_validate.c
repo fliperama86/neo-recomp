@@ -1020,6 +1020,8 @@ static int exact_control_source_ext_length(const NgM68kInstr *instr,
 
 static int validate_control_transfer(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t expected_opcode = 0u;
 
     if (instr->size != 0u ||
         instr->dst.mode != NG_M68K_EA_NONE ||
@@ -1027,7 +1029,14 @@ static int validate_control_transfer(const NgM68kInstr *instr) {
         instr->src_reg != 0u ||
         instr->condition != 0u ||
         !exact_control_source_ext_length(instr, &ext_len) ||
+        !ea_opcode_field(&instr->src, &ea_field) ||
         instr->byte_length != (uint8_t)(2u + ext_len)) {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)((instr->mnemonic == NG_M68K_JMP ?
+                                  0x4EC0u : 0x4E80u) | ea_field);
+    if (instr->opcode != expected_opcode) {
         return 0;
     }
 
@@ -1056,6 +1065,7 @@ static int validate_control_transfer(const NgM68kInstr *instr) {
 
 static int validate_pea(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
 
     return instr->size == 4u &&
            instr->dst.mode == NG_M68K_EA_NONE &&
@@ -1065,11 +1075,14 @@ static int validate_pea(const NgM68kInstr *instr) {
            instr->condition == 0u &&
            instr->form == NG_M68K_FORM_NONE &&
            exact_control_source_ext_length(instr, &ext_len) &&
-           instr->byte_length == (uint8_t)(2u + ext_len);
+           ea_opcode_field(&instr->src, &ea_field) &&
+           instr->byte_length == (uint8_t)(2u + ext_len) &&
+           instr->opcode == (uint16_t)(0x4840u | ea_field);
 }
 
 static int validate_lea(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
 
     return instr->size == 4u &&
            instr->dst.mode == NG_M68K_EA_AREG &&
@@ -1079,7 +1092,11 @@ static int validate_lea(const NgM68kInstr *instr) {
            instr->src_reg == 0u &&
            instr->condition == 0u &&
            exact_control_source_ext_length(instr, &ext_len) &&
-           instr->byte_length == (uint8_t)(2u + ext_len);
+           ea_opcode_field(&instr->src, &ea_field) &&
+           instr->byte_length == (uint8_t)(2u + ext_len) &&
+           instr->opcode == (uint16_t)(0x41C0u |
+                                       ((uint16_t)instr->dst.reg << 9) |
+                                       ea_field);
 }
 
 static int validate_move_sr_ccr(const NgM68kInstr *instr) {
