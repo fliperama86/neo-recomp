@@ -2149,7 +2149,8 @@ void ng_m68k_format(const NgM68kInstr *instr, char *out, unsigned out_size) {
         break;
     case NG_M68K_MOVEA:
         if (instr->form == NG_M68K_FORM_PC_INDEX_TO_AREG) {
-            snprintf(out, out_size, "MOVEA.L ($%06X,PC,D%u.W),A%u",
+            snprintf(out, out_size, "MOVEA.%c ($%06X,PC,D%u.W),A%u",
+                     instr->size == NG_M68K_SIZE_LONG ? 'L' : 'W',
                      instr->target & 0xFFFFFFu, instr->src_reg, instr->reg);
         } else {
             char src[64];

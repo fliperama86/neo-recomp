@@ -1325,14 +1325,40 @@ int main(void) {
 
     {
         const unsigned char bytes[] = { 0x20, 0x7B, 0x00, 0x04 };
+        char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0x0007F6u, &instr));
         CHECK(instr.mnemonic == NG_M68K_MOVEA);
+        CHECK(instr.size == 4);
         CHECK(instr.byte_length == 4);
         CHECK(instr.form == NG_M68K_FORM_PC_INDEX_TO_AREG);
         CHECK(instr.reg == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 0);
+        CHECK(instr.src.mode == NG_M68K_EA_PC_INDEX);
         CHECK(instr.src_reg == 0);
         CHECK(instr.displacement == 4);
         CHECK(instr.target == 0x0007FCu);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVEA.L ($0007FC,PC,D0.W),A0") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x32, 0x7B, 0x00, 0x04 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0x0007F6u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVEA);
+        CHECK(instr.size == 2);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.form == NG_M68K_FORM_PC_INDEX_TO_AREG);
+        CHECK(instr.reg == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_PC_INDEX);
+        CHECK(instr.src_reg == 0);
+        CHECK(instr.displacement == 4);
+        CHECK(instr.target == 0x0007FCu);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVEA.W ($0007FC,PC,D0.W),A1") == 0);
     }
 
     {
