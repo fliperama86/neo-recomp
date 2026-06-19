@@ -192,10 +192,13 @@ static const char *ng_condition_expr(uint8_t condition) {
 
 static int emit_branch_condition(FILE *out,
                                  const NgM68kInstr *instr,
-                                 const char *target_label) {
+                                 const char *target_label,
+                                 uint32_t trace_return_pc) {
     const char *expr = ng_condition_expr(instr->condition);
 
     if (instr->condition == 0u) {
+        fprintf(out, "    if (ng_service_trace(0x%08Xu)) return;\n",
+                trace_return_pc & 0x00FFFFFFu);
         fprintf(out, "    goto %s;\n", target_label);
         return 1;
     }
@@ -205,7 +208,11 @@ static int emit_branch_condition(FILE *out,
     }
 
     if (expr) {
-        fprintf(out, "    if (%s) goto %s;\n", expr, target_label);
+        fprintf(out, "    if (%s) {\n", expr);
+        fprintf(out, "      if (ng_service_trace(0x%08Xu)) return;\n",
+                trace_return_pc & 0x00FFFFFFu);
+        fprintf(out, "      goto %s;\n", target_label);
+        fprintf(out, "    }\n");
         return 1;
     }
 
@@ -2412,11 +2419,10 @@ static int emit_instr(FILE *out,
         break;
     case NG_M68K_BRA:
         ng_c_label_for_addr(instr->target, target_label, (unsigned)sizeof(target_label));
-        fprintf(out, "    goto %s;\n", target_label);
-        return 1;
+        return emit_branch_condition(out, instr, target_label, instr->target);
     case NG_M68K_BCC:
         ng_c_label_for_addr(instr->target, target_label, (unsigned)sizeof(target_label));
-        return emit_branch_condition(out, instr, target_label);
+        return emit_branch_condition(out, instr, target_label, instr->target);
     case NG_M68K_SCC: {
         const char *expr = ng_condition_expr(instr->condition);
         char value_expr[512];

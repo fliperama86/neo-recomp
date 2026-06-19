@@ -478,7 +478,9 @@ int main(void) {
         CHECK(strstr(text, "/* $000104: UNLK A5 */") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[5] = ng68k_read32(g_ng_m68k.a[7]);") != NULL);
         CHECK(strstr(text, "/* $000106: Bcc.B $000110 */") != NULL);
-        CHECK(strstr(text, "if (((g_ng_m68k.sr & NG_CCR_N) != 0)) goto ng_label_000110;") != NULL);
+        CHECK(strstr(text, "if (((g_ng_m68k.sr & NG_CCR_N) != 0)) {") != NULL);
+        CHECK(strstr(text, "if (ng_service_trace(0x00000110u)) return;") != NULL);
+        CHECK(strstr(text, "goto ng_label_000110;") != NULL);
         CHECK(strstr(text, "/* $000110: Scc.B (A0)+ */") != NULL);
         CHECK(strstr(text, "ng68k_write8(g_ng_m68k.a[0], (uint8_t)((((g_ng_m68k.sr & NG_CCR_N) != 0) ? 0xFFu : 0x00u)));") != NULL);
         CHECK(strstr(text, "/* $000114: DBcc.1 D7,$000110 */") != NULL);

@@ -206,6 +206,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Extended trace exception coverage to taken `BRA`/`Bcc` paths. The
+  generated branch path now services trace with the taken target PC before
+  jumping, covered by a generated-exec `BMI` fixture.
 - local: Added basic generated trace exception entry. Linear fall-through
   instructions now service SR T-bit tracing after execution, stack saved SR and
   next PC through vector 9, and clear the live T bit during exception entry.
