@@ -138,6 +138,21 @@ static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
     }
 }
 
+static int validate_branch(const NgM68kInstr *instr) {
+    if ((instr->byte_length != 2u && instr->byte_length != 4u) ||
+        instr->size != 0u ||
+        instr->immediate != 0u ||
+        instr->reg != 0u ||
+        instr->src_reg != 0u ||
+        !no_ea_operands(instr)) {
+        return 0;
+    }
+    if (instr->mnemonic == NG_M68K_BCC) {
+        return instr->condition >= 2u && instr->condition <= 15u;
+    }
+    return instr->condition == 0u;
+}
+
 static int validate_shift_rotate(const NgM68kInstr *instr) {
     if (instr->dst.mode == NG_M68K_EA_DREG) {
         if (!valid_size(instr->size)) {
@@ -190,6 +205,10 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                instr->size == 0u &&
                instr->immediate <= 15u &&
                no_ea_operands(instr);
+    case NG_M68K_BRA:
+    case NG_M68K_BSR:
+    case NG_M68K_BCC:
+        return validate_branch(instr);
     case NG_M68K_JMP:
     case NG_M68K_JSR:
     case NG_M68K_PEA:
@@ -335,8 +354,6 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                instr->dst.mode == NG_M68K_EA_DREG;
     case NG_M68K_SWAP:
         return instr->dst.mode == NG_M68K_EA_DREG;
-    case NG_M68K_BCC:
-        return instr->condition <= 15u;
     case NG_M68K_SCC:
         return instr->condition <= 15u &&
                instr->size == 1u &&

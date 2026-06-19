@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened CPU-only branch legality for MC68000 control flow.
+  `test_m68k_validate` now covers valid byte/word `BRA`/`BSR`/`Bcc` forms,
+  rejects 68020-style long branch lengths for the current MC68000 target, and
+  rejects `Bcc` condition fields reserved for `BRA`/`BSR`.
 - local: Added another CPU-only validator slice for MC68000 system/control
   forms. `test_m68k_validate` now covers `ORI`/`ANDI`/`EORI` to `CCR`/`SR`,
   `MOVE USP`, `TRAP`, `STOP`, `NOP`, `RESET`, `RTE`, `RTR`, `RTS`, `TRAPV`,
