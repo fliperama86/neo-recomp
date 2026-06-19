@@ -19,11 +19,6 @@ static int ea_is_data_alterable(const NgM68kEa *ea) {
     return ea->mode == NG_M68K_EA_DREG || ea_is_memory_alterable(ea);
 }
 
-static int no_ea_operands(const NgM68kInstr *instr) {
-    return instr->src.mode == NG_M68K_EA_NONE &&
-           instr->dst.mode == NG_M68K_EA_NONE;
-}
-
 static int ea_is_empty(const NgM68kEa *ea) {
     return ea->mode == NG_M68K_EA_NONE &&
            ea->reg == 0u &&
@@ -245,7 +240,7 @@ static int valid_no_operand_2byte(const NgM68kInstr *instr) {
            instr->target == 0u &&
            instr->absolute_addr == 0u &&
            instr->displacement == 0 &&
-           no_ea_operands(instr);
+           no_ea_fields(instr);
 }
 
 static int valid_fixed_no_operand_2byte(const NgM68kInstr *instr,
@@ -261,7 +256,7 @@ static int valid_control_immediate_fields(const NgM68kInstr *instr) {
            instr->target == 0u &&
            instr->absolute_addr == 0u &&
            instr->displacement == 0 &&
-           no_ea_operands(instr);
+           no_ea_fields(instr);
 }
 
 static int validate_illegal_opcode_metadata(const NgM68kInstr *instr) {
