@@ -1239,6 +1239,9 @@ static int valid_sign_extended_byte(uint32_t value) {
 }
 
 static int validate_moveq(const NgM68kInstr *instr) {
+    uint16_t expected_opcode =
+        (uint16_t)(0x7000u | ((uint16_t)instr->reg << 9) |
+                   (uint8_t)instr->immediate);
     return instr->byte_length == 2u &&
            instr->size == 4u &&
            instr->form == NG_M68K_FORM_IMM_TO_DREG &&
@@ -1251,7 +1254,8 @@ static int validate_moveq(const NgM68kInstr *instr) {
            valid_sign_extended_byte(instr->immediate) &&
            ea_is_empty(&instr->src) &&
            ea_is_exact_register(&instr->dst, NG_M68K_EA_DREG) &&
-           instr->reg == instr->dst.reg;
+           instr->reg == instr->dst.reg &&
+           instr->opcode == expected_opcode;
 }
 
 static int validate_ext_swap(const NgM68kInstr *instr) {

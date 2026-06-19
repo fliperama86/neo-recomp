@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `MOVEQ` validation so opcode register bits and
+  immediate byte must match the decoded data-register destination and
+  sign-extended immediate. `test_m68k_validate` covered mismatched
+  opcode register and immediate metadata red first.
 - local: Tightened `EXG` validation so the opcode opmode and register
   bits must match the decoded Dn-Dn, An-An, or Dn-An exchange
   metadata. `test_m68k_validate` covered mismatched opmode and

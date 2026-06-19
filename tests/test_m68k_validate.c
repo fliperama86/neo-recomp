@@ -547,6 +547,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVEQ;
+    instr.opcode = 0x7080u;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.form = NG_M68K_FORM_IMM_TO_DREG;
@@ -555,6 +556,30 @@ int main(void) {
     instr.dst.mode = NG_M68K_EA_DREG;
     instr.dst.reg = 0u;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVEQ;
+    instr.opcode = 0x7280u;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.form = NG_M68K_FORM_IMM_TO_DREG;
+    instr.reg = 0u;
+    instr.immediate = 0xFFFFFF80u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.dst.reg = 0u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVEQ;
+    instr.opcode = 0x7001u;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.form = NG_M68K_FORM_IMM_TO_DREG;
+    instr.reg = 0u;
+    instr.immediate = 0xFFFFFF80u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.dst.reg = 0u;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVEQ;
