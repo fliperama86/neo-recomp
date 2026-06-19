@@ -420,10 +420,12 @@ static int emit_ea_write(FILE *out,
                 ea->reg, (unsigned)ng_ea_step_bytes(ea, size));
         return 1;
     case NG_M68K_EA_APRE:
-        fprintf(out, "    g_ng_m68k.a[%u] -= %uu;\n",
+        fprintf(out, "    { %s ng_predec_value = (%s)(%s);\n",
+                ctype, ctype, expr);
+        fprintf(out, "      g_ng_m68k.a[%u] -= %uu;\n",
                 ea->reg, (unsigned)ng_ea_step_bytes(ea, size));
-        fprintf(out, "    %s(g_ng_m68k.a[%u], (%s)(%s));\n",
-                write_fn, ea->reg, ctype, expr);
+        fprintf(out, "      %s(g_ng_m68k.a[%u], ng_predec_value); }\n",
+                write_fn, ea->reg);
         return 1;
     case NG_M68K_EA_ADISP:
         fprintf(out, "    %s((uint32_t)(g_ng_m68k.a[%u] + (int32_t)%d), (%s)(%s));\n",

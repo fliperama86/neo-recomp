@@ -150,7 +150,10 @@ Covered by executable generated-C validation:
   - `MOVE.B Dn,abs`
   - `MOVE.B (d16,An),Dn`
   - generic `MOVE.B/W/L <ea>,<ea>` paths covered so far by data-register,
-    immediate, postincrement, address-indirect, and indexed destination forms
+    immediate, postincrement, address-indirect, indexed destination, and
+    predecrement stack-pointer self-alias forms; `MOVE.L A7,-(A7)` now proves
+    the source address register is captured before the destination
+    predecrement side effect
   - generic `MOVEA.W/L <ea>,An` paths covered so far by immediate and
     address-register sources, including `MOVEA.W` sign-extension with CCR
     preserved
@@ -276,6 +279,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fixed generic `MOVE` destination-predecrement source capture. The
+  generated-exec fixture covered `MOVE.L A7,-(A7)` red first and now checks
+  that the pushed longword is the old stack pointer value, not the
+  already-decremented destination `A7`.
 - local: Fixed `UNLK A7` stack-pointer alias semantics. `test_generated_exec`
   now covers opcode `$4E5F` red first and checks that `A7` becomes the
   longword read from the old stack pointer, without the normal post-pop `+4`
