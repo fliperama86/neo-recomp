@@ -82,6 +82,10 @@ static void scan_function_candidate(const NgProgramRom *rom,
             return;
         }
 
+        if (pc != start_addr) {
+            ng_function_discovery_add(out, rom, pc);
+        }
+
         if (have_previous) {
             NgM68kJumpTablePattern pattern;
             if (ng_m68k_match_pc_index_jump_table(&previous, &instr, &pattern)) {

@@ -2527,6 +2527,8 @@ static void emit_function_body(FILE *out, const NgProgramRom *rom, uint32_t star
         }
         ng_m68k_format(&instrs[i], text, (unsigned)sizeof(text));
         fprintf(out, "    /* $%06X: %s */\n", instrs[i].addr & 0x00FFFFFFu, text);
+        fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
+                instrs[i].addr & 0x00FFFFFFu);
         if (!emit_instr(out, &instrs[i])) {
             return;
         }

@@ -206,6 +206,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added runtime-supplied instruction-boundary interrupts. Generated C now
+  polls before each emitted instruction, accepted interrupts stack the current
+  instruction PC, and `RTE` returns through instruction-start continuations
+  discovered by `function_discovery`. Generated-exec covers a level-2
+  interrupt landing between two `MOVEQ` instructions and resuming at the
+  second instruction.
 - local: Added basic interrupt entry from `STOP`: generated code now services
   runtime-approved interrupts after the stop hook, stacks an SR/PC frame on
   `SSP`, raises supervisor mode and the interrupt mask to the accepted level,

@@ -107,8 +107,10 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: MOVEQ #5,D0 */") != NULL);
+        CHECK(strstr(text, "if (ng_service_interrupt(0x00000000u)) return;") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = 0x00000005u;") != NULL);
         CHECK(strstr(text, "/* $000002: ADD.W D0,D0 */") != NULL);
+        CHECK(strstr(text, "if (ng_service_interrupt(0x00000002u)) return;") != NULL);
         CHECK(strstr(text, "uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src;") != NULL);
         CHECK(strstr(text, "if (ng_full > 0x0000FFFFu) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);
         CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x0000000Au);") != NULL);

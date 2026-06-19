@@ -69,8 +69,8 @@ Tasks:
   - `MOVE USP`
   - immediate SR operations
 - Verify exception stack-frame layout and return behavior.
-- Broaden interrupt entry beyond the current basic `STOP` wake path, including
-  instruction-boundary recognition and level-7/IPL details.
+- Broaden interrupt entry beyond runtime-supplied instruction-boundary polling,
+  including level-7/IPL details and real NeoGeo interrupt sources.
 
 Exit criteria:
 

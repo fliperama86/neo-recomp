@@ -44,6 +44,7 @@ Last local verification: **6/6 passing** on 2026-06-19.
 | Supervisor/user stack switching for emitted code | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; generated `ng_set_sr()` helper in `recompiler/src/c_emitter.c`. | Full-SR writes, `STOP`, exception entry, and `RTE` now switch active `A7` between `USP` and `SSP` when the S bit changes. |
 | Privilege violations for emitted privileged instructions | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; generated `ng_require_supervisor()` helper in `recompiler/src/c_emitter.c`. | User-mode `STOP`, `RESET`, `RTE`, `MOVE <ea>,SR`, `MOVE USP`, and `ORI/ANDI/EORI #imm,SR` now vector through privilege-violation vector 8 with the faulting instruction PC. MC68000 `MOVE SR,<ea>` remains unprivileged; later-family `MOVE from SR` privilege is out of current MC68000 scope. |
 | Basic interrupt entry from `STOP` | Done | `tests/test_c_emitter.c`, `tests/test_function_discovery.c`, `tests/test_generated_exec.c`; generated `ng_service_interrupt()` helper and runtime `ng_m68k_take_interrupt()` hook. | `STOP` now installs the immediate SR, lets the runtime arm an interrupt, accepts runtime-approved interrupts according to the current mask, stacks SR/PC on `SSP`, sets supervisor mode plus the interrupt mask, vectors through the supplied vector number, and returns through `RTE` to the post-`STOP` continuation. A masked interrupt fixture verifies no wake/frame when the level is not allowed. |
+| Runtime-supplied instruction-boundary interrupts | Done | `tests/test_c_emitter.c`, `tests/test_function_discovery.c`, `tests/test_generated_exec.c`; per-instruction `ng_service_interrupt()` checks in generated C. | Generated code now polls for runtime-approved interrupts before each emitted instruction. Accepted interrupts stack the current instruction PC, vector to the handler, and `RTE` returns through discovered instruction-start continuations. |
 | All 16 condition predicates available to generated code | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; condition predicate helper in `recompiler/src/c_emitter.c`. | Only selected branch/condition behavior is oracle-covered; full flag correctness is partial. |
 
 ## Partial / Needs Broader Proof
@@ -56,8 +57,8 @@ Last local verification: **6/6 passing** on 2026-06-19.
 | Arithmetic/divide semantics | Partial | `MULS/MULU`, `DIVS/DIVU`, `ADD/SUB/CMP`, extend arithmetic, BCD, and unary RMW paths exist. | Exact overflow, quotient/remainder, divide-by-zero, undefined/unaffected flags, and edge-case behavior against a trusted 68000 oracle. |
 | `MOVEM` | Partial | Long/word register-list transfers and predecrement paths are emitted for covered cases. | Full ordering, mask, word sign-extension, and all valid EA modes verified against oracle fixtures. |
 | Exception stack semantics | Partial | Basic SR/PC exception frames, supervisor stack selection, and vector dispatch are emitted for covered generated paths. | Exact vector fetch ordering, address/bus error frames, and all exception priorities. |
-| Interrupt model | Partial | `STOP` can wake through a runtime-supplied accepted interrupt, stack a format-0 frame, update the interrupt mask, vector to a handler, and return via `RTE`. | Interrupt recognition between ordinary instructions, IPL edge/level tracking including level-7 nuance, interrupt priority against other exceptions, and NeoGeo VBlank/IRQ source integration. |
-| Function discovery / CFG | Partial | Direct calls, continuations, tail jumps, and a known PC-index jump-table shape are discovered conservatively. | Conditional branch basic-block splitting, indirect jump tables beyond the current pattern, data-driven targets, and robust real-ROM CFG recovery. |
+| Interrupt model | Partial | `STOP` and ordinary instruction boundaries can accept runtime-approved interrupts, stack a format-0 frame, update the interrupt mask, vector to a handler, and return via `RTE`. | IPL edge/level tracking including level-7 nuance, interrupt priority against other exceptions, and NeoGeo VBlank/IRQ source integration. |
+| Function discovery / CFG | Partial | Direct calls, instruction-start continuations, `JSR`/`BSR` continuations, `STOP` continuations, tail jumps, and a known PC-index jump-table shape are discovered conservatively. | Conditional branch basic-block splitting, indirect jump tables beyond the current pattern, data-driven targets, and robust real-ROM CFG recovery without excessive duplicate generation. |
 | `g_ng_m68k.pc` | Partial | Dispatch uses function addresses and local labels; some stack frames include explicit return PCs. | Generated code does not consistently maintain architectural `PC` after each instruction or at every exception boundary. |
 | Real-ROM frontier tracking | Partial | `docs/progress.md` records the last Metal Slug frontier and notes it is stale. | Rerun the Metal Slug smoke and replace stale `DC.W` frontier data with the current first failure. |
 | Runtime bus boundary | Partial | Generated code only uses `ng68k_read*`/`ng68k_write*` and runtime hooks. | Correct NeoGeo memory map/device behavior in the runtime, with tests. |
@@ -66,7 +67,7 @@ Last local verification: **6/6 passing** on 2026-06-19.
 
 | Area | Status | Required work |
 | --- | --- | --- |
-| General interrupt recognition | Missing | Poll/accept interrupts at instruction boundaries, model IPL transitions and level-7 behavior, and integrate real NeoGeo interrupt sources. |
+| Full IPL / NeoGeo interrupt integration | Missing | Model IPL transitions and level-7 behavior, prioritize interrupts against other exceptions, and integrate real NeoGeo interrupt sources. |
 | Trace mode | Missing | Implement trace-bit behavior and trace exceptions. |
 | Address/bus error precision | Missing | Handle odd word/long accesses and unmapped/bus-error cases with correct exception behavior if required by real software. |
 | Full oracle/fuzz harness | Missing | Add a trusted 68000 reference runner or generated randomized fixtures for every implemented instruction family, size, EA mode, and edge case. |
@@ -85,9 +86,9 @@ should **not** replace the real supervisor/user stack switching tracked here.
 
 ## Ordered TDD Backlog
 
-1. **General interrupt recognition**: add tests for between-instruction
-   interrupt acceptance, level-7 edge behavior, and NeoGeo interrupt source
-   integration.
+1. **Full IPL / NeoGeo interrupt integration**: add tests for level-7 edge
+   behavior, interrupt priority against other exceptions, and real NeoGeo
+   interrupt source integration.
 2. **Trusted oracle/fuzz harness**: compare generated C against an external or
    embedded 68000 reference for per-instruction semantic edge cases.
 3. **Real-ROM smoke refresh**: regenerate Metal Slug C, capture the current first

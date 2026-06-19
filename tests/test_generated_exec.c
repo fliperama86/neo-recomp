@@ -26,8 +26,14 @@ static uint32_t g_dispatch_miss_count;
 static uint32_t g_last_dispatch_miss;
 static uint8_t g_pending_interrupt_level;
 static uint8_t g_pending_interrupt_vector;
+static uint32_t g_pending_interrupt_after_poll;
+static uint32_t g_interrupt_poll_count;
 static uint8_t g_arm_stop_interrupt_level;
 static uint8_t g_arm_stop_interrupt_vector;
+static uint8_t g_oracle_pending_interrupt_level;
+static uint8_t g_oracle_pending_interrupt_vector;
+static uint32_t g_oracle_pending_interrupt_after_poll;
+static uint32_t g_oracle_interrupt_poll_count;
 static uint8_t g_oracle_stop_interrupt_level;
 static uint8_t g_oracle_stop_interrupt_vector;
 
@@ -111,6 +117,29 @@ static uint32_t oracle_interrupt(NgM68kState *state,
     state->a[7] -= 2u;
     bus_write16(bus, state->a[7], saved_sr);
     return bus_read32(bus, (uint32_t)vector * 4u);
+}
+
+static int oracle_take_interrupt(const NgM68kState *state,
+                                 uint8_t *level,
+                                 uint8_t *vector) {
+    uint8_t mask;
+    if (g_oracle_pending_interrupt_level == 0u) {
+        return 0;
+    }
+    ++g_oracle_interrupt_poll_count;
+    if (g_oracle_pending_interrupt_after_poll != 0u &&
+        g_oracle_interrupt_poll_count < g_oracle_pending_interrupt_after_poll) {
+        return 0;
+    }
+    mask = (uint8_t)((state->sr >> 8) & 7u);
+    if (g_oracle_pending_interrupt_level <= mask) {
+        return 0;
+    }
+    *level = g_oracle_pending_interrupt_level;
+    *vector = g_oracle_pending_interrupt_vector;
+    g_oracle_pending_interrupt_level = 0;
+    g_oracle_pending_interrupt_vector = 0;
+    return 1;
 }
 
 static int oracle_condition_true(uint16_t sr, uint8_t condition) {
@@ -409,7 +438,16 @@ static int oracle_exec(const uint8_t *program,
     }
 
     for (uint32_t step = 0; step < 192u; ++step) {
-        uint16_t op = program_read16(program, size, pc);
+        uint8_t pending_level;
+        uint8_t pending_vector;
+        uint16_t op;
+
+        if (oracle_take_interrupt(state, &pending_level, &pending_vector)) {
+            pc = oracle_interrupt(state, bus, pc, pending_level, pending_vector);
+            continue;
+        }
+
+        op = program_read16(program, size, pc);
 
         if (op == 0x4E75u) {
             pc = bus_read32(bus, state->a[7]);
@@ -2052,6 +2090,11 @@ void ng_log_dispatch_miss(uint32_t addr) {
 }
 
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {
+    ++g_interrupt_poll_count;
+    if (g_pending_interrupt_after_poll != 0u &&
+        g_interrupt_poll_count < g_pending_interrupt_after_poll) {
+        return 0;
+    }
     if (g_pending_interrupt_level == 0u ||
         g_pending_interrupt_level <= current_mask) {
         return 0;
@@ -2060,6 +2103,7 @@ int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector
     *vector = g_pending_interrupt_vector;
     g_pending_interrupt_level = 0;
     g_pending_interrupt_vector = 0;
+    g_pending_interrupt_after_poll = 0;
     return 1;
 }
 
@@ -2428,6 +2472,55 @@ int main(void) {
     CHECK(ng68k_read16(0x000001EAu) == 0x0000u);
     g_pending_interrupt_level = 0;
     g_pending_interrupt_vector = 0;
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = SR_S;
+    expected_state.a[7] = 0x000001F0u;
+    expected_state.ssp = expected_state.a[7];
+    bus_write32(expected_bus, 26u * 4u, 0x00000430u);
+    g_oracle_pending_interrupt_level = 2u;
+    g_oracle_pending_interrupt_vector = 26u;
+    g_oracle_pending_interrupt_after_poll = 2u;
+    g_oracle_interrupt_poll_count = 0;
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x00000420u,
+                      &expected_state, expected_bus, 0));
+    CHECK(g_oracle_pending_interrupt_level == 0);
+    g_oracle_pending_interrupt_vector = 0;
+    g_oracle_pending_interrupt_after_poll = 0;
+    g_oracle_interrupt_poll_count = 0;
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = SR_S;
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    ng68k_write32(26u * 4u, 0x00000430u);
+    g_pending_interrupt_level = 2u;
+    g_pending_interrupt_vector = 26u;
+    g_pending_interrupt_after_poll = 2u;
+    g_interrupt_poll_count = 0;
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000420u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_pending_interrupt_level == 0);
+    CHECK(g_pending_interrupt_vector == 0);
+    CHECK(g_pending_interrupt_after_poll == 0);
+    CHECK(g_interrupt_poll_count >= 2u);
+    CHECK(g_ng_m68k.d[0] == expected_state.d[0]);
+    CHECK(g_ng_m68k.d[1] == expected_state.d[1]);
+    CHECK(g_ng_m68k.a[7] == expected_state.a[7]);
+    CHECK(g_ng_m68k.sr == expected_state.sr);
+    CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+    CHECK(g_ng_m68k.d[0] == 0x00000001u);
+    CHECK(g_ng_m68k.d[1] == 0x00000002u);
+    CHECK(g_ng_m68k.a[7] == 0x000001F0u);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read16(0x000001EAu) == 0x2000u);
+    CHECK(ng68k_read32(0x000001ECu) == 0x00000422u);
+    g_interrupt_poll_count = 0;
 
     return 0;
 }

@@ -48,12 +48,13 @@ int main(void) {
         write16(&rom, 0xB0u, 0x4E75u);
 
         CHECK(ng_function_discover_from_entry(&rom, 0x40u, &discovery));
-        CHECK(discovery.count == 5u);
+        CHECK(discovery.count == 6u);
         CHECK(discovery.addrs[0] == 0x40u);
-        CHECK(discovery.addrs[1] == 0x80u);
-        CHECK(discovery.addrs[2] == 0x90u);
-        CHECK(discovery.addrs[3] == 0xA0u);
-        CHECK(discovery.addrs[4] == 0xB0u);
+        CHECK(discovery.addrs[1] == 0x44u);
+        CHECK(discovery.addrs[2] == 0x80u);
+        CHECK(discovery.addrs[3] == 0x90u);
+        CHECK(discovery.addrs[4] == 0xA0u);
+        CHECK(discovery.addrs[5] == 0xB0u);
         CHECK(!discovery.truncated);
         CHECK(ng_function_discovery_contains(&discovery, 0xA0u));
         CHECK(!ng_function_discovery_contains(&discovery, 0xA2u));
@@ -76,10 +77,11 @@ int main(void) {
         write16(&rom, 0x90u, 0x4E75u);
 
         CHECK(ng_function_discover_from_entry(&rom, 0x20u, &discovery));
-        CHECK(discovery.count == 3u);
+        CHECK(discovery.count == 4u);
         CHECK(discovery.addrs[0] == 0x20u);
-        CHECK(discovery.addrs[1] == 0x80u);
-        CHECK(discovery.addrs[2] == 0x90u);
+        CHECK(discovery.addrs[1] == 0x24u);
+        CHECK(discovery.addrs[2] == 0x80u);
+        CHECK(discovery.addrs[3] == 0x90u);
 
         ng_program_rom_free(&rom);
     }
@@ -122,6 +124,23 @@ int main(void) {
         CHECK(discovery.count == 2u);
         CHECK(discovery.addrs[0] == 0x00u);
         CHECK(discovery.addrs[1] == 0x04u);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x20u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x7001u); /* MOVEQ #1,D0 */
+        write16(&rom, 0x02u, 0x7202u); /* MOVEQ #2,D1 */
+        write16(&rom, 0x04u, 0x4E75u); /* interrupt/RTE can resume here too */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(discovery.count == 3u);
+        CHECK(discovery.addrs[0] == 0x00u);
+        CHECK(discovery.addrs[1] == 0x02u);
+        CHECK(discovery.addrs[2] == 0x04u);
 
         ng_program_rom_free(&rom);
     }

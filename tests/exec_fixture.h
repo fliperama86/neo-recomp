@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#define NG_EXEC_FIXTURE_SIZE 0x412u
-#define NG_EXEC_FIXTURE_ADDR_COUNT 25u
+#define NG_EXEC_FIXTURE_SIZE 0x432u
+#define NG_EXEC_FIXTURE_ADDR_COUNT 29u
 
 static void ng_exec_fixture_write16(uint8_t *data, uint32_t addr, uint16_t value) {
     data[addr] = (uint8_t)(value >> 8);
@@ -366,6 +366,12 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
     ng_exec_fixture_write16(data, 0x406u, 0x4E72u); /* STOP #$2700 */
     ng_exec_fixture_write16(data, 0x408u, 0x2700u);
     ng_exec_fixture_write16(data, 0x410u, 0x4E73u); /* RTE */
+
+    ng_exec_fixture_write16(data, 0x420u, 0x7001u); /* MOVEQ #1,D0 */
+    ng_exec_fixture_write16(data, 0x422u, 0x7202u); /* MOVEQ #2,D1 */
+    ng_exec_fixture_write16(data, 0x424u, 0x4E72u); /* STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x426u, 0x2700u);
+    ng_exec_fixture_write16(data, 0x430u, 0x4E73u); /* RTE */
 }
 
 static uint32_t ng_exec_fixture_addr(uint32_t index) {
@@ -395,6 +401,10 @@ static uint32_t ng_exec_fixture_addr(uint32_t index) {
         0x00000404u,
         0x00000406u,
         0x00000410u,
+        0x00000420u,
+        0x00000422u,
+        0x00000424u,
+        0x00000430u,
     };
     return index < NG_EXEC_FIXTURE_ADDR_COUNT ? addrs[index] : 0;
 }
