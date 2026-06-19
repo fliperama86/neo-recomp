@@ -1725,20 +1725,51 @@ static int validate_immediate_to_ea(const NgM68kInstr *instr) {
 
 static int validate_word_data_to_dreg(const NgM68kInstr *instr) {
     uint8_t src_ext = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t base_opcode = 0u;
+    uint16_t expected_opcode = 0u;
 
-    return instr->size == 2u &&
-           exact_data_source_ext_length(instr, &src_ext) &&
-           instr->immediate == 0u &&
-           instr->src_reg == 0u &&
-           instr->condition == 0u &&
-           instr->form == NG_M68K_FORM_NONE &&
-           instr->target == 0u &&
-           instr->absolute_addr == 0u &&
-           instr->displacement == 0 &&
-           instr->dst.mode == NG_M68K_EA_DREG &&
-           ea_simple_register_payload(&instr->dst) &&
-           instr->reg == instr->dst.reg &&
-           instr->byte_length == (uint8_t)(2u + src_ext);
+    switch (instr->mnemonic) {
+    case NG_M68K_CHK:
+        base_opcode = 0x4180u;
+        break;
+    case NG_M68K_MULU:
+        base_opcode = 0xC0C0u;
+        break;
+    case NG_M68K_MULS:
+        base_opcode = 0xC1C0u;
+        break;
+    case NG_M68K_DIVU:
+        base_opcode = 0x80C0u;
+        break;
+    case NG_M68K_DIVS:
+        base_opcode = 0x81C0u;
+        break;
+    default:
+        return 0;
+    }
+
+    if (instr->size != 2u ||
+        !exact_data_source_ext_length(instr, &src_ext) ||
+        !ea_opcode_field(&instr->src, &ea_field) ||
+        instr->immediate != 0u ||
+        instr->src_reg != 0u ||
+        instr->condition != 0u ||
+        instr->form != NG_M68K_FORM_NONE ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->displacement != 0 ||
+        instr->dst.mode != NG_M68K_EA_DREG ||
+        !ea_simple_register_payload(&instr->dst) ||
+        instr->reg != instr->dst.reg ||
+        instr->byte_length != (uint8_t)(2u + src_ext)) {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)(base_opcode |
+                                 ((uint16_t)instr->dst.reg << 9) |
+                                 ea_field);
+    return instr->opcode == expected_opcode;
 }
 
 static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {

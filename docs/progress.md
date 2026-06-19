@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened word-sized `CHK`, `MULU`/`MULS`, and
+  `DIVU`/`DIVS` validation so opcode class, destination register,
+  and source EA bits must match decoded metadata. `test_m68k_validate`
+  covered cross-mnemonic and destination-register opcode mismatches red first.
 - local: Tightened `ADDX`/`SUBX` and byte-only `ABCD`/`SBCD`
   validation so register and predecrement forms require opcode mnemonic,
   size, R/M form, source register, and destination register bits to match
