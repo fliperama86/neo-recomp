@@ -1320,7 +1320,7 @@ static int validate_movem(const NgM68kInstr *instr) {
 
     size_bit = instr->size == 4u ? 0x0040u : 0u;
 
-    if (instr->src.mode == NG_M68K_EA_NONE &&
+    if (ea_is_empty(&instr->src) &&
         instr->dst.mode != NG_M68K_EA_NONE) {
         if (!movem_reg_to_mem_ext_length(&instr->dst, &ext_len) ||
             !ea_opcode_field(&instr->dst, &ea_field) ||
@@ -1331,7 +1331,7 @@ static int validate_movem(const NgM68kInstr *instr) {
         return instr->opcode == expected_opcode;
     }
 
-    if (instr->dst.mode == NG_M68K_EA_NONE &&
+    if (ea_is_empty(&instr->dst) &&
         instr->src.mode != NG_M68K_EA_NONE) {
         if (!movem_mem_to_reg_ext_length(instr, &ext_len) ||
             !ea_opcode_field(&instr->src, &ea_field) ||
