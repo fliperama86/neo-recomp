@@ -252,6 +252,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 binary `ADD`/`SUB`/`CMP`/`OR`/`AND`/`EOR`
+  register/EA forms against the Motorola/NXP Programmer's Reference Manual
+  source/destination EA tables. The validator now requires exact source and
+  destination EA payloads, PC-relative extension-word bases, index-register
+  metadata, data-register payloads, instruction lengths, source-register
+  metadata, and canonical legacy form/top-level fields for EA-to-Dn, Dn-to-
+  memory, and `EOR` Dn-to-data-alterable forms. `test_m68k_validate` covered
+  malformed indexed source/destination payloads, PC-relative absolute bases,
+  data-register payloads, and legacy metadata red first.
 - local: Fact-checked MC68000 `ADDI`/`SUBI`/`ORI`/`ANDI`/`EORI`
   and `CMPI` immediate-to-data-alterable forms against the Motorola/NXP
   Programmer's Reference Manual immediate and destination EA tables. The

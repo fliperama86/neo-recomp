@@ -359,55 +359,6 @@ static int validate_quick_op(const NgM68kInstr *instr) {
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
-static int data_source_ext_length(const NgM68kEa *ea,
-                                  uint8_t size,
-                                  uint8_t *out_ext) {
-    switch (ea->mode) {
-    case NG_M68K_EA_DREG:
-    case NG_M68K_EA_AIND:
-    case NG_M68K_EA_APOST:
-    case NG_M68K_EA_APRE:
-        if (ea->reg >= 8u) {
-            return 0;
-        }
-        *out_ext = 0u;
-        return 1;
-    case NG_M68K_EA_ADISP:
-    case NG_M68K_EA_AINDEX:
-        if (ea->reg >= 8u) {
-            return 0;
-        }
-        *out_ext = 2u;
-        return 1;
-    case NG_M68K_EA_ABS_W:
-    case NG_M68K_EA_PC_DISP:
-    case NG_M68K_EA_PC_INDEX:
-        *out_ext = 2u;
-        return 1;
-    case NG_M68K_EA_ABS_L:
-        *out_ext = 4u;
-        return 1;
-    case NG_M68K_EA_IMM:
-        *out_ext = size == 4u ? 4u : 2u;
-        return valid_size(size);
-    default:
-        return 0;
-    }
-}
-
-static int addsubcmp_source_ext_length(const NgM68kEa *ea,
-                                       uint8_t size,
-                                       uint8_t *out_ext) {
-    if (ea->mode == NG_M68K_EA_AREG) {
-        if (size == 1u || ea->reg >= 8u) {
-            return 0;
-        }
-        *out_ext = 0u;
-        return 1;
-    }
-    return data_source_ext_length(ea, size, out_ext);
-}
-
 static int memory_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
     switch (ea->mode) {
     case NG_M68K_EA_AIND:
@@ -676,6 +627,21 @@ static int exact_data_source_ext_length(const NgM68kInstr *instr,
     default:
         return 0;
     }
+}
+
+static int exact_addsubcmp_source_ext_length(const NgM68kInstr *instr,
+                                             uint8_t *out_ext) {
+    const NgM68kEa *ea = &instr->src;
+
+    if (ea->mode == NG_M68K_EA_AREG) {
+        if (instr->size == 1u || !ea_simple_register_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    }
+
+    return exact_data_source_ext_length(instr, out_ext);
 }
 
 static int validate_move_legacy_fields(const NgM68kInstr *instr) {
@@ -1194,16 +1160,61 @@ static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
     int valid_src = allow_areg_source ?
-        addsubcmp_source_ext_length(&instr->src, instr->size, &ext_len) :
-        data_source_ext_length(&instr->src, instr->size, &ext_len);
+        exact_addsubcmp_source_ext_length(instr, &ext_len) :
+        exact_data_source_ext_length(instr, &ext_len);
+    int alu_form =
+        instr->mnemonic == NG_M68K_ADD ||
+        instr->mnemonic == NG_M68K_SUB ||
+        instr->mnemonic == NG_M68K_CMP;
 
     return valid_size(instr->size) &&
            instr->immediate == 0u &&
+           instr->condition == 0u &&
+           instr->target == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0 &&
            instr->src_reg == instr->src.reg &&
            valid_src &&
            instr->dst.mode == NG_M68K_EA_DREG &&
-           instr->dst.reg < 8u &&
+           ea_simple_register_payload(&instr->dst) &&
+           instr->reg == instr->dst.reg &&
+           instr->form == (alu_form ? NG_M68K_FORM_DREG_TO_DREG :
+                                      NG_M68K_FORM_NONE) &&
            instr->byte_length == (uint8_t)(2u + ext_len);
+}
+
+static int validate_binary_destination_legacy_fields(const NgM68kInstr *instr,
+                                                     int allow_dreg_dst) {
+    if (instr->condition != 0u ||
+        instr->target != 0u) {
+        return 0;
+    }
+
+    switch (instr->dst.mode) {
+    case NG_M68K_EA_DREG:
+        return allow_dreg_dst &&
+               ea_simple_register_payload(&instr->dst) &&
+               instr->form == NG_M68K_FORM_DREG_TO_DREG &&
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == 0;
+    case NG_M68K_EA_ADISP:
+        return instr->form == NG_M68K_FORM_AREG_DISP &&
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == instr->dst.displacement;
+    case NG_M68K_EA_ABS_W:
+    case NG_M68K_EA_ABS_L:
+        return instr->form == NG_M68K_FORM_ABS &&
+               instr->reg == 0u &&
+               instr->absolute_addr == instr->dst.absolute_addr &&
+               instr->displacement == 0;
+    default:
+        return instr->form == NG_M68K_FORM_NONE &&
+               instr->reg == 0u &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == 0;
+    }
 }
 
 static int validate_dreg_to_memory_binary(const NgM68kInstr *instr) {
@@ -1212,9 +1223,10 @@ static int validate_dreg_to_memory_binary(const NgM68kInstr *instr) {
     return valid_size(instr->size) &&
            instr->immediate == 0u &&
            instr->src.mode == NG_M68K_EA_DREG &&
-           instr->src.reg < 8u &&
+           ea_simple_register_payload(&instr->src) &&
            instr->src_reg == instr->src.reg &&
-           memory_alterable_ext_length(&instr->dst, &ext_len) &&
+           exact_memory_alterable_ext_length(&instr->dst, &ext_len) &&
+           validate_binary_destination_legacy_fields(instr, 0) &&
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
@@ -1224,9 +1236,10 @@ static int validate_dreg_to_data_alterable_binary(const NgM68kInstr *instr) {
     return valid_size(instr->size) &&
            instr->immediate == 0u &&
            instr->src.mode == NG_M68K_EA_DREG &&
-           instr->src.reg < 8u &&
+           ea_simple_register_payload(&instr->src) &&
            instr->src_reg == instr->src.reg &&
-           data_alterable_ext_length(&instr->dst, &ext_len) &&
+           exact_data_alterable_ext_length(&instr->dst, &ext_len) &&
+           validate_binary_destination_legacy_fields(instr, 1) &&
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
