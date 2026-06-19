@@ -125,6 +125,27 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x08, 0x3A, 0x00, 0x00, 0x00, 0x02 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_BTST);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 1);
+        CHECK(instr.immediate == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_PC_DISP);
+        CHECK(instr.dst.absolute_addr == 0x00000006u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "BTST #0,($000006,PC)") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x08, 0x3C, 0x00, 0x00, 0x00, 0xFF };
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_UNKNOWN);
+        CHECK(instr.byte_length == 2);
+    }
+
+    {
         const unsigned char bytes[] = { 0x08, 0x42, 0x00, 0x01 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

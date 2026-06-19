@@ -997,5 +997,30 @@ int main(void) {
         ng_program_rom_free(&rom);
     }
 
+    {
+        NgProgramRom rom = make_rom(0x08u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x083Au); /* BTST #0,($000006,PC) */
+        write16(&rom, 0x02u, 0x0000u);
+        write16(&rom, 0x04u, 0x0002u);
+        write16(&rom, 0x06u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: BTST #0,($000006,PC) */") != NULL);
+        CHECK(strstr(text, "uint8_t ng_ea_000000 = ng68k_read8(0x00000006u);") != NULL);
+        CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << (0u)); uint8_t ng_value = (uint8_t)(ng_ea_000000);") != NULL);
+        CHECK(strstr(text, "ng68k_write8(0x00000006u") == NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
     return 0;
 }

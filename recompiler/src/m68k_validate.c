@@ -126,6 +126,24 @@ static int validate_move_usp(const NgM68kInstr *instr) {
     return 0;
 }
 
+static int validate_btst(const NgM68kInstr *instr) {
+    if (instr->src.mode != NG_M68K_EA_NONE &&
+        instr->src.mode != NG_M68K_EA_DREG) {
+        return 0;
+    }
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        return instr->size == 4u;
+    }
+    if (instr->size != 1u || !ea_is_data(&instr->dst)) {
+        return 0;
+    }
+    if (instr->dst.mode == NG_M68K_EA_IMM &&
+        instr->src.mode != NG_M68K_EA_DREG) {
+        return 0;
+    }
+    return 1;
+}
+
 static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
     if (instr->byte_length != 4u || !no_ea_operands(instr)) {
         return 0;
@@ -336,10 +354,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                instr->src.mode == NG_M68K_EA_DREG &&
                ea_is_data_alterable(&instr->dst);
     case NG_M68K_BTST:
-        return (instr->dst.mode == NG_M68K_EA_DREG ?
-                    instr->size == 4u :
-                    instr->size == 1u) &&
-               ea_is_data(&instr->dst);
+        return validate_btst(instr);
     case NG_M68K_BCHG:
     case NG_M68K_BCLR:
     case NG_M68K_BSET:

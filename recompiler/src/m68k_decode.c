@@ -1130,7 +1130,10 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         uint8_t op_kind = (uint8_t)((op >> 6) & 3u);
         uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
         uint8_t ea_reg = (uint8_t)(op & 7u);
-        if (ea_mode != 1u && !(ea_mode == 7u && ea_reg >= 2u)) {
+        if ((op_kind == 0u &&
+             is_data_ea(ea_mode, ea_reg) &&
+             !(ea_mode == 7u && ea_reg == 4u)) ||
+            (op_kind != 0u && is_data_alterable_ea(ea_mode, ea_reg))) {
             static const NgM68kMnemonic mnemonics[4] = {
                 NG_M68K_BTST,
                 NG_M68K_BCHG,
@@ -1167,7 +1170,8 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         uint8_t op_kind = (uint8_t)((op >> 6) & 3u);
         uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
         uint8_t ea_reg = (uint8_t)(op & 7u);
-        if (ea_mode != 1u && !(ea_mode == 7u && ea_reg >= 2u)) {
+        if ((op_kind == 0u && is_data_ea(ea_mode, ea_reg)) ||
+            (op_kind != 0u && is_data_alterable_ea(ea_mode, ea_reg))) {
             static const NgM68kMnemonic mnemonics[4] = {
                 NG_M68K_BTST,
                 NG_M68K_BCHG,

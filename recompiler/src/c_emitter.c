@@ -1191,6 +1191,21 @@ static int emit_bit_imm_generic(FILE *out, const NgM68kInstr *instr) {
         return 1;
     }
 
+    if (instr->mnemonic == NG_M68K_BTST) {
+        char value_expr[256];
+        if (!emit_ea_read(out, instr, &instr->dst, 1u,
+                          value_expr, (unsigned)sizeof(value_expr))) {
+            return 0;
+        }
+        fprintf(out,
+                "    { uint8_t ng_mask = (uint8_t)(1u << (%s)); uint8_t ng_value = (uint8_t)(%s);\n",
+                bit_expr, value_expr);
+        fprintf(out,
+                "      if ((ng_value & ng_mask) == 0) g_ng_m68k.sr |= NG_CCR_Z; else g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & (uint16_t)~NG_CCR_Z);\n");
+        fprintf(out, "    }\n");
+        return 1;
+    }
+
     if (!emit_ea_address(out, instr, &instr->dst, 1u,
                          addr_expr, (unsigned)sizeof(addr_expr))) {
         return 0;

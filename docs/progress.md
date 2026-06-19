@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `BTST` effective-address tables against the
+  Motorola/NXP Programmer's Reference Manual. Static immediate-bit `BTST` now
+  decodes and emits read-only PC-relative data destinations, static
+  `BTST #n,#data` remains invalid, and the validator distinguishes read-only
+  `BTST` data destinations from altering bit-op data-alterable destinations.
+  `test_m68k_decode`, `test_m68k_validate`, and `test_c_emitter` covered the
+  failures first.
 - local: Fact-checked `MOVE <ea>,<ea>` source legality against the
   Motorola/NXP Programmer's Reference Manual. Byte-sized `MOVE An,<ea>` is now
   rejected in decode as `UNKNOWN`, while `MOVE.W An,Dn` remains legal; the
