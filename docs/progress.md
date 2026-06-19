@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `MOVEM` direction-specific EA classes
+  against the Motorola/NXP Programmer's Reference Manual. The validator now
+  requires exact register-to-memory control/predecrement destination payloads,
+  exact memory-to-register control/postincrement source payloads, and
+  MOVEM-specific PC-relative base calculations from the EA extension word
+  after the register-mask word. `test_m68k_validate` covered malformed
+  predecrement, PC-displacement, indexed, and postincrement payloads red
+  first.
 - local: Fact-checked MC68000 `BTST` and `BCHG`/`BCLR`/`BSET`
   static-immediate and dynamic-Dn bit-number forms against the Motorola/NXP
   Programmer's Reference Manual. The validator now requires exact bit-number

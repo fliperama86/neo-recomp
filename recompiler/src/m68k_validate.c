@@ -847,47 +847,9 @@ static int validate_move(const NgM68kInstr *instr) {
     return instr->byte_length == (uint8_t)(2u + src_ext + dst_ext);
 }
 
-static int control_source_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
-    switch (ea->mode) {
-    case NG_M68K_EA_AIND:
-        if (ea->reg >= 8u) {
-            return 0;
-        }
-        *out_ext = 0u;
-        return 1;
-    case NG_M68K_EA_ADISP:
-    case NG_M68K_EA_AINDEX:
-        if (ea->reg >= 8u) {
-            return 0;
-        }
-        if (ea->mode == NG_M68K_EA_AINDEX && ea->index_reg >= 8u) {
-            return 0;
-        }
-        *out_ext = 2u;
-        return 1;
-    case NG_M68K_EA_ABS_W:
-    case NG_M68K_EA_PC_DISP:
-        *out_ext = 2u;
-        return 1;
-    case NG_M68K_EA_ABS_L:
-        *out_ext = 4u;
-        return 1;
-    case NG_M68K_EA_PC_INDEX:
-        if (ea->index_reg >= 8u) {
-            return 0;
-        }
-        *out_ext = 2u;
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static int exact_control_source_ext_length(const NgM68kInstr *instr,
-                                           uint8_t *out_ext) {
-    const NgM68kEa *ea = &instr->src;
-    uint32_t ext_addr = instr->addr + 2u;
-
+static int exact_control_ea_ext_length(const NgM68kEa *ea,
+                                       uint32_t extension_addr,
+                                       uint8_t *out_ext) {
     switch (ea->mode) {
     case NG_M68K_EA_AIND:
         if (!ea_simple_register_payload(ea)) {
@@ -920,13 +882,13 @@ static int exact_control_source_ext_length(const NgM68kInstr *instr,
         *out_ext = 4u;
         return 1;
     case NG_M68K_EA_PC_DISP:
-        if (!ea_pc_displacement_payload(ea, ext_addr)) {
+        if (!ea_pc_displacement_payload(ea, extension_addr)) {
             return 0;
         }
         *out_ext = 2u;
         return 1;
     case NG_M68K_EA_PC_INDEX:
-        if (!ea_pc_index_payload(ea, ext_addr)) {
+        if (!ea_pc_index_payload(ea, extension_addr)) {
             return 0;
         }
         *out_ext = 2u;
@@ -934,6 +896,11 @@ static int exact_control_source_ext_length(const NgM68kInstr *instr,
     default:
         return 0;
     }
+}
+
+static int exact_control_source_ext_length(const NgM68kInstr *instr,
+                                           uint8_t *out_ext) {
+    return exact_control_ea_ext_length(&instr->src, instr->addr + 2u, out_ext);
 }
 
 static int validate_control_transfer(const NgM68kInstr *instr) {
@@ -1039,23 +1006,33 @@ static int movem_reg_to_mem_ext_length(const NgM68kEa *ea,
     switch (ea->mode) {
     case NG_M68K_EA_AIND:
     case NG_M68K_EA_APRE:
-        if (ea->reg >= 8u) {
+        if (!ea_simple_register_payload(ea)) {
             return 0;
         }
         *out_ext = 0u;
         return 1;
     case NG_M68K_EA_ADISP:
+        if (!ea_address_displacement_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
     case NG_M68K_EA_AINDEX:
-        if (ea->reg >= 8u ||
-            (ea->mode == NG_M68K_EA_AINDEX && ea->index_reg >= 8u)) {
+        if (!ea_address_index_payload(ea)) {
             return 0;
         }
         *out_ext = 2u;
         return 1;
     case NG_M68K_EA_ABS_W:
+        if (!ea_abs_word_payload(ea)) {
+            return 0;
+        }
         *out_ext = 2u;
         return 1;
     case NG_M68K_EA_ABS_L:
+        if (!ea_abs_long_payload(ea)) {
+            return 0;
+        }
         *out_ext = 4u;
         return 1;
     default:
@@ -1063,16 +1040,18 @@ static int movem_reg_to_mem_ext_length(const NgM68kEa *ea,
     }
 }
 
-static int movem_mem_to_reg_ext_length(const NgM68kEa *ea,
+static int movem_mem_to_reg_ext_length(const NgM68kInstr *instr,
                                        uint8_t *out_ext) {
+    const NgM68kEa *ea = &instr->src;
+
     if (ea->mode == NG_M68K_EA_APOST) {
-        if (ea->reg >= 8u) {
+        if (!ea_simple_register_payload(ea)) {
             return 0;
         }
         *out_ext = 0u;
         return 1;
     }
-    return control_source_ext_length(ea, out_ext);
+    return exact_control_ea_ext_length(ea, instr->addr + 4u, out_ext);
 }
 
 static int validate_movem(const NgM68kInstr *instr) {
@@ -1098,7 +1077,7 @@ static int validate_movem(const NgM68kInstr *instr) {
 
     if (instr->dst.mode == NG_M68K_EA_NONE &&
         instr->src.mode != NG_M68K_EA_NONE) {
-        return movem_mem_to_reg_ext_length(&instr->src, &ext_len) &&
+        return movem_mem_to_reg_ext_length(instr, &ext_len) &&
                instr->byte_length == (uint8_t)(4u + ext_len);
     }
 
