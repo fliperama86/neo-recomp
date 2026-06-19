@@ -380,45 +380,6 @@ static int validate_quick_op(const NgM68kInstr *instr) {
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
-static int memory_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
-    switch (ea->mode) {
-    case NG_M68K_EA_AIND:
-    case NG_M68K_EA_APOST:
-    case NG_M68K_EA_APRE:
-        if (ea->reg >= 8u) {
-            return 0;
-        }
-        *out_ext = 0u;
-        return 1;
-    case NG_M68K_EA_ADISP:
-    case NG_M68K_EA_AINDEX:
-        if (ea->reg >= 8u) {
-            return 0;
-        }
-        *out_ext = 2u;
-        return 1;
-    case NG_M68K_EA_ABS_W:
-        *out_ext = 2u;
-        return 1;
-    case NG_M68K_EA_ABS_L:
-        *out_ext = 4u;
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static int data_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
-    if (ea->mode == NG_M68K_EA_DREG) {
-        if (ea->reg >= 8u) {
-            return 0;
-        }
-        *out_ext = 0u;
-        return 1;
-    }
-    return memory_alterable_ext_length(ea, out_ext);
-}
-
 static int exact_memory_alterable_ext_length(const NgM68kEa *ea,
                                              uint8_t *out_ext) {
     switch (ea->mode) {
@@ -1566,11 +1527,12 @@ static int validate_unary_data_alterable(const NgM68kInstr *instr,
                                          int byte_only) {
     uint8_t ext_len = 0u;
 
-    if (instr->src.mode != NG_M68K_EA_NONE ||
+    if (!ea_is_empty(&instr->src) ||
         instr->immediate != 0u ||
         instr->src_reg != 0u ||
         instr->condition != 0u ||
-        !data_alterable_ext_length(&instr->dst, &ext_len)) {
+        instr->target != 0u ||
+        !exact_data_alterable_ext_length(&instr->dst, &ext_len)) {
         return 0;
     }
 
@@ -1588,10 +1550,30 @@ static int validate_unary_data_alterable(const NgM68kInstr *instr,
 
     if (instr->dst.mode == NG_M68K_EA_DREG) {
         return instr->form == NG_M68K_FORM_DREG &&
-               instr->reg == instr->dst.reg;
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == 0;
     }
 
-    return 1;
+    if (instr->dst.mode == NG_M68K_EA_ADISP) {
+        return instr->form == NG_M68K_FORM_AREG_DISP &&
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == instr->dst.displacement;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_ABS_W ||
+        instr->dst.mode == NG_M68K_EA_ABS_L) {
+        return instr->form == NG_M68K_FORM_ABS &&
+               instr->reg == 0u &&
+               instr->absolute_addr == instr->dst.absolute_addr &&
+               instr->displacement == 0;
+    }
+
+    return instr->form == NG_M68K_FORM_NONE &&
+           instr->reg == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0;
 }
 
 int ng_m68k_validate(const NgM68kInstr *instr) {

@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 destination-only `CLR`/`NEG`/`NEGX`/`NOT`
+  and byte-only `NBCD`/`TAS` data-alterable forms against the
+  Motorola/NXP Programmer's Reference Manual. The shared unary validator now
+  requires exact destination EA payloads, canonical Dn/address-displacement/
+  absolute legacy metadata, and no stray source, count, condition, target,
+  absolute, or displacement fields. `test_m68k_validate` covered malformed
+  Dn, postincrement, absolute-long, and address-displacement metadata red
+  first.
 - local: Fact-checked MC68000 shift/rotate register-count, immediate-count,
   and memory one-bit forms against the Motorola/NXP Programmer's Reference
   Manual. The validator now rejects malformed Dn count/destination payloads,
