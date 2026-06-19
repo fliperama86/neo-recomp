@@ -142,7 +142,9 @@ Covered by executable generated-C validation:
     behavior where the addressing register receives the final EA, and
     predecrement register-to-memory masks, including MC68000 predecrement mask
     reversal and initial-`A7` storage when `A7` is also in the saved register
-    list
+    list; control-mode coverage now includes address-displacement and
+    absolute-word register-to-memory destinations plus address-displacement,
+    absolute-long, and PC-relative memory-to-register sources
   - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests and
     generated-exec long Dn→alternate-byte-memory→Dn round-trip with flags preserved
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
@@ -245,6 +247,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `MOVEM` control-mode ordering against the Motorola/NXP
+  Programmer's Reference Manual. Generated-exec now covers D/A mask order for
+  address-displacement and absolute-word register-to-memory long transfers,
+  address-displacement memory-to-register long transfers, absolute-long and
+  PC-relative memory-to-register word transfers, word sign-extension into both
+  data and address registers, and CCR preservation.
 - local: Fact-checked word-form `MULU.W`/`MULS.W` semantics against the
   Motorola/NXP Programmer's Reference Manual. Generated-exec now covers an
   unsigned product with bit 31 set, a signed negative product, and a signed

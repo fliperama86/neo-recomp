@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#define NG_EXEC_FIXTURE_SIZE 0x5C00u
-#define NG_EXEC_FIXTURE_ADDR_COUNT 126u
+#define NG_EXEC_FIXTURE_SIZE 0x5D00u
+#define NG_EXEC_FIXTURE_ADDR_COUNT 127u
 
 #if defined(__GNUC__) || defined(__clang__)
 #define NG_EXEC_FIXTURE_MAYBE_UNUSED __attribute__((unused))
@@ -974,6 +974,151 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
     ng_exec_fixture_write32(data, 0x5B44u, 0x00001226u);
     ng_exec_fixture_write16(data, 0x5B48u, 0x4E72u); /* STOP #$2700 */
     ng_exec_fixture_write16(data, 0x5B4Au, 0x2700u);
+
+    {
+        uint32_t pc = 0x5C00u;
+        ng_exec_fixture_write16(data, pc, 0x203Cu); /* MOVE.L #$11112222,D0 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x11112222u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x227Cu); /* MOVEA.L #$33334444,A1 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x33334444u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x287Cu); /* MOVEA.L #$00001300,A4 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001300u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x44FCu); /* MOVE #$001F,CCR */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x001Fu);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x48ECu); /* MOVEM.L D0/A1,($10,A4) */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x0201u);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x0010u);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x40F9u); /* MOVE SR,$00001230 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001230u);
+        pc += 4u;
+
+        ng_exec_fixture_write16(data, pc, 0x4CECu); /* MOVEM.L ($10,A4),D2/A3 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x0804u);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x0010u);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x40F9u); /* MOVE SR,$00001232 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001232u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x23C2u); /* MOVE.L D2,$00001234 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001234u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x23CBu); /* MOVE.L A3,$00001238 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001238u);
+        pc += 4u;
+
+        ng_exec_fixture_write16(data, pc, 0x2A3Cu); /* MOVE.L #$55556666,D5 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x55556666u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x2C7Cu); /* MOVEA.L #$77778888,A6 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x77778888u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x44FCu); /* MOVE #$001F,CCR */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x001Fu);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x48F8u); /* MOVEM.L D5/A6,$1330.W */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x4020u);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x1330u);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x40F9u); /* MOVE SR,$0000123C */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x0000123Cu);
+        pc += 4u;
+
+        ng_exec_fixture_write16(data, pc, 0x33FCu); /* MOVE.W #$8001,$00001340 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x8001u);
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001340u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x33FCu); /* MOVE.W #$7FFE,$00001342 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x7FFEu);
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001342u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x44FCu); /* MOVE #$001F,CCR */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x001Fu);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x4CB9u); /* MOVEM.W $00001340,D3/A4 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x1008u);
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001340u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x40F9u); /* MOVE SR,$0000123E */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x0000123Eu);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x23C3u); /* MOVE.L D3,$00001240 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001240u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x23CCu); /* MOVE.L A4,$00001244 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001244u);
+        pc += 4u;
+
+        ng_exec_fixture_write16(data, pc, 0x33FCu); /* MOVE.W #$FFFE,$00001350 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0xFFFEu);
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001350u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x33FCu); /* MOVE.W #$0002,$00001352 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x0002u);
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001352u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x44FCu); /* MOVE #$001F,CCR */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x001Fu);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x4CBAu); /* MOVEM.W ($1350,PC),D4/A5 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x2010u);
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, (uint16_t)((int32_t)0x00001350 - (int32_t)pc));
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x40F9u); /* MOVE SR,$00001248 */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x00001248u);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x23C4u); /* MOVE.L D4,$0000124A */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x0000124Au);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x23CDu); /* MOVE.L A5,$0000124E */
+        pc += 2u;
+        ng_exec_fixture_write32(data, pc, 0x0000124Eu);
+        pc += 4u;
+        ng_exec_fixture_write16(data, pc, 0x4E72u); /* STOP #$2700 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x2700u);
+    }
 }
 
 static NG_EXEC_FIXTURE_MAYBE_UNUSED uint32_t ng_exec_fixture_addr(uint32_t index) {
@@ -1104,6 +1249,7 @@ static NG_EXEC_FIXTURE_MAYBE_UNUSED uint32_t ng_exec_fixture_addr(uint32_t index
         0x00005800u,
         0x00005A00u,
         0x00005B00u,
+        0x00005C00u,
     };
     return index < NG_EXEC_FIXTURE_ADDR_COUNT ? addrs[index] : 0;
 }
