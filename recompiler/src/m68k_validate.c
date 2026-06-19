@@ -1925,7 +1925,7 @@ static int validate_tst_legacy_fields(const NgM68kInstr *instr) {
         instr->condition != 0u ||
         instr->src_reg != 0u ||
         instr->immediate != 0u ||
-        instr->dst.mode != NG_M68K_EA_NONE) {
+        !ea_is_empty(&instr->dst)) {
         return 0;
     }
 

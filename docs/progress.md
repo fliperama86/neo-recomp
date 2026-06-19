@@ -276,6 +276,7 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `TST` validation so its implicit destination side must have an empty EA payload. `test_m68k_validate` covered a stray destination payload on `TST.W D1` red first.
 - local: Tightened `MOVEM` validation so the implicit register-list side must have an empty EA payload in both register-to-memory and memory-to-register directions. `test_m68k_validate` covered stray source payload on `MOVEM.L <list>,-(A7)` and stray destination payload on `MOVEM.W (d16,PC),<list>` red first.
 - local: Tightened `PEA` validation so its destination EA must be completely empty, not merely `EA_NONE` by mode. `test_m68k_validate` covered a stray destination payload on `PEA (d16,An)` red first.
 - local: Tightened `MOVE SR,<ea>` / `MOVE <ea>,SR` validation so the implicit SR side must have an empty EA payload in both directions. `test_m68k_validate` covered stray source payload on `MOVE SR,Dn` and stray destination payload on `MOVE (d16,PC),SR` red first.
