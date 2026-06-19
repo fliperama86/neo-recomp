@@ -1608,11 +1608,11 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
         uint8_t ea_reg = (uint8_t)(op & 7u);
         if (size_code != 3u &&
+            !(ea_mode == 1u && size_code == 0u) &&
             (ea_mode == 1u || is_data_alterable_ea(ea_mode, ea_reg))) {
             out->mnemonic = (op & 0x0100u) ? NG_M68K_SUBQ : NG_M68K_ADDQ;
             out->byte_length = 2;
-            out->size = ea_mode == 1u ? NG_M68K_SIZE_LONG :
-                size_from_opcode_bits(size_code);
+            out->size = size_from_opcode_bits(size_code);
             out->immediate = (uint8_t)((op >> 9) & 7u);
             if (out->immediate == 0) {
                 out->immediate = 8;

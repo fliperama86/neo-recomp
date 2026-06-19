@@ -649,6 +649,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_SUBQ;
+    instr.opcode = 0x5188u;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.immediate = 8u;
@@ -657,6 +658,43 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_SUBQ;
+    instr.opcode = 0x5189u;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.immediate = 8u;
+    instr.dst.mode = NG_M68K_EA_AREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_SUBQ;
+    instr.opcode = 0x5088u;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.immediate = 8u;
+    instr.dst.mode = NG_M68K_EA_AREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_SUBQ;
+    instr.opcode = 0x5148u;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.immediate = 8u;
+    instr.dst.mode = NG_M68K_EA_AREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ADDQ;
+    instr.opcode = 0x5248u;
+    instr.byte_length = 2u;
+    instr.size = 2u;
+    instr.immediate = 1u;
+    instr.dst.mode = NG_M68K_EA_AREG;
+    CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_SUBQ;
+    instr.opcode = 0x5188u;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.immediate = 8u;
@@ -666,6 +704,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ADDQ;
+    instr.opcode = 0x5442u;
     instr.byte_length = 2u;
     instr.size = 2u;
     instr.immediate = 2u;
@@ -677,6 +716,31 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ADDQ;
+    instr.opcode = 0x5242u;
+    instr.byte_length = 2u;
+    instr.size = 2u;
+    instr.immediate = 2u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.dst.reg = 2u;
+    instr.form = NG_M68K_FORM_DREG;
+    instr.reg = 2u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ADDQ;
+    instr.opcode = 0x5482u;
+    instr.byte_length = 2u;
+    instr.size = 2u;
+    instr.immediate = 2u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.dst.reg = 2u;
+    instr.form = NG_M68K_FORM_DREG;
+    instr.reg = 2u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ADDQ;
+    instr.opcode = 0x5442u;
     instr.byte_length = 2u;
     instr.size = 2u;
     instr.immediate = 2u;
@@ -717,6 +781,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ADDQ;
+    instr.opcode = 0x522Bu;
     instr.byte_length = 4u;
     instr.size = 1u;
     instr.immediate = 1u;

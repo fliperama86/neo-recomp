@@ -284,6 +284,7 @@ static int validate_move_usp(const NgM68kInstr *instr) {
 
 static int exact_data_alterable_ext_length(const NgM68kEa *ea,
                                            uint8_t *out_ext);
+static int ea_opcode_field(const NgM68kEa *ea, uint8_t *out_field);
 
 static int exact_bit_data_ext_length(const NgM68kEa *ea,
                                      uint8_t size,
@@ -523,6 +524,9 @@ static int validate_quick_destination_legacy_fields(const NgM68kInstr *instr) {
 
 static int validate_quick_op(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t size_bits = 0u;
+    uint16_t expected_opcode = 0u;
 
     if (instr->immediate < 1u ||
         instr->immediate > 8u ||
@@ -530,20 +534,40 @@ static int validate_quick_op(const NgM68kInstr *instr) {
         instr->src_reg != 0u ||
         instr->condition != 0u ||
         instr->target != 0u ||
-        !quick_alterable_ext_length(&instr->dst, &ext_len)) {
+        !quick_alterable_ext_length(&instr->dst, &ext_len) ||
+        !ea_opcode_field(&instr->dst, &ea_field)) {
         return 0;
     }
+
+    if (instr->size == 1u) {
+        size_bits = 0u;
+    } else if (instr->size == 2u) {
+        size_bits = 0x0040u;
+    } else if (instr->size == 4u) {
+        size_bits = 0x0080u;
+    } else {
+        return 0;
+    }
+
+    expected_opcode =
+        (uint16_t)(0x5000u |
+                   ((uint16_t)((instr->immediate == 8u) ? 0u : instr->immediate) << 9) |
+                   ((instr->mnemonic == NG_M68K_SUBQ) ? 0x0100u : 0u) |
+                   size_bits |
+                   ea_field);
 
     if (instr->dst.mode == NG_M68K_EA_AREG) {
         return valid_word_or_long(instr->size) &&
                validate_quick_destination_legacy_fields(instr) &&
-               instr->byte_length == (uint8_t)(2u + ext_len);
+               instr->byte_length == (uint8_t)(2u + ext_len) &&
+               instr->opcode == expected_opcode;
     }
 
     return valid_size(instr->size) &&
            ea_is_data_alterable(&instr->dst) &&
            validate_quick_destination_legacy_fields(instr) &&
-           instr->byte_length == (uint8_t)(2u + ext_len);
+           instr->byte_length == (uint8_t)(2u + ext_len) &&
+           instr->opcode == expected_opcode;
 }
 
 static int exact_memory_alterable_ext_length(const NgM68kEa *ea,
@@ -1290,6 +1314,10 @@ static int ea_opcode_field(const NgM68kEa *ea, uint8_t *out_field) {
     case NG_M68K_EA_DREG:
         if (ea->reg >= 8u) return 0;
         *out_field = ea->reg;
+        return 1;
+    case NG_M68K_EA_AREG:
+        if (ea->reg >= 8u) return 0;
+        *out_field = (uint8_t)(0x08u | ea->reg);
         return 1;
     case NG_M68K_EA_AIND:
         if (ea->reg >= 8u) return 0;

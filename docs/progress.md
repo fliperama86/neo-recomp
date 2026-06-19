@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `ADDQ`/`SUBQ` decode and validation so word-sized
+  address-register quick ops keep their word opcode size, byte-sized
+  address-register quick opcodes decode as `UNKNOWN`, and validator
+  opcode bits for quick count, operation, size, and destination EA
+  must match the decoded metadata. `test_m68k_decode` and
+  `test_m68k_validate` covered these red first.
 - local: Tightened unary data-alterable validation so `CLR`, `NEG`,
   `NEGX`, `NOT`, `NBCD`, and `TAS` opcode class, size bits, and
   effective-address bits must match the decoded destination metadata.

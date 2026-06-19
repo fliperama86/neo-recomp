@@ -1284,6 +1284,26 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x52, 0x48 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ADDQ);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.immediate == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ADDQ.W #1,A0") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x52, 0x08 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_UNKNOWN);
+    }
+
+    {
         const unsigned char bytes[] = { 0x51, 0x98 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
