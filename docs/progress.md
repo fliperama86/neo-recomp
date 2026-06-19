@@ -261,6 +261,12 @@ files with raw VRAM, nonzero-VRAM, work-RAM, and palette modes. It remains an
 offline diagnostic scaffold, not a live emulator loop, so there is still no
 mandatory SDL dependency or added CI surface.
 
+The next real-frame prerequisite is loading the cartridge asset regions that a
+renderer will actually need. The `.neo` loader now has a tested full-container
+path for P/S/M/V1/V2/C regions: P is still normalized for 68000 recompilation,
+while S fix-layer and interleaved C sprite data are preserved for future video
+decode/rendering work.
+
 A manual single-budget deep probe also reaches its guard without a dispatch or
 bus miss:
 
@@ -1235,6 +1241,10 @@ and `V` are only trusted where generated-exec tests cover them.
   SDL2 is available through `pkg-config`, for interactively inspecting the same
   final-budget snapshot artifacts without turning SDL into a required runtime or
   CI dependency.
+- local: Added tested full `.neo` container region extraction for P/S/M/V1/V2/C.
+  Program ROM loading still only exposes normalized P bytes to the CPU
+  recompiler, but host/video work can now load S fix-layer data and interleaved
+  C sprite data from the same cartridge image.
 - local: Connected the LSPC timer model to NTSC frame/scanline advancement:
   runtime tests now cover 384-pixel scanlines, 264-scanline frame wrap,
   VBlank requests on frame start/wrap, and timer interrupts firing from

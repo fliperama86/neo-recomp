@@ -5,6 +5,21 @@
 #include <string.h>
 
 #define NEO_HEADER_SIZE 0x1000u
+#define NEO_HEADER_P_SIZE 0x04u
+#define NEO_HEADER_S_SIZE 0x08u
+#define NEO_HEADER_M_SIZE 0x0Cu
+#define NEO_HEADER_V1_SIZE 0x10u
+#define NEO_HEADER_V2_SIZE 0x14u
+#define NEO_HEADER_C_SIZE 0x18u
+
+typedef struct NgNeoHeader {
+    uint32_t p_size;
+    uint32_t s_size;
+    uint32_t m_size;
+    uint32_t v1_size;
+    uint32_t v2_size;
+    uint32_t c_size;
+} NgNeoHeader;
 
 static int read_whole_file(const char *path, uint8_t **out_data, uint32_t *out_size) {
     FILE *f = fopen(path, "rb");
@@ -59,6 +74,62 @@ static void byteswap_words(uint8_t *data, uint32_t size) {
     }
 }
 
+static int parse_neo_header(const char *path,
+                            const uint8_t *file_data,
+                            uint32_t file_size,
+                            NgNeoHeader *header) {
+    if (file_size < NEO_HEADER_SIZE ||
+        file_data[0] != 'N' || file_data[1] != 'E' ||
+        file_data[2] != 'O' || file_data[3] != 1) {
+        fprintf(stderr, "%s is not a supported .neo image\n", path);
+        return 0;
+    }
+
+    header->p_size = read_le32(file_data + NEO_HEADER_P_SIZE);
+    header->s_size = read_le32(file_data + NEO_HEADER_S_SIZE);
+    header->m_size = read_le32(file_data + NEO_HEADER_M_SIZE);
+    header->v1_size = read_le32(file_data + NEO_HEADER_V1_SIZE);
+    header->v2_size = read_le32(file_data + NEO_HEADER_V2_SIZE);
+    header->c_size = read_le32(file_data + NEO_HEADER_C_SIZE);
+    uint64_t expected_size =
+        (uint64_t)NEO_HEADER_SIZE + header->p_size + header->s_size +
+        header->m_size + header->v1_size + header->v2_size + header->c_size;
+    if (header->p_size == 0u || expected_size != file_size) {
+        fprintf(stderr,
+                "%s has invalid .neo region sizes "
+                "(P=%u S=%u M=%u V1=%u V2=%u C=%u, file=%u expected=%llu)\n",
+                path,
+                header->p_size,
+                header->s_size,
+                header->m_size,
+                header->v1_size,
+                header->v2_size,
+                header->c_size,
+                file_size,
+                (unsigned long long)expected_size);
+        return 0;
+    }
+    return 1;
+}
+
+static int copy_region(NgNeoRomRegion *region,
+                       const uint8_t *data,
+                       uint32_t size) {
+    region->data = NULL;
+    region->size = 0;
+    if (size == 0u) {
+        return 1;
+    }
+
+    region->data = (uint8_t *)malloc(size);
+    if (!region->data) {
+        return 0;
+    }
+    memcpy(region->data, data, size);
+    region->size = size;
+    return 1;
+}
+
 int ng_program_rom_load(NgProgramRom *rom, const char *p1_path, const char *p2_path) {
     uint8_t *p1 = NULL;
     uint8_t *p2 = NULL;
@@ -94,6 +165,60 @@ int ng_program_rom_load(NgProgramRom *rom, const char *p1_path, const char *p2_p
     return 1;
 }
 
+int ng_neo_rom_image_load(NgNeoRomImage *image, const char *neo_path) {
+    if (!image) {
+        return 0;
+    }
+    memset(image, 0, sizeof(*image));
+
+    uint8_t *file_data = NULL;
+    uint32_t file_size = 0;
+    if (!read_whole_file(neo_path, &file_data, &file_size)) {
+        return 0;
+    }
+
+    NgNeoHeader header;
+    if (!parse_neo_header(neo_path, file_data, file_size, &header)) {
+        free(file_data);
+        return 0;
+    }
+
+    const uint8_t *cursor = file_data + NEO_HEADER_SIZE;
+    int ok = copy_region(&image->p, cursor, header.p_size);
+    cursor += header.p_size;
+    ok = ok && copy_region(&image->s, cursor, header.s_size);
+    cursor += header.s_size;
+    ok = ok && copy_region(&image->m, cursor, header.m_size);
+    cursor += header.m_size;
+    ok = ok && copy_region(&image->v1, cursor, header.v1_size);
+    cursor += header.v1_size;
+    ok = ok && copy_region(&image->v2, cursor, header.v2_size);
+    cursor += header.v2_size;
+    ok = ok && copy_region(&image->c, cursor, header.c_size);
+    if (!ok) {
+        ng_neo_rom_image_free(image);
+        free(file_data);
+        return 0;
+    }
+    byteswap_words(image->p.data, image->p.size);
+
+    free(file_data);
+    return 1;
+}
+
+void ng_neo_rom_image_free(NgNeoRomImage *image) {
+    if (!image) {
+        return;
+    }
+    free(image->p.data);
+    free(image->s.data);
+    free(image->m.data);
+    free(image->v1.data);
+    free(image->v2.data);
+    free(image->c.data);
+    memset(image, 0, sizeof(*image));
+}
+
 int ng_program_rom_load_neo(NgProgramRom *rom, const char *neo_path) {
     uint8_t *file_data = NULL;
     uint32_t file_size = 0;
@@ -101,33 +226,24 @@ int ng_program_rom_load_neo(NgProgramRom *rom, const char *neo_path) {
         return 0;
     }
 
-    if (file_size < NEO_HEADER_SIZE ||
-        file_data[0] != 'N' || file_data[1] != 'E' ||
-        file_data[2] != 'O' || file_data[3] != 1) {
-        fprintf(stderr, "%s is not a supported .neo image\n", neo_path);
+    NgNeoHeader header;
+    if (!parse_neo_header(neo_path, file_data, file_size, &header)) {
         free(file_data);
         return 0;
     }
 
-    uint32_t p_size = read_le32(file_data + 4);
-    if (p_size == 0 || p_size > file_size - NEO_HEADER_SIZE) {
-        fprintf(stderr, "%s has an invalid P-region size: %u\n", neo_path, p_size);
-        free(file_data);
-        return 0;
-    }
-
-    uint8_t *program = (uint8_t *)malloc(p_size);
+    uint8_t *program = (uint8_t *)malloc(header.p_size);
     if (!program) {
         free(file_data);
         return 0;
     }
 
-    memcpy(program, file_data + NEO_HEADER_SIZE, p_size);
-    byteswap_words(program, p_size);
+    memcpy(program, file_data + NEO_HEADER_SIZE, header.p_size);
+    byteswap_words(program, header.p_size);
     free(file_data);
 
     rom->data = program;
-    rom->size = p_size;
+    rom->size = header.p_size;
     return 1;
 }
 

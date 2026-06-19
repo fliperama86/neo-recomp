@@ -63,8 +63,18 @@ static void write_le32(unsigned char *dst, unsigned value) {
 }
 
 static int write_synthetic_neo(const char *path) {
-    enum { header_size = 0x1000, p_size = 0x1238 };
-    unsigned char *image = (unsigned char *)calloc(header_size + p_size, 1);
+    enum {
+        header_size = 0x1000,
+        p_size = 0x1238,
+        s_size = 4,
+        m_size = 3,
+        v1_size = 5,
+        v2_size = 2,
+        c_size = 6
+    };
+    size_t image_size = header_size + p_size + s_size + m_size +
+                        v1_size + v2_size + c_size;
+    unsigned char *image = (unsigned char *)calloc(image_size, 1);
     if (!image) {
         return 0;
     }
@@ -74,6 +84,11 @@ static int write_synthetic_neo(const char *path) {
     image[2] = 'O';
     image[3] = 1;
     write_le32(image + 4, p_size);
+    write_le32(image + 8, s_size);
+    write_le32(image + 0x0C, m_size);
+    write_le32(image + 0x10, v1_size);
+    write_le32(image + 0x14, v2_size);
+    write_le32(image + 0x18, c_size);
 
     unsigned char *p = image + header_size;
     p[0] = 0x10;
@@ -100,6 +115,31 @@ static int write_synthetic_neo(const char *path) {
     p[0x125] = 0x00;
     p[0x126] = 0x34;
     p[0x127] = 0x12;
+    unsigned char *s = p + p_size;
+    s[0] = 0x53;
+    s[1] = 0x10;
+    s[2] = 0x53;
+    s[3] = 0x11;
+    unsigned char *m = s + s_size;
+    m[0] = 0x4D;
+    m[1] = 0x10;
+    m[2] = 0x4D;
+    unsigned char *v1 = m + m_size;
+    v1[0] = 0xA1;
+    v1[1] = 0xA2;
+    v1[2] = 0xA3;
+    v1[3] = 0xA4;
+    v1[4] = 0xA5;
+    unsigned char *v2 = v1 + v1_size;
+    v2[0] = 0xB1;
+    v2[1] = 0xB2;
+    unsigned char *c = v2 + v2_size;
+    c[0] = 0xC1;
+    c[1] = 0xC2;
+    c[2] = 0xC3;
+    c[3] = 0xC4;
+    c[4] = 0xC5;
+    c[5] = 0xC6;
 
     FILE *f = fopen(path, "wb");
     if (!f) {
@@ -107,7 +147,7 @@ static int write_synthetic_neo(const char *path) {
         return 0;
     }
 
-    int ok = fwrite(image, 1, header_size + p_size, f) == header_size + p_size;
+    int ok = fwrite(image, 1, image_size, f) == image_size;
     fclose(f);
     free(image);
     return ok;
@@ -141,6 +181,31 @@ int main(void) {
 
     const char *neo_path = "synthetic.neo";
     CHECK(write_synthetic_neo(neo_path));
+
+    NgNeoRomImage image = {0};
+    CHECK(ng_neo_rom_image_load(&image, neo_path));
+    CHECK(image.p.size == 0x1238u);
+    CHECK(image.s.size == 4u);
+    CHECK(image.m.size == 3u);
+    CHECK(image.v1.size == 5u);
+    CHECK(image.v2.size == 2u);
+    CHECK(image.c.size == 6u);
+    CHECK(image.p.data[0] == 0x00u);
+    CHECK(image.p.data[1] == 0x10u);
+    CHECK(image.p.data[8] == 0x12u);
+    CHECK(image.p.data[9] == 0x34u);
+    CHECK(image.s.data[0] == 0x53u);
+    CHECK(image.s.data[3] == 0x11u);
+    CHECK(image.m.data[0] == 0x4Du);
+    CHECK(image.m.data[2] == 0x4Du);
+    CHECK(image.v1.data[0] == 0xA1u);
+    CHECK(image.v1.data[4] == 0xA5u);
+    CHECK(image.v2.data[0] == 0xB1u);
+    CHECK(image.v2.data[1] == 0xB2u);
+    CHECK(image.c.data[0] == 0xC1u);
+    CHECK(image.c.data[5] == 0xC6u);
+    ng_neo_rom_image_free(&image);
+
     CHECK(ng_program_rom_load_neo(&rom, neo_path));
     remove(neo_path);
 

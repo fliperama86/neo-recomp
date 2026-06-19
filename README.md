@@ -134,8 +134,9 @@ word swapping if needed, and bank-window mapping.
 Current M1 status:
 
 - Raw P-ROM vector parsing is covered by a synthetic unit test.
-- MiSTer `.neo` P-region extraction and word normalization are covered by a
-  synthetic unit test.
+- MiSTer `.neo` extraction is covered by a synthetic unit test: the P-region is
+  normalized for 68000 execution, and the S/M/V1/V2/C regions are available for
+  future video/audio host work.
 - Real local smoke has been verified with `G:\Mister\NEOGEO\mslug.neo`.
 
 Current headless Metal Slug smoke:
