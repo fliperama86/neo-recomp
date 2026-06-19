@@ -996,8 +996,11 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->mnemonic = NG_M68K_MOVEQ;
         out->size = NG_M68K_SIZE_LONG;
         out->byte_length = 2;
+        out->form = NG_M68K_FORM_IMM_TO_DREG;
         out->reg = (uint8_t)((op >> 9) & 7u);
         out->immediate = (uint32_t)(int32_t)sign8((uint8_t)(op & 0xFFu));
+        out->dst.mode = NG_M68K_EA_DREG;
+        out->dst.reg = out->reg;
         return finish_decode(rom, addr, out);
     }
     if ((op & 0xF1FFu) == 0x41FAu) {
@@ -1699,7 +1702,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
     }
     if ((op & 0xFFF8u) == 0x4840u) {
         out->mnemonic = NG_M68K_SWAP;
-        out->size = NG_M68K_SIZE_LONG;
+        out->size = NG_M68K_SIZE_WORD;
         out->byte_length = 2;
         out->form = NG_M68K_FORM_DREG;
         out->reg = (uint8_t)(op & 7u);

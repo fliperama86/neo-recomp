@@ -1378,7 +1378,10 @@ int main(void) {
         CHECK(instr.mnemonic == NG_M68K_MOVEQ);
         CHECK(instr.byte_length == 2);
         CHECK(instr.size == 4);
+        CHECK(instr.form == NG_M68K_FORM_IMM_TO_DREG);
         CHECK(instr.reg == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 0);
         CHECK((int32_t)instr.immediate == -128);
     }
 
@@ -1805,7 +1808,7 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_SWAP);
         CHECK(instr.byte_length == 2);
-        CHECK(instr.size == 4);
+        CHECK(instr.size == 2);
         CHECK(instr.form == NG_M68K_FORM_DREG);
         CHECK(instr.reg == 2);
         CHECK(instr.dst.mode == NG_M68K_EA_DREG);

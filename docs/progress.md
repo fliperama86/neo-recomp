@@ -252,6 +252,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `MOVEQ`, `EXT`, and `SWAP` register-only
+  forms against the Motorola/NXP Programmer's Reference Manual. `MOVEQ`
+  decode now records its immediate-to-data-register destination metadata and
+  the validator requires sign-extended 8-bit immediates. `SWAP` decode now
+  records the PRM word attribute while preserving 32-bit result flag emission.
+  `EXT`/`SWAP` validation now requires exact 2-byte data-register metadata,
+  matching register fields, legal sizes, and no stray operands or legacy
+  fields. `test_m68k_decode` and `test_m68k_validate` covered malformed
+  metadata red first.
 - local: Fact-checked MC68000 `EXG` register exchanges against the
   Motorola/NXP Programmer's Reference Manual. Decode now records the Rx/Ry
   register fields for Dn-Dn, An-An, and Dn-An exchanges, and the validator

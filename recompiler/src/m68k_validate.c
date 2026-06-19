@@ -633,6 +633,48 @@ static int validate_exg(const NgM68kInstr *instr) {
            ea_is_exact_register(&instr->dst, NG_M68K_EA_AREG);
 }
 
+static int valid_sign_extended_byte(uint32_t value) {
+    return value == (uint32_t)(int32_t)(int8_t)(uint8_t)value;
+}
+
+static int validate_moveq(const NgM68kInstr *instr) {
+    return instr->byte_length == 2u &&
+           instr->size == 4u &&
+           instr->form == NG_M68K_FORM_IMM_TO_DREG &&
+           instr->reg < 8u &&
+           instr->src_reg == 0u &&
+           instr->condition == 0u &&
+           instr->target == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0 &&
+           valid_sign_extended_byte(instr->immediate) &&
+           ea_is_empty(&instr->src) &&
+           ea_is_exact_register(&instr->dst, NG_M68K_EA_DREG) &&
+           instr->reg == instr->dst.reg;
+}
+
+static int validate_ext_swap(const NgM68kInstr *instr) {
+    if (instr->byte_length != 2u ||
+        instr->form != NG_M68K_FORM_DREG ||
+        instr->immediate != 0u ||
+        instr->src_reg != 0u ||
+        instr->condition != 0u ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->displacement != 0 ||
+        !ea_is_empty(&instr->src) ||
+        !ea_is_exact_register(&instr->dst, NG_M68K_EA_DREG) ||
+        instr->reg != instr->dst.reg) {
+        return 0;
+    }
+
+    if (instr->mnemonic == NG_M68K_EXT) {
+        return instr->size == 2u || instr->size == 4u;
+    }
+
+    return instr->size == 2u;
+}
+
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
@@ -1015,15 +1057,8 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_DIVS:
         return validate_word_data_to_dreg(instr);
     case NG_M68K_EXT:
-        return instr->byte_length == 2u &&
-               (instr->size == 2u || instr->size == 4u) &&
-               instr->src.mode == NG_M68K_EA_NONE &&
-               instr->dst.mode == NG_M68K_EA_DREG;
     case NG_M68K_SWAP:
-        return instr->byte_length == 2u &&
-               instr->size == 4u &&
-               instr->src.mode == NG_M68K_EA_NONE &&
-               instr->dst.mode == NG_M68K_EA_DREG;
+        return validate_ext_swap(instr);
     case NG_M68K_SCC:
         return valid_scc_length(instr->byte_length) &&
                instr->condition <= 15u &&
@@ -1057,10 +1092,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_SBCD:
         return instr->size == 1u && valid_extend_pair(instr);
     case NG_M68K_MOVEQ:
-        return instr->byte_length == 2u &&
-               instr->size == 4u &&
-               instr->reg < 8u &&
-               no_ea_operands(instr);
+        return validate_moveq(instr);
     default:
         return 1;
     }
