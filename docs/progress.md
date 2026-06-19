@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked immediate arithmetic/logical `#data,<ea>` forms against
+  the Motorola/NXP Programmer's Reference Manual. The validator now rejects
+  malformed `ADDI`/`SUBI`/`ORI`/`ANDI`/`EORI` metadata with impossible
+  instruction lengths, oversized byte/word immediates, stray source operands,
+  or non-data-alterable destinations. `test_m68k_validate` covered the
+  failures first.
 - local: Fact-checked `MOVEA`, `ADDA`, `SUBA`, and `CMPA` address-register
   destination forms against the Motorola/NXP Programmer's Reference Manual.
   The validator now rejects malformed address-register-operation metadata with

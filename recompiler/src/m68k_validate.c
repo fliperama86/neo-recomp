@@ -200,6 +200,15 @@ static int validate_cmpi(const NgM68kInstr *instr) {
            ea_is_data_alterable(&instr->dst);
 }
 
+static int validate_immediate_to_ea(const NgM68kInstr *instr) {
+    return valid_size(instr->size) &&
+           valid_cmpi_length(instr->size, instr->byte_length) &&
+           valid_immediate_width(instr->size, instr->immediate) &&
+           instr->src_reg == 0u &&
+           instr->src.mode == NG_M68K_EA_NONE &&
+           ea_is_data_alterable(&instr->dst);
+}
+
 static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
     if (instr->byte_length != 4u || !no_ea_operands(instr)) {
         return 0;
@@ -373,7 +382,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_ORI:
     case NG_M68K_ANDI:
     case NG_M68K_EORI:
-        return valid_size(instr->size) && ea_is_data_alterable(&instr->dst);
+        return validate_immediate_to_ea(instr);
     case NG_M68K_ORI_TO_CCR:
     case NG_M68K_ORI_TO_SR:
     case NG_M68K_ANDI_TO_CCR:
