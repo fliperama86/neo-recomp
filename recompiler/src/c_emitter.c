@@ -109,8 +109,8 @@ static void emit_header(FILE *out) {
     fprintf(out, "    ng_generated_call(ng68k_read32((uint32_t)vector * 4u));\n");
     fprintf(out, "    return 1;\n");
     fprintf(out, "}\n\n");
-    fprintf(out, "static int ng_service_trace(uint32_t return_pc) {\n");
-    fprintf(out, "    if ((g_ng_m68k.sr & NG_SR_T) == 0) return 0;\n");
+    fprintf(out, "static int ng_service_trace(uint32_t return_pc, uint16_t trace_sr) {\n");
+    fprintf(out, "    if ((trace_sr & NG_SR_T) == 0) return 0;\n");
     fprintf(out, "    ng_push_exception_frame(return_pc);\n");
     fprintf(out, "    ng_generated_call(ng68k_read32(0x00000024u));\n");
     fprintf(out, "    return 1;\n");
@@ -197,7 +197,7 @@ static int emit_branch_condition(FILE *out,
     const char *expr = ng_condition_expr(instr->condition);
 
     if (instr->condition == 0u) {
-        fprintf(out, "    if (ng_service_trace(0x%08Xu)) return;\n",
+        fprintf(out, "    if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 trace_return_pc & 0x00FFFFFFu);
         fprintf(out, "    goto %s;\n", target_label);
         return 1;
@@ -209,7 +209,7 @@ static int emit_branch_condition(FILE *out,
 
     if (expr) {
         fprintf(out, "    if (%s) {\n", expr);
-        fprintf(out, "      if (ng_service_trace(0x%08Xu)) return;\n",
+        fprintf(out, "      if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 trace_return_pc & 0x00FFFFFFu);
         fprintf(out, "      goto %s;\n", target_label);
         fprintf(out, "    }\n");
@@ -1967,6 +1967,8 @@ static int emit_instr(FILE *out,
         fprintf(out, "    ng_set_sr(0x%04Xu);\n", instr->immediate & 0xFFFFu);
         fprintf(out, "    ng_m68k_stop_until_interrupt(0x%04Xu);\n",
                 instr->immediate & 0xFFFFu);
+        fprintf(out, "    if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
+                (instr->addr + instr->byte_length) & 0x00FFFFFFu);
         fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
                 (instr->addr + instr->byte_length) & 0x00FFFFFFu);
         fprintf(out, "    return;\n");
@@ -1991,24 +1993,26 @@ static int emit_instr(FILE *out,
     case NG_M68K_RTE:
         emit_require_supervisor(out, instr->addr);
         fprintf(out, "    { uint16_t ng_sr = ng68k_read16(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 2u;\n");
-        fprintf(out, "      uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;\n");
-        fprintf(out, "      ng_set_sr(ng_sr);\n");
-        fprintf(out, "      ng_generated_call(ng_pc);\n");
+      fprintf(out, "      uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;\n");
+      fprintf(out, "      ng_set_sr(ng_sr);\n");
+        fprintf(out, "      if (ng_service_trace(ng_pc, ng_trace_sr)) return;\n");
+      fprintf(out, "      ng_generated_call(ng_pc);\n");
         fprintf(out, "    }\n");
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_RTR:
         fprintf(out, "    { uint16_t ng_ccr = ng68k_read16(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 2u;\n");
-        fprintf(out, "      uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;\n");
-        fprintf(out, "      g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | (ng_ccr & 0x001Fu));\n");
-        fprintf(out, "      ng_generated_call(ng_pc);\n");
+      fprintf(out, "      uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;\n");
+      fprintf(out, "      g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | (ng_ccr & 0x001Fu));\n");
+        fprintf(out, "      if (ng_service_trace(ng_pc, ng_trace_sr)) return;\n");
+      fprintf(out, "      ng_generated_call(ng_pc);\n");
         fprintf(out, "    }\n");
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_RTS:
         fprintf(out, "    { uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]);\n");
         fprintf(out, "      g_ng_m68k.a[7] += 4u;\n");
-        fprintf(out, "      if (ng_service_trace(ng_pc)) return;\n");
+        fprintf(out, "      if (ng_service_trace(ng_pc, ng_trace_sr)) return;\n");
         fprintf(out, "      ng_generated_call(ng_pc);\n");
         fprintf(out, "    }\n");
         fprintf(out, "    return;\n");
@@ -2461,7 +2465,7 @@ static int emit_instr(FILE *out,
         fprintf(out, "      g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFF0000u) | (uint32_t)ng_counter;\n",
                 instr->reg, instr->reg);
         fprintf(out, "      if (ng_counter != 0xFFFFu) {\n");
-        fprintf(out, "        if (ng_service_trace(0x%08Xu)) return;\n",
+        fprintf(out, "        if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 instr->target & 0x00FFFFFFu);
         fprintf(out, "        goto %s;\n", target_label);
         fprintf(out, "      }\n");
@@ -2480,20 +2484,20 @@ static int emit_instr(FILE *out,
             instr->form != NG_M68K_FORM_PC_RELATIVE) {
             char addr_expr[256];
             if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
-                fprintf(out, "    if (ng_service_trace(%s)) return;\n", addr_expr);
+                fprintf(out, "    if (ng_service_trace(%s, ng_trace_sr)) return;\n", addr_expr);
                 fprintf(out, "    ng_generated_call(%s);\n", addr_expr);
                 fprintf(out, "    return;\n");
                 return 0;
             }
         }
-        fprintf(out, "    if (ng_service_trace(0x%08Xu)) return;\n",
+        fprintf(out, "    if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 instr->target & 0x00FFFFFFu);
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_BSR:
         emit_push_return_address(out, instr->addr + instr->byte_length);
-        fprintf(out, "    if (ng_service_trace(0x%08Xu)) return;\n",
+        fprintf(out, "    if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 instr->target & 0x00FFFFFFu);
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
         fprintf(out, "    return;\n");
@@ -2504,13 +2508,13 @@ static int emit_instr(FILE *out,
             instr->form != NG_M68K_FORM_PC_RELATIVE) {
             char addr_expr[256];
             if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
-                fprintf(out, "    if (ng_service_trace(%s)) return;\n", addr_expr);
+                fprintf(out, "    if (ng_service_trace(%s, ng_trace_sr)) return;\n", addr_expr);
                 fprintf(out, "    ng_generated_call(%s);\n", addr_expr);
                 fprintf(out, "    return;\n");
                 return 0;
             }
         }
-        fprintf(out, "    if (ng_service_trace(0x%08Xu)) return;\n",
+        fprintf(out, "    if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 instr->target & 0x00FFFFFFu);
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
         fprintf(out, "    return;\n");
@@ -2556,6 +2560,9 @@ static void emit_function_body(FILE *out,
     uint32_t label_targets[NG_EMIT_MAX_INSTRUCTIONS];
     uint32_t label_count = 0;
 
+    fprintf(out, "    uint16_t ng_trace_sr = 0;\n");
+    fprintf(out, "    (void)ng_trace_sr;\n");
+
     for (uint32_t i = 0; i < NG_EMIT_MAX_INSTRUCTIONS; ++i) {
         NgM68kInstr instr;
         if (!ng_m68k_decode(rom, pc, &instr)) {
@@ -2597,6 +2604,7 @@ static void emit_function_body(FILE *out,
         fprintf(out, "    /* $%06X: %s */\n", instrs[i].addr & 0x00FFFFFFu, text);
         fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
                 instrs[i].addr & 0x00FFFFFFu);
+        fprintf(out, "    ng_trace_sr = g_ng_m68k.sr;\n");
         if (!ng_m68k_validate(&instrs[i])) {
             emit_record_unsupported(diagnostics, instrs[i].addr);
             fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n",
@@ -2607,7 +2615,7 @@ static void emit_function_body(FILE *out,
         if (!emit_instr(out, &instrs[i], diagnostics)) {
             return;
         }
-        fprintf(out, "    if (ng_service_trace(0x%08Xu)) return;\n",
+        fprintf(out, "    if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 (instrs[i].addr + instrs[i].byte_length) & 0x00FFFFFFu);
     }
 
