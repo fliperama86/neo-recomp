@@ -81,6 +81,7 @@ int main(void) {
     CHECK(audit.missing_direct_count == 1u);
     CHECK(audit.external_direct_count == 1u);
     CHECK(audit.computed_count == 2u);
+    CHECK(audit.runtime_computed_count == 0u);
     CHECK(audit.jump_table_count == 1u);
     CHECK(audit.jump_table_resolved_entries == 3u);
     CHECK(audit.jump_table_missing_entries == 1u);
@@ -125,7 +126,7 @@ int main(void) {
     CHECK(ng_dispatch_audit_write(out, &audit));
     CHECK(read_file(out, text, sizeof(text)));
     fclose(out);
-    CHECK(strstr(text, "dispatch audit: sites=6 direct=3 missing_direct=1 external_direct=1 computed=2 jump_tables=1") != NULL);
+    CHECK(strstr(text, "dispatch audit: sites=6 direct=3 missing_direct=1 external_direct=1 computed=2 runtime_computed=0 jump_tables=1") != NULL);
     CHECK(strstr(text, "$000010 DIRECT JSR target=$000080 discovered=yes") != NULL);
     CHECK(strstr(text, "$00001A JUMP_TABLE JMP table=$00001C resolved=3 missing=1") != NULL);
     CHECK(strstr(text, "$000060 COMPUTED JSR target=<runtime>") != NULL);
@@ -137,6 +138,28 @@ int main(void) {
     audit.computed_count = 0u;
     audit.jump_table_missing_entries = 0u;
     CHECK(!ng_dispatch_audit_has_gaps(&audit));
+
+    NgGameConfig config;
+    ng_game_config_init(&config);
+    config.runtime_dispatch[config.runtime_dispatch_count++] = 0x60u;
+    CHECK(ng_dispatch_audit_build_with_config(&rom, &discovery, &config, &audit));
+    CHECK(audit.computed_count == 1u);
+    CHECK(audit.runtime_computed_count == 1u);
+    CHECK(audit.sites[2].kind == NG_DISPATCH_AUDIT_COMPUTED);
+    CHECK(audit.sites[2].site_addr == 0x60u);
+    CHECK(audit.sites[2].runtime_allowed);
+    CHECK(audit.sites[3].kind == NG_DISPATCH_AUDIT_COMPUTED);
+    CHECK(audit.sites[3].site_addr == 0x68u);
+    CHECK(!audit.sites[3].runtime_allowed);
+
+    out = tmpfile();
+    CHECK(out != NULL);
+    CHECK(ng_dispatch_audit_write(out, &audit));
+    CHECK(read_file(out, text, sizeof(text)));
+    fclose(out);
+    CHECK(strstr(text, "computed=1 runtime_computed=1") != NULL);
+    CHECK(strstr(text, "$000060 COMPUTED JSR target=<runtime> allowed=yes") != NULL);
+    CHECK(strstr(text, "$000068 COMPUTED JSR target=<runtime>\n") != NULL);
 
     ng_program_rom_free(&rom);
 

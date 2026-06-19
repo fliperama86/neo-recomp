@@ -23,6 +23,7 @@ typedef struct NgDispatchAuditSite {
     uint8_t target_known;
     uint8_t target_in_discovery;
     uint8_t target_external;
+    uint8_t runtime_allowed;
     uint8_t resolved_entries;
     uint8_t missing_entries;
 } NgDispatchAuditSite;
@@ -34,6 +35,7 @@ typedef struct NgDispatchAudit {
     uint32_t missing_direct_count;
     uint32_t external_direct_count;
     uint32_t computed_count;
+    uint32_t runtime_computed_count;
     uint32_t jump_table_count;
     uint32_t jump_table_resolved_entries;
     uint32_t jump_table_missing_entries;
@@ -44,5 +46,9 @@ void ng_dispatch_audit_init(NgDispatchAudit *audit);
 int ng_dispatch_audit_build(const NgProgramRom *rom,
                             const NgFunctionDiscovery *discovery,
                             NgDispatchAudit *audit);
+int ng_dispatch_audit_build_with_config(const NgProgramRom *rom,
+                                        const NgFunctionDiscovery *discovery,
+                                        const NgGameConfig *config,
+                                        NgDispatchAudit *audit);
 int ng_dispatch_audit_has_gaps(const NgDispatchAudit *audit);
 int ng_dispatch_audit_write(FILE *out, const NgDispatchAudit *audit);

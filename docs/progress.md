@@ -60,12 +60,13 @@ Latest local Metal Slug smoke used:
 cc -std=c99 -Wall -Wextra -Iinclude -c build/mslug_recomp.c -o build/mslug_recomp.o
 ```
 
-The generated C now compiles to an object. The current dispatch audit frontier is:
+The generated C now compiles to an object, and the current Metal Slug smoke
+passes `--fail-on-dispatch-gaps`. The current dispatch audit is:
 
 ```text
 function candidates: 397
-dispatch audit: sites=33 direct=31 missing_direct=0 external_direct=2 computed=1 jump_tables=1 table_resolved=4 table_missing=0
-$0006C8 COMPUTED JSR target=<runtime>
+dispatch audit: sites=33 direct=31 missing_direct=0 external_direct=2 computed=0 runtime_computed=1 jump_tables=1 table_resolved=4 table_missing=0
+$0006C8 COMPUTED JSR target=<runtime> allowed=yes
 $000862 DIRECT JMP target=$C00444 discovered=no external=yes
 $000984 DIRECT JSR target=$C004C2 discovered=no external=yes
 ```
@@ -74,8 +75,10 @@ The discovery candidate cap is now 1024; Metal Slug currently discovers 397
 candidate entry/instruction-boundary addresses without truncation. The previous
 missing direct P-ROM targets (`$05DC1C`, `$05DC34`, `$024FB8`) are now
 discovered. Direct BIOS/system-ROM targets are classified as external runtime
-fallbacks instead of missing P-ROM discovery, leaving one computed runtime
-`JSR (A0)` as the current dispatch frontier.
+fallbacks instead of missing P-ROM discovery. The RAM-loaded callback at
+`$0006C8` (`MOVEA.L (A6),A0; JSR (A0)`) is explicitly classified in
+`games/mslug.toml` as a runtime-computed dispatch site, so it remains visible in
+the audit without failing the static P-ROM dispatch-gap check.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
@@ -1255,9 +1258,9 @@ Use this loop:
 
 Immediate next slice:
 
-- Resolve or deliberately classify the current Metal Slug dispatch frontier:
-  `$0006C8` `JSR (A0)` after `MOVEA.L (A6),A0`.
-- Then rerun the Metal Slug smoke and update the audit/tracker again.
+- Move from static CPU recompilation smoke to a small executable checkpoint:
+  wire the generated Metal Slug C into a host harness or runner path far enough
+  to enter cartridge code and observe the first runtime fallback/hardware miss.
 - Keep NeoGeo timer/VBlank integration queued until the current CPU dispatch
   backlog is narrower.
 

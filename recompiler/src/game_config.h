@@ -5,6 +5,7 @@
 #define NG_GAME_CONFIG_MAX_FUNCTIONS 128u
 #define NG_GAME_CONFIG_MAX_DISCOVERY_FILES 32u
 #define NG_GAME_CONFIG_MAX_JUMP_TABLES 64u
+#define NG_GAME_CONFIG_MAX_RUNTIME_DISPATCHES 64u
 #define NG_GAME_CONFIG_MAX_PATH 256u
 
 typedef enum NgGameConfigJumpTableFormat {
@@ -30,6 +31,8 @@ typedef struct NgGameConfig {
     uint32_t discovery_file_count;
     NgGameConfigJumpTable jump_tables[NG_GAME_CONFIG_MAX_JUMP_TABLES];
     uint32_t jump_table_count;
+    uint32_t runtime_dispatch[NG_GAME_CONFIG_MAX_RUNTIME_DISPATCHES];
+    uint32_t runtime_dispatch_count;
     int truncated;
 } NgGameConfig;
 

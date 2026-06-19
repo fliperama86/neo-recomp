@@ -113,6 +113,9 @@ int main(void) {
             "entry = [0x000120]\n"
             "extra = [0x000130]\n"
             "\n"
+            "[dispatch]\n"
+            "runtime = [0x0001C0]\n"
+            "\n"
             "[[jump_table]]\n"
             "start = 0x000190\n"
             "end = 0x000194\n"
@@ -151,7 +154,10 @@ int main(void) {
             "\n"
             "[functions]\n"
             "entry = [0x000040]\n"
-            "extra = [0x000100]\n");
+            "extra = [0x000100]\n"
+            "\n"
+            "[dispatch]\n"
+            "runtime = [0x0001B0]\n");
     CHECK(fclose(out) == 0);
 
     CHECK(ng_game_config_load(parent, &config));
@@ -163,6 +169,9 @@ int main(void) {
     CHECK(config.extra[1] == 0x000130u);
     CHECK(config.extra[2] == 0x000140u);
     CHECK(config.discovery_file_count == 2u);
+    CHECK(config.runtime_dispatch_count == 2u);
+    CHECK(config.runtime_dispatch[0] == 0x0001B0u);
+    CHECK(config.runtime_dispatch[1] == 0x0001C0u);
     CHECK(config.jump_table_count == 2u);
     CHECK(config.jump_tables[0].start == 0x000180u);
     CHECK(config.jump_tables[0].end == 0x000188u);
@@ -184,6 +193,7 @@ int main(void) {
     CHECK(config.entry_count == 0u);
     CHECK(config.extra_count == 0u);
     CHECK(config.discovery_file_count == 0u);
+    CHECK(config.runtime_dispatch_count == 0u);
     CHECK(config.jump_table_count == 0u);
     CHECK(!config.truncated);
 

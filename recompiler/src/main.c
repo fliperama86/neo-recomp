@@ -134,9 +134,10 @@ static int emit_c_file(const char *path,
 
 static int emit_dispatch_audit_file(const char *path,
                                     const NgProgramRom *rom,
-                                    const NgFunctionDiscovery *discovery) {
+                                    const NgFunctionDiscovery *discovery,
+                                    const NgGameConfig *config) {
     NgDispatchAudit audit;
-    if (!ng_dispatch_audit_build(rom, discovery, &audit)) {
+    if (!ng_dispatch_audit_build_with_config(rom, discovery, config, &audit)) {
         fprintf(stderr, "failed to build dispatch audit\n");
         return 0;
     }
@@ -156,12 +157,13 @@ static int emit_dispatch_audit_file(const char *path,
         return 0;
     }
 
-    printf("dispatch audit: %s (sites=%u missing_direct=%u external_direct=%u computed=%u jump_tables=%u)\n",
+    printf("dispatch audit: %s (sites=%u missing_direct=%u external_direct=%u computed=%u runtime_computed=%u jump_tables=%u)\n",
            path,
            audit.count,
            audit.missing_direct_count,
            audit.external_direct_count,
            audit.computed_count,
+           audit.runtime_computed_count,
            audit.jump_table_count);
     return 1;
 }
@@ -225,11 +227,12 @@ int main(int argc, char **argv) {
     }
 
     printf("game config: %s\n", game_path);
-    printf("game config functions: entry=%u extra=%u discovery_files=%u jump_tables=%u%s\n",
+    printf("game config functions: entry=%u extra=%u discovery_files=%u jump_tables=%u runtime_dispatch=%u%s\n",
            game_config.entry_count,
            game_config.extra_count,
            game_config.discovery_file_count,
            game_config.jump_table_count,
+           game_config.runtime_dispatch_count,
            game_config.truncated ? " (truncated)" : "");
     printf("program image: %u bytes\n", rom.size);
     if (rom.size >= 8) {
@@ -264,13 +267,19 @@ int main(int argc, char **argv) {
                         return 1;
                     }
                     if (emit_dispatch_audit_path &&
-                        !emit_dispatch_audit_file(emit_dispatch_audit_path, &rom, &discovery)) {
+                        !emit_dispatch_audit_file(emit_dispatch_audit_path,
+                                                  &rom,
+                                                  &discovery,
+                                                  &game_config)) {
                         ng_program_rom_free(&rom);
                         return 1;
                     }
                     if (fail_on_dispatch_gaps) {
                         NgDispatchAudit audit;
-                        if (!ng_dispatch_audit_build(&rom, &discovery, &audit)) {
+                        if (!ng_dispatch_audit_build_with_config(&rom,
+                                                                 &discovery,
+                                                                 &game_config,
+                                                                 &audit)) {
                             fprintf(stderr, "failed to build dispatch audit\n");
                             ng_program_rom_free(&rom);
                             return 1;

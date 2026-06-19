@@ -14,3 +14,7 @@ bank_window_size = 0x100000
 [functions]
 entry = []
 extra = []
+
+[dispatch]
+# Callback target is loaded from RAM through A6 and dispatched via JSR (A0).
+runtime = [0x0006C8]
