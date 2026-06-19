@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `ADDQ`/`SUBQ` immediate 1-8 quick
+  operations against the Motorola/NXP Programmer's Reference Manual,
+  including word/long-only address-register destinations. The validator now
+  requires exact quick-op destination EA payloads and canonical Dn,
+  address-displacement, and absolute legacy metadata while rejecting stray
+  source, condition, target, and malformed top-level form/register/absolute/
+  displacement metadata. `test_m68k_validate` covered malformed Dn, An,
+  address-displacement, and legacy-field metadata red first.
 - local: Fact-checked MC68000 destination-only `CLR`/`NEG`/`NEGX`/`NOT`
   and byte-only `NBCD`/`TAS` data-alterable forms against the
   Motorola/NXP Programmer's Reference Manual. The shared unary validator now

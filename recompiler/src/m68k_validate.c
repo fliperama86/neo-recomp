@@ -336,22 +336,33 @@ static int quick_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
     case NG_M68K_EA_AIND:
     case NG_M68K_EA_APOST:
     case NG_M68K_EA_APRE:
-        if (ea->reg >= 8u) {
+        if (!ea_simple_register_payload(ea)) {
             return 0;
         }
         *out_ext = 0u;
         return 1;
     case NG_M68K_EA_ADISP:
+        if (!ea_address_displacement_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
     case NG_M68K_EA_AINDEX:
-        if (ea->reg >= 8u) {
+        if (!ea_address_index_payload(ea)) {
             return 0;
         }
         *out_ext = 2u;
         return 1;
     case NG_M68K_EA_ABS_W:
+        if (!ea_abs_word_payload(ea)) {
+            return 0;
+        }
         *out_ext = 2u;
         return 1;
     case NG_M68K_EA_ABS_L:
+        if (!ea_abs_long_payload(ea)) {
+            return 0;
+        }
         *out_ext = 4u;
         return 1;
     default:
@@ -359,24 +370,57 @@ static int quick_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
     }
 }
 
+static int validate_quick_destination_legacy_fields(const NgM68kInstr *instr) {
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        return instr->form == NG_M68K_FORM_DREG &&
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_ADISP) {
+        return instr->form == NG_M68K_FORM_AREG_DISP &&
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == instr->dst.displacement;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_ABS_W ||
+        instr->dst.mode == NG_M68K_EA_ABS_L) {
+        return instr->form == NG_M68K_FORM_ABS &&
+               instr->reg == 0u &&
+               instr->absolute_addr == instr->dst.absolute_addr &&
+               instr->displacement == 0;
+    }
+
+    return instr->form == NG_M68K_FORM_NONE &&
+           instr->reg == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0;
+}
+
 static int validate_quick_op(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
 
     if (instr->immediate < 1u ||
         instr->immediate > 8u ||
-        instr->src.mode != NG_M68K_EA_NONE ||
+        !ea_is_empty(&instr->src) ||
         instr->src_reg != 0u ||
+        instr->condition != 0u ||
+        instr->target != 0u ||
         !quick_alterable_ext_length(&instr->dst, &ext_len)) {
         return 0;
     }
 
     if (instr->dst.mode == NG_M68K_EA_AREG) {
         return valid_word_or_long(instr->size) &&
+               validate_quick_destination_legacy_fields(instr) &&
                instr->byte_length == (uint8_t)(2u + ext_len);
     }
 
     return valid_size(instr->size) &&
            ea_is_data_alterable(&instr->dst) &&
+           validate_quick_destination_legacy_fields(instr) &&
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
