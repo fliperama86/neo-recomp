@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Adapted another `segagenesisrecomp` project-scaffolding pattern:
+  `[game].discovery_files` now lets a game config merge additional TOML seed
+  files relative to the parent config, and the CLI reports the discovery-file
+  count.
 - local: Added basic generated architectural PC maintenance. Dispatcher entry,
   instruction-boundary interrupt polls, linear fall-through, and `STOP`
   completion now update `g_ng_m68k.pc`, with generated-exec coverage for
@@ -470,7 +474,7 @@ Real-ROM smoke remains a near follow-up once a local `.neo` input is available.
 
 Near follow-ups:
 
-- Parse `games/*.toml` into machine-checkable discovery/runtime metadata.
+- Parse `games/*.toml` beyond function/discovery-file seeds into machine-checkable discovery/runtime metadata.
 - Enforce dispatch-audit gaps in smoke runs and add interior-label checks.
 - Migrate more instruction families onto the generic EA helpers instead of adding bespoke forms.
 - Broaden the decode/codegen legality layer so invalid source/destination EA combinations fail loudly.

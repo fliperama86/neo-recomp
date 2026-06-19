@@ -2,6 +2,7 @@
 name = "Metal Slug - Super Vehicle-001"
 short_name = "mslug"
 year = 1996
+discovery_files = []
 
 [program]
 address_space = "m68k"
@@ -13,4 +14,3 @@ bank_window_size = 0x100000
 [functions]
 entry = []
 extra = []
-

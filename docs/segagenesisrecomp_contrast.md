@@ -27,7 +27,7 @@ set of patterns to adapt deliberately.
 | Supervisor/user stacks | Active `SSP`/`USP` switching is now covered for full-SR writes, exception entry, `STOP`, and `RTE`. | Runtime state comments assume `A7 = SSP` and `USP` is a separate shadow; good enough for Genesis game paths, not a complete user-mode model. | Do **not** copy this simplification; keep the official MC68000 stack model. |
 | Interrupts/STOP | Runtime-approved `STOP` wake, instruction-boundary interrupts, a basic IPL/level-7-edge runtime controller, cartridge VBlank/timer/reset-pending source APIs, and memory-mapped `REG_IRQACK` clearing are covered; timer/VBlank scheduling remains open. | Runtime has cooperative VBlank and STOP yield hooks, but many semantics are tuned to Genesis/Sonic. | Use it as a design reference for runtime scheduling, not as a 68000 spec oracle. |
 | Cycle timing | Missing. | Emits estimated per-instruction cycles and uses a cycle accumulator for VBlank/audio timing. | Add only after semantic correctness; make cycle estimates separately testable. |
-| Game config | `--game` now parses `[functions].entry` and `[functions].extra` as discovery seeds. | TOML config drives output prefix, disassembly discovery files, RAM layout, jump tables, protected ranges, code-address oracles, and per-game hooks. | Expand `games/*.toml` beyond function seeds before serious real-ROM smoke work. |
+| Game config | `--game` now parses `[functions].entry`, `[functions].extra`, and `[game].discovery_files` as mergeable discovery seeds. | TOML config drives output prefix, disassembly discovery files, RAM layout, jump tables, protected ranges, code-address oracles, and per-game hooks. | Keep expanding `games/*.toml` beyond seed merging before serious real-ROM smoke work. |
 | Tracking docs | Added `docs/68k_correctness_tracker.md`; progress and finish plan exist. | Has `COVERAGE.md`, `PRINCIPLES.md`, debug docs, and generated dispatch audits. | Keep our tracker, and add machine-generated audits as implementation catches up. |
 
 ## 2026-06-19 Follow-Up Contrast
@@ -42,8 +42,9 @@ CPU work. Fact-checked local files show two different strengths:
   exception paths, so copying that implementation would regress CPU behavior.
 - The reference is ahead on **project scaffolding**: `game_config.c`, generated
   dispatch audits, disassembly-sourced seeds/jump tables, interior-label checks,
-  and L3 oracle tests. Those are still actionable for us because they reduce
-  real-ROM guesswork.
+  and L3 oracle tests. We have now adapted the first discovery-file seed merge,
+  but jump-table metadata, protected ranges, code-address oracles, and L3 oracle
+  parity remain actionable because they reduce real-ROM guesswork.
 - The reference README advertises a stack-skip fix for `addq.l #4,sp; rts`
   because its generated calls can behave like host calls. Our stack-backed
   `JSR`/`RTS` model now has a generated-exec regression proving the
@@ -75,8 +76,9 @@ CPU work. Fact-checked local files show two different strengths:
 4. **Discovery data pipeline**
    - Reference TOML can merge disassembly-generated seeds, subroutine labels,
      jump tables, protected ranges, and code-address lists.
-   - NeoGeo adaptation: parse `games/*.toml`, then support generated discovery
-     files for known BIOS/game disassembly sources or analysis outputs.
+   - NeoGeo adaptation: `[game].discovery_files` now merges additional seed TOML
+     files; next adapt jump-table directives, protected ranges, and code-address
+     oracles for known BIOS/game disassembly sources or analysis outputs.
 
 5. **Dispatch and interior-label audits**
    - Reference generated dispatch exposes table accessors and writes a dispatch
@@ -110,8 +112,9 @@ These reinforce items already in `68k_correctness_tracker.md`:
    VBlank/timer scheduling, and interrupt priority.
 2. Extend the new **dispatch/jump-table audit** into unresolved dynamic
    control-flow enforcement before the next serious real-ROM smoke loop.
-3. Expand **game TOML parsing** beyond function seeds so `--game` drives more
-   discovery/runtime metadata.
+3. Expand **game TOML parsing** beyond function/discovery-file seeds so
+   `--game` drives jump-table, protected-range, code-address, and runtime
+   metadata.
 4. **Broaden the post-decode legality validator** and route invalid encodings
    to loud diagnostics/trap behavior.
 5. Add a **trusted oracle harness** for CPU semantics and per-function parity.

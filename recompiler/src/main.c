@@ -221,9 +221,10 @@ int main(int argc, char **argv) {
     }
 
     printf("game config: %s\n", game_path);
-    printf("game config functions: entry=%u extra=%u%s\n",
+    printf("game config functions: entry=%u extra=%u discovery_files=%u%s\n",
            game_config.entry_count,
            game_config.extra_count,
+           game_config.discovery_file_count,
            game_config.truncated ? " (truncated)" : "");
     printf("program image: %u bytes\n", rom.size);
     if (rom.size >= 8) {
