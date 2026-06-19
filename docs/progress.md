@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 word-form `CHK`, `MULU`/`MULS`, and
+  `DIVU`/`DIVS` source/destination metadata against the Motorola/NXP
+  Programmer's Reference Manual. The validator now rejects malformed
+  word-data-source-to-Dn metadata, including impossible source-EA instruction
+  lengths, bad data-register destinations, and stray top-level immediate/source
+  register fields. `test_m68k_validate` covered the failures first.
 - local: Fact-checked immediate arithmetic/logical `#data,<ea>` forms against
   the Motorola/NXP Programmer's Reference Manual. The validator now rejects
   malformed `ADDI`/`SUBI`/`ORI`/`ANDI`/`EORI` metadata with impossible

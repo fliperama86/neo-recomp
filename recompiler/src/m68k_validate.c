@@ -173,6 +173,28 @@ static int valid_single_ea_length(uint8_t byte_length) {
     return byte_length == 2u || byte_length == 4u || byte_length == 6u;
 }
 
+static int valid_word_data_source_length(const NgM68kEa *ea,
+                                         uint8_t byte_length) {
+    switch (ea->mode) {
+    case NG_M68K_EA_DREG:
+    case NG_M68K_EA_AIND:
+    case NG_M68K_EA_APOST:
+    case NG_M68K_EA_APRE:
+        return byte_length == 2u;
+    case NG_M68K_EA_ADISP:
+    case NG_M68K_EA_AINDEX:
+    case NG_M68K_EA_ABS_W:
+    case NG_M68K_EA_PC_DISP:
+    case NG_M68K_EA_PC_INDEX:
+    case NG_M68K_EA_IMM:
+        return byte_length == 4u;
+    case NG_M68K_EA_ABS_L:
+        return byte_length == 6u;
+    default:
+        return 0;
+    }
+}
+
 static int validate_address_reg_op(const NgM68kInstr *instr) {
     return valid_word_or_long(instr->size) &&
            valid_single_ea_length(instr->byte_length) &&
@@ -207,6 +229,16 @@ static int validate_immediate_to_ea(const NgM68kInstr *instr) {
            instr->src_reg == 0u &&
            instr->src.mode == NG_M68K_EA_NONE &&
            ea_is_data_alterable(&instr->dst);
+}
+
+static int validate_word_data_to_dreg(const NgM68kInstr *instr) {
+    return instr->size == 2u &&
+           valid_word_data_source_length(&instr->src, instr->byte_length) &&
+           instr->immediate == 0u &&
+           instr->src_reg == 0u &&
+           ea_is_data(&instr->src) &&
+           instr->dst.mode == NG_M68K_EA_DREG &&
+           instr->dst.reg < 8u;
 }
 
 static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
@@ -437,16 +469,12 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_CMPI:
         return validate_cmpi(instr);
     case NG_M68K_CHK:
-        return instr->size == 2u &&
-               ea_is_data(&instr->src) &&
-               instr->dst.mode == NG_M68K_EA_DREG;
+        return validate_word_data_to_dreg(instr);
     case NG_M68K_MULU:
     case NG_M68K_MULS:
     case NG_M68K_DIVU:
     case NG_M68K_DIVS:
-        return instr->size == 2u &&
-               ea_is_data(&instr->src) &&
-               instr->dst.mode == NG_M68K_EA_DREG;
+        return validate_word_data_to_dreg(instr);
     case NG_M68K_EXT:
         return instr->byte_length == 2u &&
                (instr->size == 2u || instr->size == 4u) &&
