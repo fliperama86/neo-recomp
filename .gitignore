@@ -7,3 +7,5 @@ roms/
 *.vcxproj.filters
 *.vcxproj.user
 compile_commands.json
+
+docs/.obsidian/
