@@ -169,6 +169,19 @@ static int valid_immediate_width(uint8_t size, uint32_t immediate) {
     return size == 4u;
 }
 
+static int valid_single_ea_length(uint8_t byte_length) {
+    return byte_length == 2u || byte_length == 4u || byte_length == 6u;
+}
+
+static int validate_address_reg_op(const NgM68kInstr *instr) {
+    return valid_word_or_long(instr->size) &&
+           valid_single_ea_length(instr->byte_length) &&
+           instr->immediate == 0u &&
+           instr->src.mode != NG_M68K_EA_NONE &&
+           instr->dst.mode == NG_M68K_EA_AREG &&
+           instr->dst.reg < 8u;
+}
+
 static int validate_tst(const NgM68kInstr *instr) {
     return valid_size(instr->size) &&
            valid_tst_length(instr->byte_length) &&
@@ -295,15 +308,11 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                ea_is_move_source(&instr->src, instr->size) &&
                ea_is_data_alterable(&instr->dst);
     case NG_M68K_MOVEA:
-        return valid_word_or_long(instr->size) &&
-               instr->src.mode != NG_M68K_EA_NONE &&
-               instr->dst.mode == NG_M68K_EA_AREG;
+        return validate_address_reg_op(instr);
     case NG_M68K_ADDA:
     case NG_M68K_SUBA:
     case NG_M68K_CMPA:
-        return valid_word_or_long(instr->size) &&
-               instr->src.mode != NG_M68K_EA_NONE &&
-               instr->dst.mode == NG_M68K_EA_AREG;
+        return validate_address_reg_op(instr);
     case NG_M68K_EXG:
         return instr->size == 4u &&
                ((instr->src.mode == NG_M68K_EA_DREG &&

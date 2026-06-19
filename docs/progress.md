@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `MOVEA`, `ADDA`, `SUBA`, and `CMPA` address-register
+  destination forms against the Motorola/NXP Programmer's Reference Manual.
+  The validator now rejects malformed address-register-operation metadata with
+  invalid byte lengths, byte sizes, missing sources, bad destinations, or stray
+  top-level immediates while preserving valid word/long source EA forms.
+  `test_m68k_validate` covered the failures first.
 - local: Fact-checked `TST <ea>` and `CMPI #data,<ea>` against the
   Motorola/NXP Programmer's Reference Manual with MC68000 scope. The validator
   now rejects malformed `TST` and `CMPI` metadata, including stray operands,
