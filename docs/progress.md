@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened binary `ADD`/`SUB`/`CMP`/`OR`/`AND`/`EOR`
+  validation so opcode operation, direction, size, source register,
+  destination register, and EA bits must match decoded metadata.
+  `test_m68k_validate` covered cross-operation, register-field, and
+  direction-form opcode mismatches red first.
 - local: Tightened immediate logical/arithmetic/compare validation so
   `ORI`/`ANDI`/`SUBI`/`ADDI`/`EORI`/`CMPI` opcodes must match decoded
   mnemonic, size, and destination EA bits in addition to immediate width

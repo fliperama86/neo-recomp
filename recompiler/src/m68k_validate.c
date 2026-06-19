@@ -1463,6 +1463,10 @@ static int validate_dbcc(const NgM68kInstr *instr) {
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t base_opcode = 0u;
+    uint16_t size_bits = 0u;
+    uint16_t expected_opcode = 0u;
     int valid_src = allow_areg_source ?
         exact_addsubcmp_source_ext_length(instr, &ext_len) :
         exact_data_source_ext_length(instr, &ext_len);
@@ -1471,20 +1475,58 @@ static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
         instr->mnemonic == NG_M68K_SUB ||
         instr->mnemonic == NG_M68K_CMP;
 
-    return valid_size(instr->size) &&
-           instr->immediate == 0u &&
-           instr->condition == 0u &&
-           instr->target == 0u &&
-           instr->absolute_addr == 0u &&
-           instr->displacement == 0 &&
-           instr->src_reg == instr->src.reg &&
-           valid_src &&
-           instr->dst.mode == NG_M68K_EA_DREG &&
-           ea_simple_register_payload(&instr->dst) &&
-           instr->reg == instr->dst.reg &&
-           instr->form == (alu_form ? NG_M68K_FORM_DREG_TO_DREG :
-                                      NG_M68K_FORM_NONE) &&
-           instr->byte_length == (uint8_t)(2u + ext_len);
+    switch (instr->mnemonic) {
+    case NG_M68K_OR:
+        base_opcode = 0x8000u;
+        break;
+    case NG_M68K_SUB:
+        base_opcode = 0x9000u;
+        break;
+    case NG_M68K_CMP:
+        base_opcode = 0xB000u;
+        break;
+    case NG_M68K_AND:
+        base_opcode = 0xC000u;
+        break;
+    case NG_M68K_ADD:
+        base_opcode = 0xD000u;
+        break;
+    default:
+        return 0;
+    }
+
+    if (instr->size == 1u) {
+        size_bits = 0x0000u;
+    } else if (instr->size == 2u) {
+        size_bits = 0x0040u;
+    } else if (instr->size == 4u) {
+        size_bits = 0x0080u;
+    } else {
+        return 0;
+    }
+
+    if (instr->immediate != 0u ||
+        instr->condition != 0u ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->displacement != 0 ||
+        instr->src_reg != instr->src.reg ||
+        !valid_src ||
+        !ea_opcode_field(&instr->src, &ea_field) ||
+        instr->dst.mode != NG_M68K_EA_DREG ||
+        !ea_simple_register_payload(&instr->dst) ||
+        instr->reg != instr->dst.reg ||
+        instr->form != (alu_form ? NG_M68K_FORM_DREG_TO_DREG :
+                                  NG_M68K_FORM_NONE) ||
+        instr->byte_length != (uint8_t)(2u + ext_len)) {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)(base_opcode |
+                                 ((uint16_t)instr->dst.reg << 9) |
+                                 size_bits |
+                                 ea_field);
+    return instr->opcode == expected_opcode;
 }
 
 static int validate_binary_destination_legacy_fields(const NgM68kInstr *instr,
@@ -1523,28 +1565,94 @@ static int validate_binary_destination_legacy_fields(const NgM68kInstr *instr,
 
 static int validate_dreg_to_memory_binary(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t base_opcode = 0u;
+    uint16_t size_bits = 0u;
+    uint16_t expected_opcode = 0u;
 
-    return valid_size(instr->size) &&
-           instr->immediate == 0u &&
-           instr->src.mode == NG_M68K_EA_DREG &&
-           ea_simple_register_payload(&instr->src) &&
-           instr->src_reg == instr->src.reg &&
-           exact_memory_alterable_ext_length(&instr->dst, &ext_len) &&
-           validate_binary_destination_legacy_fields(instr, 0) &&
-           instr->byte_length == (uint8_t)(2u + ext_len);
+    switch (instr->mnemonic) {
+    case NG_M68K_OR:
+        base_opcode = 0x8000u;
+        break;
+    case NG_M68K_SUB:
+        base_opcode = 0x9000u;
+        break;
+    case NG_M68K_AND:
+        base_opcode = 0xC000u;
+        break;
+    case NG_M68K_ADD:
+        base_opcode = 0xD000u;
+        break;
+    default:
+        return 0;
+    }
+
+    if (instr->size == 1u) {
+        size_bits = 0x0000u;
+    } else if (instr->size == 2u) {
+        size_bits = 0x0040u;
+    } else if (instr->size == 4u) {
+        size_bits = 0x0080u;
+    } else {
+        return 0;
+    }
+
+    if (instr->immediate != 0u ||
+        instr->src.mode != NG_M68K_EA_DREG ||
+        !ea_simple_register_payload(&instr->src) ||
+        instr->src_reg != instr->src.reg ||
+        !exact_memory_alterable_ext_length(&instr->dst, &ext_len) ||
+        !ea_opcode_field(&instr->dst, &ea_field) ||
+        !validate_binary_destination_legacy_fields(instr, 0) ||
+        instr->byte_length != (uint8_t)(2u + ext_len)) {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)(base_opcode |
+                                 ((uint16_t)instr->src.reg << 9) |
+                                 0x0100u |
+                                 size_bits |
+                                 ea_field);
+    return instr->opcode == expected_opcode;
 }
 
 static int validate_dreg_to_data_alterable_binary(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t size_bits = 0u;
+    uint16_t expected_opcode = 0u;
 
-    return valid_size(instr->size) &&
-           instr->immediate == 0u &&
-           instr->src.mode == NG_M68K_EA_DREG &&
-           ea_simple_register_payload(&instr->src) &&
-           instr->src_reg == instr->src.reg &&
-           exact_data_alterable_ext_length(&instr->dst, &ext_len) &&
-           validate_binary_destination_legacy_fields(instr, 1) &&
-           instr->byte_length == (uint8_t)(2u + ext_len);
+    if (instr->mnemonic != NG_M68K_EOR) {
+        return 0;
+    }
+
+    if (instr->size == 1u) {
+        size_bits = 0x0000u;
+    } else if (instr->size == 2u) {
+        size_bits = 0x0040u;
+    } else if (instr->size == 4u) {
+        size_bits = 0x0080u;
+    } else {
+        return 0;
+    }
+
+    if (instr->immediate != 0u ||
+        instr->src.mode != NG_M68K_EA_DREG ||
+        !ea_simple_register_payload(&instr->src) ||
+        instr->src_reg != instr->src.reg ||
+        !exact_data_alterable_ext_length(&instr->dst, &ext_len) ||
+        !ea_opcode_field(&instr->dst, &ea_field) ||
+        !validate_binary_destination_legacy_fields(instr, 1) ||
+        instr->byte_length != (uint8_t)(2u + ext_len)) {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)(0xB000u |
+                                 ((uint16_t)instr->src.reg << 9) |
+                                 0x0100u |
+                                 size_bits |
+                                 ea_field);
+    return instr->opcode == expected_opcode;
 }
 
 static int validate_cmpm(const NgM68kInstr *instr) {
