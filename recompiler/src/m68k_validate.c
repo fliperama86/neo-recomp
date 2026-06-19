@@ -1,20 +1,5 @@
 #include "m68k_validate.h"
 
-static int ea_is_control(const NgM68kEa *ea) {
-    switch (ea->mode) {
-    case NG_M68K_EA_AIND:
-    case NG_M68K_EA_ADISP:
-    case NG_M68K_EA_AINDEX:
-    case NG_M68K_EA_ABS_W:
-    case NG_M68K_EA_ABS_L:
-    case NG_M68K_EA_PC_DISP:
-    case NG_M68K_EA_PC_INDEX:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
 static int ea_is_memory_alterable(const NgM68kEa *ea) {
     switch (ea->mode) {
     case NG_M68K_EA_AIND:
@@ -58,24 +43,6 @@ static int ea_is_move_source(const NgM68kEa *ea, uint8_t size) {
         return size != 1u;
     }
     return ea_is_data(ea);
-}
-
-static int ea_is_movem_reg_to_mem(const NgM68kEa *ea) {
-    switch (ea->mode) {
-    case NG_M68K_EA_AIND:
-    case NG_M68K_EA_APRE:
-    case NG_M68K_EA_ADISP:
-    case NG_M68K_EA_AINDEX:
-    case NG_M68K_EA_ABS_W:
-    case NG_M68K_EA_ABS_L:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static int ea_is_movem_mem_to_reg(const NgM68kEa *ea) {
-    return ea->mode == NG_M68K_EA_APOST || ea_is_control(ea);
 }
 
 static int no_ea_operands(const NgM68kInstr *instr) {
@@ -489,6 +456,77 @@ static int validate_move_sr_ccr(const NgM68kInstr *instr) {
     return instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
+static int movem_reg_to_mem_ext_length(const NgM68kEa *ea,
+                                       uint8_t *out_ext) {
+    switch (ea->mode) {
+    case NG_M68K_EA_AIND:
+    case NG_M68K_EA_APRE:
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    case NG_M68K_EA_ADISP:
+    case NG_M68K_EA_AINDEX:
+        if (ea->reg >= 8u ||
+            (ea->mode == NG_M68K_EA_AINDEX && ea->index_reg >= 8u)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_W:
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_L:
+        *out_ext = 4u;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int movem_mem_to_reg_ext_length(const NgM68kEa *ea,
+                                       uint8_t *out_ext) {
+    if (ea->mode == NG_M68K_EA_APOST) {
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    }
+    return control_source_ext_length(ea, out_ext);
+}
+
+static int validate_movem(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
+    if (!valid_word_or_long(instr->size) ||
+        instr->immediate > 0xFFFFu ||
+        instr->reg != 0u ||
+        instr->src_reg != 0u ||
+        instr->condition != 0u ||
+        instr->form != NG_M68K_FORM_NONE ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->displacement != 0) {
+        return 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_NONE &&
+        instr->dst.mode != NG_M68K_EA_NONE) {
+        return movem_reg_to_mem_ext_length(&instr->dst, &ext_len) &&
+               instr->byte_length == (uint8_t)(4u + ext_len);
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_NONE &&
+        instr->src.mode != NG_M68K_EA_NONE) {
+        return movem_mem_to_reg_ext_length(&instr->src, &ext_len) &&
+               instr->byte_length == (uint8_t)(4u + ext_len);
+    }
+
+    return 0;
+}
+
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
@@ -829,18 +867,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                 (instr->src.mode == NG_M68K_EA_ADISP &&
                  instr->dst.mode == NG_M68K_EA_DREG));
     case NG_M68K_MOVEM:
-        if (!valid_word_or_long(instr->size)) {
-            return 0;
-        }
-        if (instr->src.mode == NG_M68K_EA_NONE &&
-            instr->dst.mode != NG_M68K_EA_NONE) {
-            return ea_is_movem_reg_to_mem(&instr->dst);
-        }
-        if (instr->dst.mode == NG_M68K_EA_NONE &&
-            instr->src.mode != NG_M68K_EA_NONE) {
-            return ea_is_movem_mem_to_reg(&instr->src);
-        }
-        return 0;
+        return validate_movem(instr);
     case NG_M68K_MOVE_SR:
     case NG_M68K_MOVE_CCR:
         return validate_move_sr_ccr(instr);

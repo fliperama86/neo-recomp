@@ -977,6 +977,22 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x4C, 0xBA, 0x00, 0x03, 0x00, 0x10 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0x1000u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVEM);
+        CHECK(instr.byte_length == 6);
+        CHECK(instr.size == 2);
+        CHECK(instr.immediate == 0x0003u);
+        CHECK(instr.src.mode == NG_M68K_EA_PC_DISP);
+        CHECK(instr.src.displacement == 0x10);
+        CHECK(instr.src.absolute_addr == 0x1014u);
+        CHECK(instr.dst.mode == NG_M68K_EA_NONE);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVEM.W ($001014,PC),#$0003") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x48, 0xE7, 0x80, 0x00 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

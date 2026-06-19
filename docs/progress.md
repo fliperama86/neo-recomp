@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `MOVEM` register-list transfers against the
+  Motorola/NXP Programmer's Reference Manual. The validator now requires
+  word/long size, a 16-bit register mask, exact `4 + EA-extension` instruction
+  lengths, no stray legacy fields, register-to-memory control-alterable or
+  predecrement destinations, and memory-to-register control or postincrement
+  sources. `test_m68k_validate` covered malformed metadata red first, and
+  `test_m68k_decode` now covers a PC-displacement memory-to-register form.
 - local: Fact-checked MC68000 `MOVE SR,<ea>`, `MOVE <ea>,SR`, and
   `MOVE <ea>,CCR` forms against the Motorola/NXP Programmer's Reference
   Manual. The validator now requires exact word-sized data/data-alterable EA
