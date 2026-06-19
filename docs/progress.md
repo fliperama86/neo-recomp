@@ -207,6 +207,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added another CPU-only validator slice for MC68000 system/control
+  forms. `test_m68k_validate` now covers `ORI`/`ANDI`/`EORI` to `CCR`/`SR`,
+  `MOVE USP`, `TRAP`, `STOP`, `NOP`, `RESET`, `RTE`, `RTR`, `RTS`, `TRAPV`,
+  and `ILLEGAL`/A-line/F-line legality, including invalid sizes,
+  immediates, operands, directions, and instruction lengths.
 - local: Continued the CPU-only MC68000 legality pass against the Motorola/NXP
   Programmer's Reference Manual. The validator now catches invalid
   `ADDA`/`SUBA`/`CMPA`, `MOVEA`, `EXG`, `LINK`/`UNLK`, `MOVEP`, `MOVEM`,

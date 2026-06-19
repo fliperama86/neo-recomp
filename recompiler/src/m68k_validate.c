@@ -71,6 +71,11 @@ static int ea_is_movem_mem_to_reg(const NgM68kEa *ea) {
     return ea->mode == NG_M68K_EA_APOST || ea_is_control(ea);
 }
 
+static int no_ea_operands(const NgM68kInstr *instr) {
+    return instr->src.mode == NG_M68K_EA_NONE &&
+           instr->dst.mode == NG_M68K_EA_NONE;
+}
+
 static int valid_size(uint8_t size) {
     return size == 1u || size == 2u || size == 4u;
 }
@@ -84,6 +89,53 @@ static int valid_extend_pair(const NgM68kInstr *instr) {
             instr->dst.mode == NG_M68K_EA_DREG) ||
            (instr->src.mode == NG_M68K_EA_APRE &&
             instr->dst.mode == NG_M68K_EA_APRE);
+}
+
+static int valid_no_operand_2byte(const NgM68kInstr *instr) {
+    return instr->byte_length == 2u &&
+           instr->size == 0u &&
+           instr->immediate == 0u &&
+           instr->reg == 0u &&
+           instr->src_reg == 0u &&
+           no_ea_operands(instr);
+}
+
+static int validate_move_usp(const NgM68kInstr *instr) {
+    if (instr->byte_length != 2u ||
+        instr->size != 4u ||
+        instr->reg >= 8u) {
+        return 0;
+    }
+    if (instr->src.mode == NG_M68K_EA_AREG &&
+        instr->src.reg == instr->reg &&
+        instr->dst.mode == NG_M68K_EA_NONE) {
+        return 1;
+    }
+    if (instr->dst.mode == NG_M68K_EA_AREG &&
+        instr->dst.reg == instr->reg &&
+        instr->src.mode == NG_M68K_EA_NONE) {
+        return 1;
+    }
+    return 0;
+}
+
+static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
+    if (instr->byte_length != 4u || !no_ea_operands(instr)) {
+        return 0;
+    }
+
+    switch (instr->mnemonic) {
+    case NG_M68K_ORI_TO_CCR:
+    case NG_M68K_ANDI_TO_CCR:
+    case NG_M68K_EORI_TO_CCR:
+        return instr->size == 1u && instr->immediate <= 0xFFu;
+    case NG_M68K_ORI_TO_SR:
+    case NG_M68K_ANDI_TO_SR:
+    case NG_M68K_EORI_TO_SR:
+        return instr->size == 2u && instr->immediate <= 0xFFFFu;
+    default:
+        return 0;
+    }
 }
 
 static int validate_shift_rotate(const NgM68kInstr *instr) {
@@ -112,6 +164,32 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     }
 
     switch (instr->mnemonic) {
+    case NG_M68K_NOP:
+    case NG_M68K_RESET:
+    case NG_M68K_RTE:
+    case NG_M68K_RTR:
+    case NG_M68K_RTS:
+    case NG_M68K_TRAPV:
+        return valid_no_operand_2byte(instr);
+    case NG_M68K_ILLEGAL:
+        return instr->byte_length == 2u &&
+               instr->size == 0u &&
+               (instr->immediate == 0u ||
+                instr->immediate == 10u ||
+                instr->immediate == 11u) &&
+               instr->reg == 0u &&
+               instr->src_reg == 0u &&
+               no_ea_operands(instr);
+    case NG_M68K_STOP:
+        return instr->byte_length == 4u &&
+               instr->size == 0u &&
+               instr->immediate <= 0xFFFFu &&
+               no_ea_operands(instr);
+    case NG_M68K_TRAP:
+        return instr->byte_length == 2u &&
+               instr->size == 0u &&
+               instr->immediate <= 15u &&
+               no_ea_operands(instr);
     case NG_M68K_JMP:
     case NG_M68K_JSR:
     case NG_M68K_PEA:
@@ -141,6 +219,8 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                  instr->dst.mode == NG_M68K_EA_AREG) ||
                 (instr->src.mode == NG_M68K_EA_DREG &&
                  instr->dst.mode == NG_M68K_EA_AREG));
+    case NG_M68K_MOVE_USP:
+        return validate_move_usp(instr);
     case NG_M68K_LINK:
     case NG_M68K_UNLK:
         return instr->reg < 8u;
@@ -183,6 +263,13 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_ANDI:
     case NG_M68K_EORI:
         return valid_size(instr->size) && ea_is_data_alterable(&instr->dst);
+    case NG_M68K_ORI_TO_CCR:
+    case NG_M68K_ORI_TO_SR:
+    case NG_M68K_ANDI_TO_CCR:
+    case NG_M68K_ANDI_TO_SR:
+    case NG_M68K_EORI_TO_CCR:
+    case NG_M68K_EORI_TO_SR:
+        return validate_immediate_to_ccr_sr(instr);
     case NG_M68K_ADD:
     case NG_M68K_SUB:
     case NG_M68K_OR:
