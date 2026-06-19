@@ -68,6 +68,37 @@ static const char *key_value_start(const char *line, const char *key) {
     return line;
 }
 
+static int is_path_separator(char c) {
+    return c == '/' || c == '\\';
+}
+
+static const char *last_path_separator(const char *path) {
+    const char *last = NULL;
+    if (!path) {
+        return NULL;
+    }
+    for (const char *p = path; *p; ++p) {
+        if (is_path_separator(*p)) {
+            last = p;
+        }
+    }
+    return last;
+}
+
+static int is_absolute_path(const char *path) {
+    if (!path || !*path) {
+        return 0;
+    }
+    if (is_path_separator(path[0])) {
+        return 1;
+    }
+    return isalpha((unsigned char)path[0]) && path[1] == ':';
+}
+
+static char join_separator_for_base(const char *base) {
+    return base && strchr(base, '\\') ? '\\' : '/';
+}
+
 static void dirname_of(const char *path, char *out, size_t out_size) {
     if (!out || out_size == 0u) {
         return;
@@ -78,7 +109,7 @@ static void dirname_of(const char *path, char *out, size_t out_size) {
         return;
     }
 
-    const char *slash = strrchr(path, '/');
+    const char *slash = last_path_separator(path);
     if (!slash) {
         snprintf(out, out_size, ".");
         return;
@@ -86,6 +117,8 @@ static void dirname_of(const char *path, char *out, size_t out_size) {
     size_t len = (size_t)(slash - path);
     if (len == 0u) {
         len = 1u;
+    } else if (len == 2u && path[1] == ':' && is_path_separator(path[2])) {
+        len = 3u;
     }
     if (len >= out_size) {
         len = out_size - 1u;
@@ -105,12 +138,14 @@ static void join_path(const char *base,
     if (!path || !*path) {
         return;
     }
-    if (path[0] == '/') {
+    if (is_absolute_path(path)) {
         snprintf(out, out_size, "%s", path);
     } else if (!base || !*base || strcmp(base, ".") == 0) {
         snprintf(out, out_size, "%s", path);
+    } else if (is_path_separator(base[strlen(base) - 1u])) {
+        snprintf(out, out_size, "%s%s", base, path);
     } else {
-        snprintf(out, out_size, "%s/%s", base, path);
+        snprintf(out, out_size, "%s%c%s", base, join_separator_for_base(base), path);
     }
 }
 

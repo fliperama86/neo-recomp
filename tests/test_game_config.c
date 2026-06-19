@@ -3,7 +3,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#define NG_PATH_SEP "\\"
+#define NG_MKDIR(path) _mkdir(path)
+#define NG_RMDIR(path) _rmdir(path)
+#else
 #include <unistd.h>
+#define NG_PATH_SEP "/"
+#define NG_MKDIR(path) mkdir((path), 0700)
+#define NG_RMDIR(path) rmdir(path)
+#endif
 
 #define CHECK(expr) do { \
     if (!(expr)) { \
@@ -12,12 +23,57 @@
     } \
 } while (0)
 
+static int open_temp_file(char *path, size_t path_size, FILE **out) {
+    if (!path || path_size == 0u || !out) {
+        return 0;
+    }
+    *out = NULL;
+
+    for (unsigned i = 0; i < 10000u; ++i) {
+        int len = snprintf(path, path_size, "neo-game-config-%u.toml", i);
+        if (len < 0 || (size_t)len >= path_size) {
+            return 0;
+        }
+
+        FILE *existing = fopen(path, "rb");
+        if (existing) {
+            fclose(existing);
+            continue;
+        }
+
+        *out = fopen(path, "w");
+        if (*out) {
+            return 1;
+        }
+    }
+
+    path[0] = '\0';
+    return 0;
+}
+
+static int make_temp_dir(char *path, size_t path_size) {
+    if (!path || path_size == 0u) {
+        return 0;
+    }
+
+    for (unsigned i = 0; i < 10000u; ++i) {
+        int len = snprintf(path, path_size, "neo-game-config-dir-%u", i);
+        if (len < 0 || (size_t)len >= path_size) {
+            return 0;
+        }
+        if (NG_MKDIR(path) == 0) {
+            return 1;
+        }
+    }
+
+    path[0] = '\0';
+    return 0;
+}
+
 int main(void) {
-    char path[] = "/tmp/neo-game-config-XXXXXX";
-    int fd = mkstemp(path);
-    CHECK(fd >= 0);
-    FILE *out = fdopen(fd, "w");
-    CHECK(out != NULL);
+    char path[256];
+    FILE *out = NULL;
+    CHECK(open_temp_file(path, sizeof(path), &out));
     fprintf(out,
             "[game]\n"
             "name = \"Synthetic\"\n"
@@ -32,7 +88,7 @@ int main(void) {
 
     NgGameConfig config;
     CHECK(ng_game_config_load(path, &config));
-    unlink(path);
+    remove(path);
 
     CHECK(config.entry_count == 2u);
     CHECK(config.entry[0] == 0x000040u);
@@ -42,14 +98,14 @@ int main(void) {
     CHECK(config.extra[1] == 512u);
     CHECK(!config.truncated);
 
-    char dir[] = "/tmp/neo-game-config-dir-XXXXXX";
-    CHECK(mkdtemp(dir) != NULL);
+    char dir[256];
+    CHECK(make_temp_dir(dir, sizeof(dir)));
     char subdir[256];
-    snprintf(subdir, sizeof(subdir), "%s/sub", dir);
-    CHECK(mkdir(subdir, 0700) == 0);
+    snprintf(subdir, sizeof(subdir), "%s" NG_PATH_SEP "sub", dir);
+    CHECK(NG_MKDIR(subdir) == 0);
 
     char child_a[256];
-    snprintf(child_a, sizeof(child_a), "%s/seeds.toml", dir);
+    snprintf(child_a, sizeof(child_a), "%s" NG_PATH_SEP "seeds.toml", dir);
     out = fopen(child_a, "w");
     CHECK(out != NULL);
     fprintf(out,
@@ -65,7 +121,10 @@ int main(void) {
     CHECK(fclose(out) == 0);
 
     char child_b[256];
-    snprintf(child_b, sizeof(child_b), "%s/sub/more.toml", dir);
+    snprintf(child_b,
+             sizeof(child_b),
+             "%s" NG_PATH_SEP "sub" NG_PATH_SEP "more.toml",
+             dir);
     out = fopen(child_b, "w");
     CHECK(out != NULL);
     fprintf(out,
@@ -74,7 +133,7 @@ int main(void) {
     CHECK(fclose(out) == 0);
 
     char parent[256];
-    snprintf(parent, sizeof(parent), "%s/game.toml", dir);
+    snprintf(parent, sizeof(parent), "%s" NG_PATH_SEP "game.toml", dir);
     out = fopen(parent, "w");
     CHECK(out != NULL);
     fprintf(out,
@@ -115,11 +174,11 @@ int main(void) {
     CHECK(config.jump_tables[1].format == NG_GAME_CONFIG_JUMP_TABLE_PCREL16);
     CHECK(!config.truncated);
 
-    unlink(parent);
-    unlink(child_a);
-    unlink(child_b);
-    rmdir(subdir);
-    rmdir(dir);
+    remove(parent);
+    remove(child_a);
+    remove(child_b);
+    NG_RMDIR(subdir);
+    NG_RMDIR(dir);
 
     ng_game_config_init(&config);
     CHECK(config.entry_count == 0u);

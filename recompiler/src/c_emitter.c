@@ -2596,6 +2596,31 @@ static void emit_stub_body(FILE *out, uint32_t addr) {
     fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n", addr & 0x00FFFFFFu);
 }
 
+static void emit_missing_branch_labels(FILE *out,
+                                       const NgM68kInstr *instrs,
+                                       uint32_t count,
+                                       const uint32_t *label_targets,
+                                       uint32_t label_count) {
+    for (uint32_t i = 0; i < label_count; ++i) {
+        int emitted = 0;
+        for (uint32_t j = 0; j < count; ++j) {
+            if ((instrs[j].addr & 0x00FFFFFFu) ==
+                (label_targets[i] & 0x00FFFFFFu)) {
+                emitted = 1;
+                break;
+            }
+        }
+        if (!emitted) {
+            char label[32];
+            ng_c_label_for_addr(label_targets[i], label, (unsigned)sizeof(label));
+            fprintf(out, "%s:\n", label);
+            fprintf(out, "    ng_generated_call(0x%08Xu);\n",
+                    label_targets[i] & 0x00FFFFFFu);
+            fprintf(out, "    return;\n");
+        }
+    }
+}
+
 static void emit_function_body(FILE *out,
                                const NgProgramRom *rom,
                                uint32_t start_addr,
@@ -2661,9 +2686,13 @@ static void emit_function_body(FILE *out,
             fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n",
                     instrs[i].addr & 0x00FFFFFFu);
             fprintf(out, "    return;\n");
+            emit_missing_branch_labels(out, instrs, count,
+                                       label_targets, label_count);
             return;
         }
         if (!emit_instr(out, &instrs[i], diagnostics)) {
+            emit_missing_branch_labels(out, instrs, count,
+                                       label_targets, label_count);
             return;
         }
         fprintf(out, "    g_ng_m68k.pc = 0x%08Xu;\n",
@@ -2672,23 +2701,7 @@ static void emit_function_body(FILE *out,
                 (instrs[i].addr + instrs[i].byte_length) & 0x00FFFFFFu);
     }
 
-    for (uint32_t i = 0; i < label_count; ++i) {
-        int emitted = 0;
-        for (uint32_t j = 0; j < count; ++j) {
-            if ((instrs[j].addr & 0x00FFFFFFu) == (label_targets[i] & 0x00FFFFFFu)) {
-                emitted = 1;
-                break;
-            }
-        }
-        if (!emitted) {
-            char label[32];
-            ng_c_label_for_addr(label_targets[i], label, (unsigned)sizeof(label));
-            fprintf(out, "%s:\n", label);
-            fprintf(out, "    ng_generated_call(0x%08Xu);\n",
-                    label_targets[i] & 0x00FFFFFFu);
-            fprintf(out, "    return;\n");
-        }
-    }
+    emit_missing_branch_labels(out, instrs, count, label_targets, label_count);
 
     fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n", pc & 0x00FFFFFFu);
 }

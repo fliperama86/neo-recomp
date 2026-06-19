@@ -50,24 +50,34 @@ expecting byte-identical machine code is not a useful invariant.
 
 ## Real ROM Frontier
 
-The last checked Metal Slug generated C reached this point in candidate `$000656`:
+Latest local Metal Slug smoke used:
 
-```text
-$000656: LEA $100080,A6
-$00065C: MOVE.L A6,$106E84
-$000662: ANDI.B #$1,($5A,A6)
-$000668: ANDI.B #$17,($69,A6)
-$00066E: TST.B ($44,A6)
-$000672: BEQ $000684
-$000676: MOVE.B ($44,A6),D0
-$00067A: MOVEQ #0,D1
-$00067C: SUBQ.B #1,D0
-$00067E: DC.W $D101
+```sh
+./build/neo-recomp --game games/mslug.toml \
+  --neo ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  --emit-c build/mslug_recomp.c \
+  --emit-dispatch-audit build/mslug_dispatch_audit.txt
+cc -std=c99 -Wall -Wextra -Iinclude -c build/mslug_recomp.c -o build/mslug_recomp.o
 ```
 
-`$D101` has since been confirmed as `ADDX.B D1,D0` and is now decoded/emitted
-locally with generated-exec coverage. The real `.neo` smoke needs to be rerun to
-find the next Metal Slug frontier.
+The generated C now compiles to an object. The current dispatch audit frontier is:
+
+```text
+function candidates: 397
+dispatch audit: sites=33 direct=31 missing_direct=2 computed=1 jump_tables=1 table_resolved=4 table_missing=0
+$0006C8 COMPUTED JSR target=<runtime>
+$000862 DIRECT JMP target=$C00444 discovered=no
+$000984 DIRECT JSR target=$C004C2 discovered=no
+```
+
+The discovery candidate cap is now 1024; Metal Slug currently discovers 397
+candidate entry/instruction-boundary addresses without truncation. The previous
+missing direct P-ROM targets (`$05DC1C`, `$05DC34`, `$024FB8`) are now
+discovered, leaving only BIOS targets outside the loaded P-ROM image plus one
+computed runtime `JSR (A0)`.
+
+The previous `$00067E: DC.W $D101` frontier has since been confirmed as
+`ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
 
 Previously visible real-output frontiers, now covered locally by the generic EA
 decode/emission path and/or generated-exec tests, include:
@@ -104,7 +114,9 @@ Covered by executable generated-C validation:
   following ROM word. Discovery now checks the post-decode validator before
   seeding fall-through instruction starts, so `UNKNOWN`/`INVALID`/unvalidated
   frontier words stop speculative scanning instead of becoming extra function
-  candidates
+  candidates. Emission now also materializes out-of-block branch-target
+  trampolines before returning from terminal blocks, so branches to discovered
+  labels outside the current linear body do not leave undeclared C labels
 - system/exception-control paths: `TRAP`, `TRAPV`, `ILLEGAL`, A-line,
   F-line, `RESET`, `STOP`, `RTE`, and `RTR` are recognized. `TRAP`,
   `TRAPV`, `ILLEGAL`, A-line, F-line, failed `CHK`, and divide-by-zero now

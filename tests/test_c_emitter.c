@@ -876,6 +876,36 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x0Au);
+        NgEmitDiagnostics diagnostics;
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x6606u); /* BNE $000008 */
+        write16(&rom, 0x02u, 0x4EB9u); /* JSR $000000 */
+        write32(&rom, 0x04u, 0x00000000u);
+        write16(&rom, 0x08u, 0x4E75u); /* RTS */
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+        discovery.addrs[discovery.count++] = 0x00000008u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c_checked(out, &rom, &discovery, &diagnostics));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(diagnostics.unsupported_count == 0u);
+        CHECK(diagnostics.decode_error_count == 0u);
+        CHECK(strstr(text, "/* $000000: Bcc.6 $000008 */") != NULL);
+        CHECK(strstr(text, "goto ng_label_000008;") != NULL);
+        CHECK(strstr(text, "/* $000002: JSR $000000 */") != NULL);
+        CHECK(strstr(text, "ng_label_000008:") != NULL);
+        CHECK(strstr(text, "ng_generated_call(0x00000008u);") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x04u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x4E72u); /* STOP #$2700 */

@@ -306,5 +306,26 @@ int main(void) {
         ng_program_rom_free(&rom);
     }
 
+    {
+        const uint32_t seed_count = 300u;
+        NgProgramRom rom = make_rom(seed_count * 2u);
+        uint32_t seeds[300];
+        CHECK(rom.data != NULL);
+
+        for (uint32_t i = 0; i < seed_count; ++i) {
+            uint32_t addr = i * 2u;
+            write16(&rom, addr, 0x4E75u); /* RTS */
+            seeds[i] = addr;
+        }
+
+        CHECK(ng_function_discover_from_seeds(&rom, seeds, seed_count, &discovery));
+        CHECK(discovery.count == seed_count);
+        CHECK(!discovery.truncated);
+        CHECK(ng_function_discovery_contains(&discovery, 0u));
+        CHECK(ng_function_discovery_contains(&discovery, (seed_count - 1u) * 2u));
+
+        ng_program_rom_free(&rom);
+    }
+
     return 0;
 }
