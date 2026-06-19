@@ -276,6 +276,7 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `MOVE SR,<ea>` / `MOVE <ea>,SR` validation so the implicit SR side must have an empty EA payload in both directions. `test_m68k_validate` covered stray source payload on `MOVE SR,Dn` and stray destination payload on `MOVE (d16,PC),SR` red first.
 - local: Tightened no-operand/control-immediate validation so `NOP`/`RESET`/`RTE`/`RTR`/`RTS`/`TRAPV`, `TRAP`/`STOP`/`ILLEGAL`, and immediate `CCR`/`SR` forms reject stray empty-EA payload fields. `test_m68k_validate` covered `ORI #imm,CCR`, `TRAP`, and `NOP` payload mutations red first.
 - local: Tightened immediate logical/arithmetic/compare validation so `CMPI` and `ORI`/`ANDI`/`EORI`/`ADDI`/`SUBI` reject stray source-EA payload fields while still accepting their extension-word immediate and data-alterable destination metadata. `test_m68k_validate` covered `CMPI` and `EORI` no-source payload mutations red first.
 - local: Added generated-exec oracle coverage for canonical `ILLEGAL`, A-line,

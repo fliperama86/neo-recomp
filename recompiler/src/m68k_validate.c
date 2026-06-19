@@ -1218,7 +1218,7 @@ static int validate_move_sr_ccr(const NgM68kInstr *instr) {
 
     if (instr->dst.mode != NG_M68K_EA_NONE) {
         if (instr->mnemonic != NG_M68K_MOVE_SR ||
-            instr->src.mode != NG_M68K_EA_NONE ||
+            !ea_is_empty(&instr->src) ||
             !move_destination_ext_length(&instr->dst, &ext_len)) {
             return 0;
         }
@@ -1230,7 +1230,8 @@ static int validate_move_sr_ccr(const NgM68kInstr *instr) {
                instr->opcode == expected_opcode;
     }
 
-    if (instr->src.mode == NG_M68K_EA_NONE) {
+    if (instr->src.mode == NG_M68K_EA_NONE ||
+        !ea_is_empty(&instr->dst)) {
         return 0;
     }
 
