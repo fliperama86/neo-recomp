@@ -252,6 +252,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `BTST` and `BCHG`/`BCLR`/`BSET`
+  static-immediate and dynamic-Dn bit-number forms against the Motorola/NXP
+  Programmer's Reference Manual. The validator now requires exact bit-number
+  source metadata, exact read-only `BTST` data-addressing destination
+  payloads including PC-relative and dynamic-immediate destinations, exact
+  data-alterable destination payloads for altering bit ops, canonical legacy
+  fields, static/dynamic instruction lengths, and no stray condition/target
+  metadata. `test_m68k_validate` covered malformed PC-relative, immediate,
+  Dn, postincrement, and displacement metadata red first.
 - local: Fact-checked privileged MC68000 `MOVE USP,An` / `MOVE An,USP`
   against the Motorola/NXP Programmer's Reference Manual. The validator now
   requires exact long-sized address-register payloads, the architectural

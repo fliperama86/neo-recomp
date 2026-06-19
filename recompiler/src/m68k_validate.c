@@ -19,25 +19,6 @@ static int ea_is_data_alterable(const NgM68kEa *ea) {
     return ea->mode == NG_M68K_EA_DREG || ea_is_memory_alterable(ea);
 }
 
-static int ea_is_data(const NgM68kEa *ea) {
-    switch (ea->mode) {
-    case NG_M68K_EA_DREG:
-    case NG_M68K_EA_AIND:
-    case NG_M68K_EA_APOST:
-    case NG_M68K_EA_APRE:
-    case NG_M68K_EA_ADISP:
-    case NG_M68K_EA_AINDEX:
-    case NG_M68K_EA_ABS_W:
-    case NG_M68K_EA_ABS_L:
-    case NG_M68K_EA_PC_DISP:
-    case NG_M68K_EA_PC_INDEX:
-    case NG_M68K_EA_IMM:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
 static int no_ea_operands(const NgM68kInstr *instr) {
     return instr->src.mode == NG_M68K_EA_NONE &&
            instr->dst.mode == NG_M68K_EA_NONE;
@@ -257,60 +238,156 @@ static int validate_move_usp(const NgM68kInstr *instr) {
     return 0;
 }
 
-static int validate_btst(const NgM68kInstr *instr) {
-    if (instr->src.mode != NG_M68K_EA_NONE &&
-        instr->src.mode != NG_M68K_EA_DREG) {
-        return 0;
-    }
-    if (instr->dst.mode == NG_M68K_EA_DREG) {
-        return instr->size == 4u;
-    }
-    if (instr->size != 1u || !ea_is_data(&instr->dst)) {
-        return 0;
-    }
-    if (instr->dst.mode == NG_M68K_EA_IMM &&
-        instr->src.mode != NG_M68K_EA_DREG) {
-        return 0;
-    }
-    return 1;
-}
+static int exact_data_alterable_ext_length(const NgM68kEa *ea,
+                                           uint8_t *out_ext);
 
-static int bit_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
+static int exact_bit_data_ext_length(const NgM68kEa *ea,
+                                     uint8_t size,
+                                     uint32_t extension_addr,
+                                     int allow_immediate,
+                                     uint8_t *out_ext) {
     switch (ea->mode) {
     case NG_M68K_EA_DREG:
+        if (size != 4u || !ea_simple_register_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
     case NG_M68K_EA_AIND:
     case NG_M68K_EA_APOST:
     case NG_M68K_EA_APRE:
-        if (ea->reg >= 8u) {
+        if (size != 1u || !ea_simple_register_payload(ea)) {
             return 0;
         }
         *out_ext = 0u;
         return 1;
     case NG_M68K_EA_ADISP:
+        if (size != 1u || !ea_address_displacement_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
     case NG_M68K_EA_AINDEX:
-        if (ea->reg >= 8u) {
+        if (size != 1u || !ea_address_index_payload(ea)) {
             return 0;
         }
         *out_ext = 2u;
         return 1;
     case NG_M68K_EA_ABS_W:
+        if (size != 1u || !ea_abs_word_payload(ea)) {
+            return 0;
+        }
         *out_ext = 2u;
         return 1;
     case NG_M68K_EA_ABS_L:
+        if (size != 1u || !ea_abs_long_payload(ea)) {
+            return 0;
+        }
         *out_ext = 4u;
+        return 1;
+    case NG_M68K_EA_PC_DISP:
+        if (size != 1u || !ea_pc_displacement_payload(ea, extension_addr)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_PC_INDEX:
+        if (size != 1u || !ea_pc_index_payload(ea, extension_addr)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_IMM:
+        if (!allow_immediate || size != 1u || !ea_immediate_payload(ea, size)) {
+            return 0;
+        }
+        *out_ext = 2u;
         return 1;
     default:
         return 0;
     }
 }
 
-static int validate_altering_bit_op(const NgM68kInstr *instr) {
-    uint8_t ext_len = 0u;
-
-    if (!ea_is_data_alterable(&instr->dst) ||
-        !bit_alterable_ext_length(&instr->dst, &ext_len)) {
+static int validate_bit_destination_legacy_fields(const NgM68kInstr *instr,
+                                                  int dynamic_bit_number) {
+    if (instr->condition != 0u ||
+        instr->target != 0u) {
         return 0;
     }
+
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        return instr->form == (dynamic_bit_number ? NG_M68K_FORM_DREG_TO_DREG :
+                                                    NG_M68K_FORM_DREG) &&
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_ADISP) {
+        return instr->form == NG_M68K_FORM_AREG_DISP &&
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == instr->dst.displacement;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_ABS_W ||
+        instr->dst.mode == NG_M68K_EA_ABS_L) {
+        return instr->form == NG_M68K_FORM_ABS &&
+               instr->reg == 0u &&
+               instr->absolute_addr == instr->dst.absolute_addr &&
+               instr->displacement == 0;
+    }
+
+    return instr->form == NG_M68K_FORM_NONE &&
+           instr->reg == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0;
+}
+
+static int validate_dynamic_bit_source(const NgM68kInstr *instr) {
+    return instr->src.mode == NG_M68K_EA_DREG &&
+           ea_simple_register_payload(&instr->src) &&
+           instr->src_reg == instr->src.reg &&
+           instr->immediate == 0u;
+}
+
+static int validate_static_bit_source(const NgM68kInstr *instr) {
+    return ea_is_empty(&instr->src) &&
+           instr->src_reg == 0u &&
+           instr->immediate <= 0xFFu;
+}
+
+static int validate_btst(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+    uint8_t base_len = instr->src.mode == NG_M68K_EA_DREG ? 2u : 4u;
+    int dynamic_bit_number = instr->src.mode == NG_M68K_EA_DREG;
+
+    if (dynamic_bit_number) {
+        if (!validate_dynamic_bit_source(instr)) {
+            return 0;
+        }
+    } else if (!validate_static_bit_source(instr)) {
+        return 0;
+    }
+
+    return exact_bit_data_ext_length(&instr->dst,
+                                     instr->size,
+                                     instr->addr + base_len,
+                                     dynamic_bit_number,
+                                     &ext_len) &&
+           validate_bit_destination_legacy_fields(instr, dynamic_bit_number) &&
+           instr->byte_length == (uint8_t)(base_len + ext_len);
+}
+
+static int validate_altering_bit_op(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+    uint8_t base_len = instr->src.mode == NG_M68K_EA_DREG ? 2u : 4u;
+    int dynamic_bit_number = instr->src.mode == NG_M68K_EA_DREG;
+
+    if (!exact_data_alterable_ext_length(&instr->dst, &ext_len)) {
+        return 0;
+    }
+
     if (instr->dst.mode == NG_M68K_EA_DREG) {
         if (instr->size != 4u) {
             return 0;
@@ -319,21 +396,15 @@ static int validate_altering_bit_op(const NgM68kInstr *instr) {
         return 0;
     }
 
-    if (instr->src.mode == NG_M68K_EA_DREG) {
-        return instr->src.reg < 8u &&
-               instr->src_reg == instr->src.reg &&
-               instr->immediate == 0u &&
-               instr->byte_length == (uint8_t)(2u + ext_len);
+    if (dynamic_bit_number) {
+        return validate_dynamic_bit_source(instr) &&
+               validate_bit_destination_legacy_fields(instr, 1) &&
+               instr->byte_length == (uint8_t)(base_len + ext_len);
     }
 
-    if (instr->src.mode == NG_M68K_EA_NONE) {
-        return instr->src.reg == 0u &&
-               instr->src_reg == 0u &&
-               instr->immediate <= 0xFFu &&
-               instr->byte_length == (uint8_t)(4u + ext_len);
-    }
-
-    return 0;
+    return validate_static_bit_source(instr) &&
+           validate_bit_destination_legacy_fields(instr, 0) &&
+           instr->byte_length == (uint8_t)(base_len + ext_len);
 }
 
 static int quick_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
