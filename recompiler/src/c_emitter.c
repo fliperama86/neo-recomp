@@ -1979,8 +1979,14 @@ static int emit_instr(FILE *out,
                                    instr->addr + instr->byte_length);
         return 0;
     case NG_M68K_TRAP:
-        emit_exception_vector_call(out, (uint8_t)(32u + (instr->immediate & 0x0Fu)),
-                                   instr->addr + instr->byte_length);
+        fprintf(out, "    ng_push_exception_frame(0x%08Xu);\n",
+                (instr->addr + instr->byte_length) & 0x00FFFFFFu);
+        fprintf(out, "    { uint32_t ng_pc = ng68k_read32(0x%08Xu);\n",
+                (uint32_t)(32u + (instr->immediate & 0x0Fu)) * 4u);
+        fprintf(out, "      if (ng_service_trace(ng_pc, ng_trace_sr)) return;\n");
+        fprintf(out, "      ng_generated_call(ng_pc);\n");
+        fprintf(out, "    }\n");
+        fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_TRAPV:
         fprintf(out, "    if (g_ng_m68k.sr & NG_CCR_V) {\n");

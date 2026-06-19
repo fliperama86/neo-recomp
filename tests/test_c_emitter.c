@@ -732,7 +732,9 @@ int main(void) {
         CHECK(strstr(text, "/* RESET privileged side effects are host-handled. */") != NULL);
         CHECK(strstr(text, "/* $000002: TRAP #3 */") != NULL);
         CHECK(strstr(text, "ng_push_exception_frame(0x00000004u);") != NULL);
-        CHECK(strstr(text, "ng_generated_call(ng68k_read32(0x0000008Cu));") != NULL);
+        CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(0x0000008Cu);") != NULL);
+        CHECK(strstr(text, "if (ng_service_trace(ng_pc, ng_trace_sr)) return;") != NULL);
+        CHECK(strstr(text, "ng_generated_call(ng_pc);") != NULL);
 
         ng_program_rom_free(&rom);
     }

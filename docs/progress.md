@@ -206,6 +206,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added trace-priority handling for `TRAP`: generated code now stacks the
+  trap exception frame first, then services trace to the trap-handler PC when
+  tracing was enabled at instruction start.
 - local: Corrected trace eligibility to use the SR T bit captured at instruction
   start, then added trace coverage for `STOP` and `RTE`/`RTR` paths. This
   covers cases where the instruction itself changes SR before trace exception
