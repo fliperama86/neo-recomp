@@ -889,6 +889,12 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0xE8, 0xD0 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_UNKNOWN);
+    }
+
+    {
         const unsigned char bytes[] = { 0xD1, 0x01 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));

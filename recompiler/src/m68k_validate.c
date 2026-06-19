@@ -1784,8 +1784,26 @@ static int validate_branch(const NgM68kInstr *instr) {
 
 static int validate_shift_rotate(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t kind = 0u;
+    uint8_t dir_left = 0u;
+    uint16_t expected_opcode = 0u;
+
+    switch (instr->mnemonic) {
+    case NG_M68K_ASR: kind = 0u; dir_left = 0u; break;
+    case NG_M68K_ASL: kind = 0u; dir_left = 1u; break;
+    case NG_M68K_LSR: kind = 1u; dir_left = 0u; break;
+    case NG_M68K_LSL: kind = 1u; dir_left = 1u; break;
+    case NG_M68K_ROXR: kind = 2u; dir_left = 0u; break;
+    case NG_M68K_ROXL: kind = 2u; dir_left = 1u; break;
+    case NG_M68K_ROR: kind = 3u; dir_left = 0u; break;
+    case NG_M68K_ROL: kind = 3u; dir_left = 1u; break;
+    default: return 0;
+    }
 
     if (instr->dst.mode == NG_M68K_EA_DREG) {
+        uint8_t size_code = 0u;
+        uint8_t count_field = 0u;
+
         if (!valid_size(instr->size) ||
             instr->byte_length != 2u ||
             !ea_simple_register_payload(&instr->dst) ||
@@ -1797,30 +1815,64 @@ static int validate_shift_rotate(const NgM68kInstr *instr) {
             instr->displacement != 0) {
             return 0;
         }
+        size_code = (instr->size == 1u) ? 0u :
+                    ((instr->size == 2u) ? 1u : 2u);
         if (instr->src.mode != NG_M68K_EA_NONE) {
-            return instr->src.mode == NG_M68K_EA_DREG &&
-                   ea_simple_register_payload(&instr->src) &&
-                   instr->src_reg == instr->src.reg &&
-                   instr->immediate == 0u;
+            if (instr->src.mode != NG_M68K_EA_DREG ||
+                !ea_simple_register_payload(&instr->src) ||
+                instr->src_reg != instr->src.reg ||
+                instr->immediate != 0u) {
+                return 0;
+            }
+            count_field = instr->src.reg;
+            expected_opcode = (uint16_t)(0xE000u |
+                                         ((uint16_t)count_field << 9) |
+                                         ((uint16_t)dir_left << 8) |
+                                         ((uint16_t)size_code << 6) |
+                                         0x0020u |
+                                         ((uint16_t)kind << 3) |
+                                         instr->dst.reg);
+            return instr->opcode == expected_opcode;
         }
-        return ea_is_empty(&instr->src) &&
-               instr->src_reg == 0u &&
-               instr->immediate >= 1u &&
-               instr->immediate <= 8u;
+        if (!ea_is_empty(&instr->src) ||
+            instr->src_reg != 0u ||
+            instr->immediate < 1u ||
+            instr->immediate > 8u) {
+            return 0;
+        }
+        count_field = (instr->immediate == 8u) ? 0u : (uint8_t)instr->immediate;
+        expected_opcode = (uint16_t)(0xE000u |
+                                     ((uint16_t)count_field << 9) |
+                                     ((uint16_t)dir_left << 8) |
+                                     ((uint16_t)size_code << 6) |
+                                     ((uint16_t)kind << 3) |
+                                     instr->dst.reg);
+        return instr->opcode == expected_opcode;
     }
 
-    return ea_is_empty(&instr->src) &&
-           instr->size == 2u &&
-           instr->immediate == 1u &&
-           instr->src_reg == 0u &&
-           instr->reg == 0u &&
-           instr->condition == 0u &&
-           instr->form == NG_M68K_FORM_NONE &&
-           instr->target == 0u &&
-           instr->absolute_addr == 0u &&
-           instr->displacement == 0 &&
-           exact_memory_alterable_ext_length(&instr->dst, &ext_len) &&
-           instr->byte_length == (uint8_t)(2u + ext_len);
+    {
+        uint8_t ea_field = 0u;
+        if (!ea_is_empty(&instr->src) ||
+            instr->size != 2u ||
+            instr->immediate != 1u ||
+            instr->src_reg != 0u ||
+            instr->reg != 0u ||
+            instr->condition != 0u ||
+            instr->form != NG_M68K_FORM_NONE ||
+            instr->target != 0u ||
+            instr->absolute_addr != 0u ||
+            instr->displacement != 0 ||
+            !exact_memory_alterable_ext_length(&instr->dst, &ext_len) ||
+            !ea_opcode_field(&instr->dst, &ea_field) ||
+            instr->byte_length != (uint8_t)(2u + ext_len)) {
+            return 0;
+        }
+        expected_opcode = (uint16_t)(0xE0C0u |
+                                     ((uint16_t)kind << 9) |
+                                     ((uint16_t)dir_left << 8) |
+                                     ea_field);
+        return instr->opcode == expected_opcode;
+    }
 }
 
 static int validate_unary_data_alterable(const NgM68kInstr *instr,

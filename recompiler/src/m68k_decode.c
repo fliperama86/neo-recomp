@@ -600,6 +600,9 @@ static int decode_shift_rotate(const NgProgramRom *rom,
     if (size_code == 3u) {
         uint8_t ea_mode = (uint8_t)((op >> 3) & 7u);
         uint8_t ea_reg = (uint8_t)(op & 7u);
+        if ((op & 0x0800u) != 0u) {
+            return 0;
+        }
         if (!is_memory_alterable_ea(ea_mode, ea_reg)) {
             return 0;
         }

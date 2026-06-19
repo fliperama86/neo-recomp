@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened shift/rotate validation so register and memory
+  forms require opcode direction, kind, size, count source, and EA bits
+  to match the decoded metadata, and made memory shift/rotate decode
+  reject non-canonical bit-11 encodings such as `$E8D0`. `test_m68k_validate`
+  and `test_m68k_decode` covered mismatched immediate-count, register-count,
+  memory-EA, cross-kind opcode metadata, and decoder over-recognition red first.
 - local: Tightened `MOVE SR,<ea>`, `MOVE <ea>,CCR`, and
   `MOVE <ea>,SR` validation so opcode class and EA bits must match
   the decoded source/destination metadata, including PC-relative source
