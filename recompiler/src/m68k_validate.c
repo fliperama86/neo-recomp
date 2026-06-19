@@ -162,6 +162,11 @@ static int ea_immediate_payload(const NgM68kEa *ea, uint8_t size) {
 }
 
 static int valid_extend_pair(const NgM68kInstr *instr) {
+    uint16_t base_opcode = 0u;
+    uint16_t size_bits = 0u;
+    uint16_t form_bits = 0u;
+    uint16_t expected_opcode = 0u;
+
     if (instr->byte_length != 2u ||
         instr->immediate != 0u ||
         instr->condition != 0u ||
@@ -173,18 +178,60 @@ static int valid_extend_pair(const NgM68kInstr *instr) {
         return 0;
     }
 
-    if (instr->src.mode == NG_M68K_EA_DREG &&
-        instr->dst.mode == NG_M68K_EA_DREG) {
-        return ea_simple_register_payload(&instr->src) &&
-               ea_simple_register_payload(&instr->dst) &&
-               instr->form == NG_M68K_FORM_DREG_TO_DREG;
+    switch (instr->mnemonic) {
+    case NG_M68K_ADDX:
+        base_opcode = 0xD100u;
+        break;
+    case NG_M68K_SUBX:
+        base_opcode = 0x9100u;
+        break;
+    case NG_M68K_ABCD:
+        base_opcode = 0xC100u;
+        break;
+    case NG_M68K_SBCD:
+        base_opcode = 0x8100u;
+        break;
+    default:
+        return 0;
     }
 
-    return instr->src.mode == NG_M68K_EA_APRE &&
-           instr->dst.mode == NG_M68K_EA_APRE &&
-           ea_simple_register_payload(&instr->src) &&
-           ea_simple_register_payload(&instr->dst) &&
-           instr->form == NG_M68K_FORM_NONE;
+    if (instr->mnemonic == NG_M68K_ADDX ||
+        instr->mnemonic == NG_M68K_SUBX) {
+        if (!valid_size(instr->size)) {
+            return 0;
+        }
+        size_bits = (instr->size == 1u) ? 0u :
+                    ((instr->size == 2u) ? 0x0040u : 0x0080u);
+    } else if (instr->size != 1u) {
+        return 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_DREG &&
+        instr->dst.mode == NG_M68K_EA_DREG) {
+        if (!ea_simple_register_payload(&instr->src) ||
+            !ea_simple_register_payload(&instr->dst) ||
+            instr->form != NG_M68K_FORM_DREG_TO_DREG) {
+            return 0;
+        }
+        form_bits = 0u;
+    } else if (instr->src.mode == NG_M68K_EA_APRE &&
+               instr->dst.mode == NG_M68K_EA_APRE) {
+        if (!ea_simple_register_payload(&instr->src) ||
+            !ea_simple_register_payload(&instr->dst) ||
+            instr->form != NG_M68K_FORM_NONE) {
+            return 0;
+        }
+        form_bits = 0x0008u;
+    } else {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)(base_opcode |
+                                 ((uint16_t)instr->dst.reg << 9) |
+                                 size_bits |
+                                 form_bits |
+                                 instr->src.reg);
+    return instr->opcode == expected_opcode;
 }
 
 static int valid_no_operand_2byte(const NgM68kInstr *instr) {

@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `ADDX`/`SUBX` and byte-only `ABCD`/`SBCD`
+  validation so register and predecrement forms require opcode mnemonic,
+  size, R/M form, source register, and destination register bits to match
+  the decoded metadata. `test_m68k_validate` covered mismatched extend/BCD
+  opcode metadata red first.
 - local: Tightened shift/rotate validation so register and memory
   forms require opcode direction, kind, size, count source, and EA bits
   to match the decoded metadata, and made memory shift/rotate decode
