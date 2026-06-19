@@ -165,7 +165,9 @@ Covered by executable generated-C validation:
   - generic `CMP.B/W/L <ea>,Dn` paths covered so far by Dn and abs reads,
     including byte overflow with `X` preserved
   - generic `ADDA.W/L <ea>,An`, `SUBA.W/L <ea>,An`, and
-    `CMPA.W/L <ea>,An` paths covered so far by immediate sources
+    `CMPA.W/L <ea>,An` paths covered so far by immediate sources, including
+    word-source sign-extension, `ADDA`/`SUBA` CCR preservation, and `CMPA`
+    preserving `X` while updating `N/Z/V/C`
   - `CMPM.B/W/L (Ay)+,(Ax)+` covered so far by word postincrement memory
     comparisons
   - `CHK.W <ea>,Dn` covered so far by immediate in-range checks, with failed
@@ -224,6 +226,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `ADDA.W`/`SUBA.W`/`CMPA.W` word-source semantics.
+  Generated-exec now covers sign-extended immediate word sources,
+  `ADDA`/`SUBA` leaving CCR untouched, and `CMPA` preserving `X` while
+  clearing `N/Z/V/C` for a positive nonzero no-borrow comparison result.
 - local: Fact-checked `MOVEA.W` sign-extension. Generated-exec now covers
   immediate word sources `#$FFFF`, `#$8000`, and `#$7FFF` loading into address
   registers as sign-extended 32-bit values while preserving CCR.
