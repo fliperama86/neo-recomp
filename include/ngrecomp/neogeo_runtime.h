@@ -79,3 +79,7 @@ uint16_t ng_neogeo_timer_stop(void);
 uint32_t ng_neogeo_timer_reload(void);
 uint32_t ng_neogeo_timer_counter(void);
 uint16_t ng_neogeo_current_scanline(void);
+uint32_t ng_neogeo_work_ram_nonzero_bytes(void);
+uint32_t ng_neogeo_work_ram_checksum(void);
+uint32_t ng_neogeo_vram_nonzero_words(void);
+uint32_t ng_neogeo_vram_checksum(void);

@@ -36,6 +36,10 @@ int main(void) {
     ng_neogeo_reset_runtime();
     ng_m68k_clear_interrupt_level();
     CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(ng_neogeo_work_ram_nonzero_bytes() == 0u);
+    CHECK(ng_neogeo_work_ram_checksum() == 0u);
+    CHECK(ng_neogeo_vram_nonzero_words() == 0u);
+    CHECK(ng_neogeo_vram_checksum() == 0u);
 
     ng_neogeo_set_external_dispatch(record_external_dispatch);
     ng_call_by_address(0x01C00444u);
@@ -145,6 +149,8 @@ int main(void) {
     ng68k_write32(0x0010FFFCu, 0xCAFEBABEu);
     CHECK(ng68k_read32(0x0010FFFCu) == 0xCAFEBABEu);
     CHECK(ng68k_read8(0x01100000u) == 0xA5u);
+    CHECK(ng_neogeo_work_ram_nonzero_bytes() == 7u);
+    CHECK(ng_neogeo_work_ram_checksum() == 0x0592u);
 
     ng68k_write16(0x00400000u, 0x1234u);
     CHECK(ng68k_read16(0x00400000u) == 0x1234u);
@@ -175,14 +181,20 @@ int main(void) {
     CHECK(ng68k_read16(0x00D00000u) == 0xCAFEu);
 
     ng_neogeo_reset_runtime();
+    CHECK(ng_neogeo_work_ram_nonzero_bytes() == 0u);
+    CHECK(ng_neogeo_work_ram_checksum() == 0u);
     CHECK(ng_neogeo_vram_addr() == 0u);
     CHECK(ng_neogeo_vram_mod() == 0u);
+    CHECK(ng_neogeo_vram_nonzero_words() == 0u);
+    CHECK(ng_neogeo_vram_checksum() == 0u);
     ng68k_write16(NG_NEO_REG_VRAMADDR, 0x0100u);
     ng68k_write16(NG_NEO_REG_VRAMMOD, 0x0002u);
     CHECK(ng_neogeo_vram_addr() == 0x0100u);
     CHECK(ng_neogeo_vram_mod() == 0x0002u);
     ng68k_write16(NG_NEO_REG_VRAMRW, 0xBEEFu);
     CHECK(ng_neogeo_vram_addr() == 0x0102u);
+    CHECK(ng_neogeo_vram_nonzero_words() == 1u);
+    CHECK(ng_neogeo_vram_checksum() == 0xBEEFu);
     ng68k_write16(NG_NEO_REG_VRAMADDR, 0x0100u);
     CHECK(ng68k_read16(NG_NEO_REG_VRAMRW) == 0xBEEFu);
     CHECK(ng_neogeo_vram_addr() == 0x0100u);

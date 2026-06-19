@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define NG_GENERATED_SMOKE_RECENT_DISPATCHES 256u
+#define NG_GENERATED_SMOKE_LOOP_MAX_PERIOD 64u
+
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
 void ng_bios_generated_call(uint32_t addr);
 
@@ -29,6 +32,7 @@ static uint64_t g_ng_generated_smoke_dispatch_count;
 static uint64_t g_ng_generated_smoke_cart_dispatch_count;
 static uint64_t g_ng_generated_smoke_bios_dispatch_count;
 static uint32_t g_ng_generated_smoke_last_dispatch_addr;
+static uint32_t g_ng_generated_smoke_recent_dispatches[NG_GENERATED_SMOKE_RECENT_DISPATCHES];
 static uint32_t g_ng_generated_smoke_budget_stop_addr;
 static int g_ng_generated_smoke_budget_hit;
 
@@ -37,6 +41,9 @@ void ng_generated_smoke_reset_dispatch_stats(void) {
     g_ng_generated_smoke_cart_dispatch_count = 0;
     g_ng_generated_smoke_bios_dispatch_count = 0;
     g_ng_generated_smoke_last_dispatch_addr = 0;
+    memset(g_ng_generated_smoke_recent_dispatches,
+           0,
+           sizeof(g_ng_generated_smoke_recent_dispatches));
     g_ng_generated_smoke_budget_stop_addr = 0;
     g_ng_generated_smoke_budget_hit = 0;
 }
@@ -68,6 +75,40 @@ uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void) {
 
 uint32_t ng_generated_smoke_last_dispatch_addr(void) {
     return g_ng_generated_smoke_last_dispatch_addr;
+}
+
+static uint32_t ng_generated_smoke_recent_from_end(uint32_t offset) {
+    if (offset >= NG_GENERATED_SMOKE_RECENT_DISPATCHES ||
+        (uint64_t)offset >= g_ng_generated_smoke_dispatch_count) {
+        return 0;
+    }
+    uint64_t idx = (g_ng_generated_smoke_dispatch_count - 1u - offset) %
+                   NG_GENERATED_SMOKE_RECENT_DISPATCHES;
+    return g_ng_generated_smoke_recent_dispatches[idx];
+}
+
+uint32_t ng_generated_smoke_recent_loop_period(void) {
+    uint64_t have = g_ng_generated_smoke_dispatch_count;
+    if (have > NG_GENERATED_SMOKE_RECENT_DISPATCHES) {
+        have = NG_GENERATED_SMOKE_RECENT_DISPATCHES;
+    }
+    for (uint32_t period = 1; period <= NG_GENERATED_SMOKE_LOOP_MAX_PERIOD; ++period) {
+        if (have < (uint64_t)period * 2u) {
+            break;
+        }
+        int matches = 1;
+        for (uint32_t i = 0; i < period; ++i) {
+            if (ng_generated_smoke_recent_from_end(i) !=
+                ng_generated_smoke_recent_from_end(i + period)) {
+                matches = 0;
+                break;
+            }
+        }
+        if (matches) {
+            return period;
+        }
+    }
+    return 0;
 }
 
 static void ng_generated_smoke_dispatch_one(uint32_t addr) {
@@ -106,6 +147,10 @@ void ng_generated_call(uint32_t addr) {
         }
         ++g_ng_generated_smoke_dispatch_count;
         g_ng_generated_smoke_last_dispatch_addr = next_addr & 0x00FFFFFFu;
+        g_ng_generated_smoke_recent_dispatches[
+            (g_ng_generated_smoke_dispatch_count - 1u) %
+            NG_GENERATED_SMOKE_RECENT_DISPATCHES] =
+            g_ng_generated_smoke_last_dispatch_addr;
         ng_generated_smoke_dispatch_one(next_addr);
     }
     g_ng_generated_smoke_dispatch_active = 0;
@@ -141,6 +186,10 @@ uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void) {
 }
 
 uint32_t ng_generated_smoke_last_dispatch_addr(void) {
+    return 0;
+}
+
+uint32_t ng_generated_smoke_recent_loop_period(void) {
     return 0;
 }
 #endif
@@ -230,10 +279,13 @@ static int ng_generated_smoke_parse_u64(const char *text, uint64_t *out) {
 #endif
 
 static void ng_generated_smoke_print_summary(void) {
+    uint32_t recent_loop_period = ng_generated_smoke_recent_loop_period();
     fprintf(stderr,
             "smoke summary: dispatches=%llu cart=%llu bios=%llu "
             "last=$%06X pc=$%06X sr=$%04X sp=$%08X polls=%u watchdog=%u "
-            "scanline=%u sound=$%02X port=$%02X\n",
+            "scanline=%u sound=$%02X port=$%02X "
+            "wram_nonzero=%u wram_sum=$%08X vram_nonzero=%u vram_sum=$%08X "
+            "recent_loop=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             (unsigned long long)ng_generated_smoke_cart_dispatch_count(),
             (unsigned long long)ng_generated_smoke_bios_dispatch_count(),
@@ -245,7 +297,12 @@ static void ng_generated_smoke_print_summary(void) {
             ng_neogeo_watchdog_kicks(),
             ng_neogeo_current_scanline(),
             ng_neogeo_sound_command(),
-            ng_neogeo_port_output());
+            ng_neogeo_port_output(),
+            ng_neogeo_work_ram_nonzero_bytes(),
+            ng_neogeo_work_ram_checksum(),
+            ng_neogeo_vram_nonzero_words(),
+            ng_neogeo_vram_checksum(),
+            recent_loop_period);
     if (ng_generated_smoke_dispatch_budget_hit()) {
         fprintf(stderr,
                 "smoke budget reached at $%06X after %llu dispatches\n",

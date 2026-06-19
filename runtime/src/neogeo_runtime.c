@@ -548,6 +548,44 @@ uint16_t ng_neogeo_current_scanline(void) {
     return g_ng_neogeo_current_scanline;
 }
 
+uint32_t ng_neogeo_work_ram_nonzero_bytes(void) {
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < sizeof(g_ng_neogeo_work_ram); ++i) {
+        if (g_ng_neogeo_work_ram[i] != 0u) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+uint32_t ng_neogeo_work_ram_checksum(void) {
+    uint32_t sum = 0;
+    for (uint32_t i = 0; i < sizeof(g_ng_neogeo_work_ram); ++i) {
+        sum += g_ng_neogeo_work_ram[i];
+    }
+    return sum;
+}
+
+uint32_t ng_neogeo_vram_nonzero_words(void) {
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < (uint32_t)(sizeof(g_ng_neogeo_vram) /
+                                        sizeof(g_ng_neogeo_vram[0])); ++i) {
+        if (g_ng_neogeo_vram[i] != 0u) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+uint32_t ng_neogeo_vram_checksum(void) {
+    uint32_t sum = 0;
+    for (uint32_t i = 0; i < (uint32_t)(sizeof(g_ng_neogeo_vram) /
+                                        sizeof(g_ng_neogeo_vram[0])); ++i) {
+        sum += g_ng_neogeo_vram[i];
+    }
+    return sum;
+}
+
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {
     ++g_ng_neogeo_interrupt_polls;
     if (g_ng_neogeo_auto_vblank_interval != 0u &&
