@@ -94,16 +94,36 @@ static int oracle_is_supervisor(const NgM68kState *state) {
     return (state->sr & SR_S) != 0;
 }
 
+static void oracle_push_exception_frame_with_sr(NgM68kState *state,
+                                                uint8_t *bus,
+                                                uint32_t return_pc,
+                                                uint16_t saved_sr,
+                                                uint16_t next_sr) {
+    oracle_set_sr(state, next_sr);
+    state->a[7] -= 4u;
+    bus_write32(bus, state->a[7], return_pc);
+    state->a[7] -= 2u;
+    bus_write16(bus, state->a[7], saved_sr);
+}
+
+static uint32_t oracle_exception(NgM68kState *state,
+                                 uint8_t *bus,
+                                 uint32_t return_pc,
+                                 uint8_t vector) {
+    uint16_t saved_sr = state->sr;
+    oracle_push_exception_frame_with_sr(
+        state,
+        bus,
+        return_pc,
+        saved_sr,
+        (uint16_t)((saved_sr | SR_S) & (uint16_t)~SR_T));
+    return bus_read32(bus, (uint32_t)vector * 4u);
+}
+
 static uint32_t oracle_privilege_violation(NgM68kState *state,
                                            uint8_t *bus,
                                            uint32_t fault_pc) {
-    uint16_t saved_sr = state->sr;
-    oracle_set_sr(state, (uint16_t)(saved_sr | SR_S));
-    state->a[7] -= 4u;
-    bus_write32(bus, state->a[7], fault_pc);
-    state->a[7] -= 2u;
-    bus_write16(bus, state->a[7], saved_sr);
-    return bus_read32(bus, 8u * 4u);
+    return oracle_exception(state, bus, fault_pc, 8u);
 }
 
 static uint32_t oracle_interrupt(NgM68kState *state,
@@ -112,13 +132,10 @@ static uint32_t oracle_interrupt(NgM68kState *state,
                                  uint8_t level,
                                  uint8_t vector) {
     uint16_t saved_sr = state->sr;
-    uint16_t new_sr = (uint16_t)((saved_sr | SR_S) & (uint16_t)~0x0700u);
+    uint16_t new_sr = (uint16_t)((saved_sr | SR_S) &
+                                 (uint16_t)~(SR_T | 0x0700u));
     new_sr = (uint16_t)(new_sr | (uint16_t)((level & 7u) << 8));
-    oracle_set_sr(state, new_sr);
-    state->a[7] -= 4u;
-    bus_write32(bus, state->a[7], return_pc);
-    state->a[7] -= 2u;
-    bus_write16(bus, state->a[7], saved_sr);
+    oracle_push_exception_frame_with_sr(state, bus, return_pc, saved_sr, new_sr);
     return bus_read32(bus, (uint32_t)vector * 4u);
 }
 
@@ -516,25 +533,13 @@ static int oracle_exec(const uint8_t *program,
             continue;
         }
         if ((op & 0xFFF0u) == 0x4E40u) {
-            uint16_t saved_sr = state->sr;
             uint8_t vector = (uint8_t)(32u + (op & 0x000Fu));
-            oracle_set_sr(state, (uint16_t)(saved_sr | SR_S));
-            state->a[7] -= 4u;
-            bus_write32(bus, state->a[7], pc + 2u);
-            state->a[7] -= 2u;
-            bus_write16(bus, state->a[7], saved_sr);
-            pc = bus_read32(bus, (uint32_t)vector * 4u);
+            pc = oracle_exception(state, bus, pc + 2u, vector);
             continue;
         }
         if (op == 0x4E76u) {
             if ((state->sr & CCR_V) != 0u) {
-                uint16_t saved_sr = state->sr;
-                oracle_set_sr(state, (uint16_t)(saved_sr | SR_S));
-                state->a[7] -= 4u;
-                bus_write32(bus, state->a[7], pc + 2u);
-                state->a[7] -= 2u;
-                bus_write16(bus, state->a[7], saved_sr);
-                pc = bus_read32(bus, 7u * 4u);
+                pc = oracle_exception(state, bus, pc + 2u, 7u);
             } else {
                 pc += 2u;
             }
@@ -542,15 +547,9 @@ static int oracle_exec(const uint8_t *program,
         }
         if (op == 0x4AFCu || (op & 0xF000u) == 0xA000u ||
             (op & 0xF000u) == 0xF000u) {
-            uint16_t saved_sr = state->sr;
             uint8_t vector = op == 0x4AFCu ? 4u :
                 (uint8_t)(((op & 0xF000u) == 0xA000u) ? 10u : 11u);
-            oracle_set_sr(state, (uint16_t)(saved_sr | SR_S));
-            state->a[7] -= 4u;
-            bus_write32(bus, state->a[7], pc + 2u);
-            state->a[7] -= 2u;
-            bus_write16(bus, state->a[7], saved_sr);
-            pc = bus_read32(bus, (uint32_t)vector * 4u);
+            pc = oracle_exception(state, bus, pc + 2u, vector);
             continue;
         }
         if ((op & 0xFFF8u) == 0x4E50u) {
@@ -963,13 +962,7 @@ static int oracle_exec(const uint8_t *program,
                 return 0;
             }
             if (src == 0u) {
-                uint16_t saved_sr = state->sr;
-                oracle_set_sr(state, (uint16_t)(saved_sr | SR_S));
-                state->a[7] -= 4u;
-                bus_write32(bus, state->a[7], next_pc);
-                state->a[7] -= 2u;
-                bus_write16(bus, state->a[7], saved_sr);
-                pc = bus_read32(bus, 5u * 4u);
+                pc = oracle_exception(state, bus, next_pc, 5u);
                 continue;
             }
             state->sr = (uint16_t)(state->sr & 0xFFF0u);
@@ -1806,11 +1799,12 @@ static int oracle_exec(const uint8_t *program,
                     state->sr = (uint16_t)(state->sr & (uint16_t)~CCR_N);
                 }
                 saved_sr = state->sr;
-                oracle_set_sr(state, (uint16_t)(saved_sr | SR_S));
-                state->a[7] -= 4u;
-                bus_write32(bus, state->a[7], next_pc);
-                state->a[7] -= 2u;
-                bus_write16(bus, state->a[7], saved_sr);
+                oracle_push_exception_frame_with_sr(
+                    state,
+                    bus,
+                    next_pc,
+                    saved_sr,
+                    (uint16_t)((saved_sr | SR_S) & (uint16_t)~SR_T));
                 pc = bus_read32(bus, 6u * 4u);
                 continue;
             }
@@ -2964,6 +2958,34 @@ int main(void) {
             CHECK(g_ng_m68k.pc == illegal_cases[i].final_pc);
         }
     }
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = (uint16_t)(SR_S | SR_T | CCR_X);
+    expected_state.a[7] = 0x000001F0u;
+    expected_state.ssp = expected_state.a[7];
+    bus_write32(expected_bus, 4u * 4u, 0x00005F30u);
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x00005F20u,
+                      &expected_state, expected_bus, 0));
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = (uint16_t)(SR_S | SR_T | CCR_X);
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    ng68k_write32(4u * 4u, 0x00005F30u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00005F20u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+    CHECK(g_ng_m68k.sr == expected_state.sr);
+    CHECK(g_ng_m68k.a[7] == expected_state.a[7]);
+    CHECK(ng68k_read16(0x0000128Au) == (uint16_t)(SR_S | CCR_X));
+    CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T | CCR_X));
+    CHECK(ng68k_read32(0x000001ECu) == 0x00005F22u);
+    CHECK(g_ng_m68k.pc == 0x00005F3Au);
 
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
     memset(g_bus, 0, sizeof(g_bus));

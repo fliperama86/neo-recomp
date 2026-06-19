@@ -276,6 +276,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generated-exec/oracle coverage proving exception entry clears
+  the live trace bit while preserving the saved SR. The new `ILLEGAL` fixture
+  starts with `T` set, has the handler store live `SR`, and checks the stacked
+  frame still contains the pre-exception `T`; the red step exposed that the
+  interpreter oracle set supervisor mode without clearing `T`.
 - local: Added standalone generated-exec/oracle coverage for `NOP` as an
   architectural no-op. The fixture now executes `NOP` between status/register
   setup and `MOVE SR,<abs>`/`STOP`, proving registers, CCR/SR, memory, and
