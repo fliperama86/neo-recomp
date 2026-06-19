@@ -34,6 +34,8 @@ static uint64_t g_ng_generated_smoke_dispatch_count;
 static uint64_t g_ng_generated_smoke_cart_dispatch_count;
 static uint64_t g_ng_generated_smoke_bios_dispatch_count;
 static uint32_t g_ng_generated_smoke_last_dispatch_addr;
+static uint32_t g_ng_generated_smoke_last_cart_dispatch_addr;
+static uint32_t g_ng_generated_smoke_last_bios_dispatch_addr;
 static uint32_t g_ng_generated_smoke_recent_dispatches[NG_GENERATED_SMOKE_RECENT_DISPATCHES];
 static uint32_t g_ng_generated_smoke_hot_addr[NG_GENERATED_SMOKE_HOT_SLOTS];
 static uint64_t g_ng_generated_smoke_hot_count[NG_GENERATED_SMOKE_HOT_SLOTS];
@@ -47,6 +49,8 @@ void ng_generated_smoke_reset_dispatch_stats(void) {
     g_ng_generated_smoke_cart_dispatch_count = 0;
     g_ng_generated_smoke_bios_dispatch_count = 0;
     g_ng_generated_smoke_last_dispatch_addr = 0;
+    g_ng_generated_smoke_last_cart_dispatch_addr = 0;
+    g_ng_generated_smoke_last_bios_dispatch_addr = 0;
     memset(g_ng_generated_smoke_recent_dispatches,
            0,
            sizeof(g_ng_generated_smoke_recent_dispatches));
@@ -97,6 +101,14 @@ uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void) {
 
 uint32_t ng_generated_smoke_last_dispatch_addr(void) {
     return g_ng_generated_smoke_last_dispatch_addr;
+}
+
+uint32_t ng_generated_smoke_last_cart_dispatch_addr(void) {
+    return g_ng_generated_smoke_last_cart_dispatch_addr;
+}
+
+uint32_t ng_generated_smoke_last_bios_dispatch_addr(void) {
+    return g_ng_generated_smoke_last_bios_dispatch_addr;
 }
 
 static uint32_t ng_generated_smoke_recent_from_end(uint32_t offset) {
@@ -165,10 +177,12 @@ static void ng_generated_smoke_dispatch_one(uint32_t addr) {
         uint32_t bios_addr =
             0x00C00000u + ((addr - 0x00C00000u) % NG_NEO_SYSTEM_ROM_BYTES);
         ++g_ng_generated_smoke_bios_dispatch_count;
+        g_ng_generated_smoke_last_bios_dispatch_addr = bios_addr;
         ng_generated_smoke_call_bios(bios_addr);
         return;
     }
     ++g_ng_generated_smoke_cart_dispatch_count;
+    g_ng_generated_smoke_last_cart_dispatch_addr = addr & 0x00FFFFFFu;
     ng_cart_generated_call(addr);
 }
 
@@ -243,6 +257,14 @@ uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void) {
 }
 
 uint32_t ng_generated_smoke_last_dispatch_addr(void) {
+    return 0;
+}
+
+uint32_t ng_generated_smoke_last_cart_dispatch_addr(void) {
+    return 0;
+}
+
+uint32_t ng_generated_smoke_last_bios_dispatch_addr(void) {
     return 0;
 }
 
@@ -402,6 +424,32 @@ static int ng_generated_smoke_write_snapshot_bytes(const char *dir,
     return 1;
 }
 
+static uint64_t ng_generated_smoke_mslug_sync_flags(void) {
+    uint64_t packed = 0;
+    for (uint32_t addr = 0x00106ED8u; addr <= 0x00106EDEu; ++addr) {
+        packed = (packed << 8) | ng68k_read8(addr);
+    }
+    return packed;
+}
+
+static uint64_t ng_generated_smoke_mslug_sync_counters(void) {
+    uint64_t packed = 0;
+    packed = ((uint64_t)ng68k_read16(0x00106EE0u) << 32) |
+             ((uint64_t)ng68k_read16(0x00106EE2u) << 16) |
+             (uint64_t)ng68k_read16(0x00106EE4u);
+    return packed;
+}
+
+static uint16_t ng_generated_smoke_mslug_vblank_selector(void) {
+    return (uint16_t)(((uint16_t)ng68k_read8(0x00106F26u) << 8) |
+                      (uint16_t)ng68k_read8(0x00106F27u));
+}
+
+static uint16_t ng_generated_smoke_mslug_bios_flags(void) {
+    return (uint16_t)(((uint16_t)ng68k_read8(0x0010FD80u) << 8) |
+                      (uint16_t)ng68k_read8(0x0010FDAEu));
+}
+
 static int ng_generated_smoke_write_snapshot_summary(const char *dir) {
     char path[4096];
     if (!ng_generated_smoke_snapshot_path(path, sizeof(path), dir, "summary.txt")) {
@@ -422,6 +470,10 @@ static int ng_generated_smoke_write_snapshot_summary(const char *dir) {
     fprintf(f, "unique=%u\n", ng_generated_smoke_unique_dispatch_count());
     fprintf(f, "hot_overflow=%u\n", ng_generated_smoke_dispatch_hot_overflow());
     fprintf(f, "last=$%06X\n", ng_generated_smoke_last_dispatch_addr() & 0x00FFFFFFu);
+    fprintf(f, "last_cart=$%06X\n",
+            ng_generated_smoke_last_cart_dispatch_addr() & 0x00FFFFFFu);
+    fprintf(f, "last_bios=$%06X\n",
+            ng_generated_smoke_last_bios_dispatch_addr() & 0x00FFFFFFu);
     fprintf(f, "pc=$%06X\n", g_ng_m68k.pc & 0x00FFFFFFu);
     fprintf(f, "sr=$%04X\n", g_ng_m68k.sr);
     fprintf(f, "sp=$%08X\n", g_ng_m68k.a[7]);
@@ -432,13 +484,40 @@ static int ng_generated_smoke_write_snapshot_summary(const char *dir) {
     fprintf(f, "timer_irq=%u\n", ng_neogeo_timer_interrupts());
     fprintf(f, "irqack=%u\n", ng_neogeo_irq_ack_writes());
     fprintf(f, "irq_pending=$%04X\n", ng_neogeo_irq_pending());
+    fprintf(f, "last_irq_pc=$%06X\n",
+            ng_neogeo_last_interrupt_return_pc() & 0x00FFFFFFu);
+    fprintf(f, "last_irq_level=%u\n", ng_neogeo_last_interrupt_level());
+    fprintf(f, "last_irq_vector=%u\n", ng_neogeo_last_interrupt_vector());
     fprintf(f, "scanline=%u\n", ng_neogeo_current_scanline());
+    fprintf(f, "lspc=$%04X\n", ng_neogeo_lspc_mode());
+    fprintf(f, "vram_addr=$%04X\n", ng_neogeo_vram_addr());
+    fprintf(f, "vram_mod=$%04X\n", ng_neogeo_vram_mod());
+    fprintf(f, "mslug_sync=$%014llX\n",
+            (unsigned long long)ng_generated_smoke_mslug_sync_flags());
+    fprintf(f, "mslug_counters=$%012llX\n",
+            (unsigned long long)ng_generated_smoke_mslug_sync_counters());
+    fprintf(f, "mslug_vblank=$%04X\n",
+            ng_generated_smoke_mslug_vblank_selector());
+    fprintf(f, "mslug_bios_flags=$%04X\n",
+            ng_generated_smoke_mslug_bios_flags());
     fprintf(f, "sound=$%02X\n", ng_neogeo_sound_command());
     fprintf(f, "port=$%02X\n", ng_neogeo_port_output());
     fprintf(f, "wram_nonzero=%u\n", ng_neogeo_work_ram_nonzero_bytes());
     fprintf(f, "wram_sum=$%08X\n", ng_neogeo_work_ram_checksum());
     fprintf(f, "palette_nonzero=%u\n", ng_neogeo_palette_ram_nonzero_bytes());
     fprintf(f, "palette_sum=$%08X\n", ng_neogeo_palette_ram_checksum());
+    fprintf(f, "palette_writes=%u\n", ng_neogeo_palette_write_count());
+    fprintf(f, "palette_nonzero_writes=%u\n",
+            ng_neogeo_palette_nonzero_write_count());
+    fprintf(f, "palette_last_addr=$%06X\n",
+            ng_neogeo_palette_last_addr() & 0x00FFFFFFu);
+    fprintf(f, "palette_last_value=$%04X\n",
+            ng_neogeo_palette_last_value());
+    fprintf(f, "palette_last_bank=%u\n", ng_neogeo_palette_last_bank());
+    fprintf(f, "palette_peak_nonzero=%u\n",
+            ng_neogeo_palette_peak_nonzero_bytes());
+    fprintf(f, "palette_peak_sum=$%08X\n",
+            ng_neogeo_palette_peak_checksum());
     fprintf(f, "vram_nonzero=%u\n", ng_neogeo_vram_nonzero_words());
     fprintf(f, "vram_sum=$%08X\n", ng_neogeo_vram_checksum());
     fprintf(f, "recent_loop=%u\n", ng_generated_smoke_recent_loop_period());
@@ -535,11 +614,20 @@ static void ng_generated_smoke_print_summary(void) {
     uint32_t recent_loop_period = ng_generated_smoke_recent_loop_period();
     fprintf(stderr,
             "smoke summary: dispatches=%llu cart=%llu bios=%llu "
-            "unique=%u hot_overflow=%u last=$%06X pc=$%06X sr=$%04X "
+            "unique=%u hot_overflow=%u last=$%06X last_cart=$%06X "
+            "last_bios=$%06X pc=$%06X sr=$%04X "
             "sp=$%08X polls=%u watchdog=%u vblank=%u frame=%u timer_irq=%u "
-            "irqack=%u irq_pending=$%04X scanline=%u sound=$%02X "
+            "irqack=%u irq_pending=$%04X last_irq_pc=$%06X "
+            "last_irq_level=%u last_irq_vector=%u "
+            "scanline=%u lspc=$%04X vram_addr=$%04X vram_mod=$%04X "
+            "mslug_sync=$%014llX mslug_counters=$%012llX "
+            "mslug_vblank=$%04X mslug_bios_flags=$%04X sound=$%02X "
             "port=$%02X wram_nonzero=%u "
             "wram_sum=$%08X palette_nonzero=%u palette_sum=$%08X "
+            "palette_writes=%u palette_nonzero_writes=%u "
+            "palette_last_addr=$%06X palette_last_value=$%04X "
+            "palette_last_bank=%u palette_peak_nonzero=%u "
+            "palette_peak_sum=$%08X "
             "vram_nonzero=%u vram_sum=$%08X recent_loop=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             (unsigned long long)ng_generated_smoke_cart_dispatch_count(),
@@ -547,6 +635,8 @@ static void ng_generated_smoke_print_summary(void) {
             ng_generated_smoke_unique_dispatch_count(),
             ng_generated_smoke_dispatch_hot_overflow(),
             ng_generated_smoke_last_dispatch_addr() & 0x00FFFFFFu,
+            ng_generated_smoke_last_cart_dispatch_addr() & 0x00FFFFFFu,
+            ng_generated_smoke_last_bios_dispatch_addr() & 0x00FFFFFFu,
             g_ng_m68k.pc & 0x00FFFFFFu,
             g_ng_m68k.sr,
             g_ng_m68k.a[7],
@@ -557,13 +647,30 @@ static void ng_generated_smoke_print_summary(void) {
             ng_neogeo_timer_interrupts(),
             ng_neogeo_irq_ack_writes(),
             ng_neogeo_irq_pending(),
+            ng_neogeo_last_interrupt_return_pc() & 0x00FFFFFFu,
+            ng_neogeo_last_interrupt_level(),
+            ng_neogeo_last_interrupt_vector(),
             ng_neogeo_current_scanline(),
+            ng_neogeo_lspc_mode(),
+            ng_neogeo_vram_addr(),
+            ng_neogeo_vram_mod(),
+            (unsigned long long)ng_generated_smoke_mslug_sync_flags(),
+            (unsigned long long)ng_generated_smoke_mslug_sync_counters(),
+            ng_generated_smoke_mslug_vblank_selector(),
+            ng_generated_smoke_mslug_bios_flags(),
             ng_neogeo_sound_command(),
             ng_neogeo_port_output(),
             ng_neogeo_work_ram_nonzero_bytes(),
             ng_neogeo_work_ram_checksum(),
             ng_neogeo_palette_ram_nonzero_bytes(),
             ng_neogeo_palette_ram_checksum(),
+            ng_neogeo_palette_write_count(),
+            ng_neogeo_palette_nonzero_write_count(),
+            ng_neogeo_palette_last_addr() & 0x00FFFFFFu,
+            ng_neogeo_palette_last_value(),
+            ng_neogeo_palette_last_bank(),
+            ng_neogeo_palette_peak_nonzero_bytes(),
+            ng_neogeo_palette_peak_checksum(),
             ng_neogeo_vram_nonzero_words(),
             ng_neogeo_vram_checksum(),
             recent_loop_period);

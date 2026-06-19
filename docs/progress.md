@@ -212,10 +212,10 @@ wall-clock timeout, and it gets far enough to write headless VRAM:
 ```text
 starting cart entry $0007CC ssp=$0010F300
 returned pc=$C11646 sr=$2100 sp=$0010F2EE
-smoke summary: dispatches=500000 cart=13547 bios=486453 unique=288 hot_overflow=0 last=$C00438 pc=$C11646 sr=$2100 sp=$0010F2EE polls=2655844 watchdog=13587 vblank=10060 frame=10060 timer_irq=0 irqack=9290 irq_pending=$0004 scanline=4 sound=$03 port=$00 wram_nonzero=606 wram_sum=$0000FB79 palette_nonzero=0 palette_sum=$00000000 vram_nonzero=2304 vram_sum=$019C9E00 recent_loop=0
+smoke summary: dispatches=500000 cart=13547 bios=486453 unique=288 hot_overflow=0 last=$C00438 last_cart=$0008F6 last_bios=$C00438 pc=$C11646 sr=$2100 sp=$0010F2EE polls=2655844 watchdog=13587 vblank=10060 frame=10060 timer_irq=0 irqack=9290 irq_pending=$0004 last_irq_pc=$05A870 last_irq_level=1 last_irq_vector=25 scanline=4 lspc=$4000 vram_addr=$1199 vram_mod=$0001 mslug_sync=$00000000000000 mslug_counters=$000000000000 mslug_vblank=$0000 mslug_bios_flags=$0202 sound=$03 port=$00 wram_nonzero=606 wram_sum=$0000FB79 palette_nonzero=0 palette_sum=$00000000 palette_writes=16684 palette_nonzero_writes=274 palette_last_addr=$400002 palette_last_value=$0000 palette_last_bank=0 palette_peak_nonzero=14 palette_peak_sum=$0000070A vram_nonzero=2304 vram_sum=$019C9E00 recent_loop=0
 dispatch hot: unique=288 overflow=0 top0=$C18500:74304 top1=$C184FC:18578 top2=$C184F8:18577 top3=$C184F4:18573 top4=$C1866C:18570
 smoke budget reached at $C11646 after 500000 dispatches
-progress oracle: ok budgets=10000,50000,100000,500000 final_pc=$C11646 cart=13547 bios=486453 unique=288 polls=2655844 vblank=10060 frame=10060 scanline=4 irqack=9290 watchdog=13587 wram_nonzero=606 wram_sum=$0000FB79 palette_nonzero=0 palette_sum=$00000000 vram_nonzero=2304 vram_sum=$019C9E00 final_recent_loop=0 max_recent_loop=50
+progress oracle: ok budgets=500000,5000000 final_pc=$C116C8 cart=943807 bios=4056193 last_cart=$000934 last_bios=$C116A4 unique=369 polls=23700433 vblank=89774 frame=89774 scanline=97 lspc=$0000 vram_addr=$0000 vram_mod=$0001 irqack=77854 last_irq=$001FE2:L1/V25 mslug_sync=$01310000003100 mslug_counters=$000401300000 mslug_vblank=$0000 mslug_bios_flags=$8202 watchdog=19149 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 palette_writes=16684 palette_nonzero_writes=274 palette_last=$400002:$0000:bank0 palette_peak_nonzero=14 palette_peak_sum=$0000070A vram_nonzero=2304 vram_sum=$01A0C140 final_recent_loop=0 max_recent_loop=0
 ```
 
 That is the first controlled "keeps running headless" checkpoint: no dispatch
@@ -227,7 +227,7 @@ RAM/VRAM checksums,
 watchdog/poll/VBlank/frame/IRQACK growth, pending-IRQ state, current scanline,
 and a short recent-dispatch loop detector), not a boot/attract-mode success
 oracle. The 50k checkpoint can stop in a short BIOS polling loop, but the 500k
-final checkpoint leaves that loop (`final_recent_loop=0`) and now requires
+and 5M checkpoints leave that loop (`final_recent_loop=0`) and now require
 nonzero VRAM writes.
 
 The smoke can also save final-budget CPU-visible state for offline inspection:
@@ -250,9 +250,17 @@ The visualizer writes dependency-free PPM diagnostics under
 color hashes, a nonzero-VRAM mask/tint, approximate palette swatches, and a
 short text report. These are intentionally not accurate Neo Geo rendering yet;
 they are a bridge from headless numeric counters to inspectable artifacts.
-Both the 500k and 5M snapshots still have `palette_nonzero=0`, so the next
-display-facing runtime question is why the current path reaches VRAM writes
-before any palette writes.
+Both the 500k and 5M snapshots still end with `palette_nonzero=0`, but richer
+palette telemetry shows this is no longer "no palette writes": the current run
+does `palette_writes=16684`, including `palette_nonzero_writes=274`, with a
+small peak of `palette_peak_nonzero=14` bytes before later zeroing it again.
+The display-facing blocker is therefore not palette address decoding; it is
+why this headless path has not reached durable game palette/video init yet.
+The 5M checkpoint also records the cart-side VBlank/main-sync state
+`mslug_sync=$01310000003100`, counters `mslug_counters=$000401300000`, and the
+last interrupt returning to cart PC `$001FE2`, so the game VBlank handshake is
+alive enough to set `$106ED8` but still not enough to produce renderable
+palette state.
 
 This snapshot/debug-render path is also the cleanest seam for a real SDL host.
 When SDL2 is available through `pkg-config`, CMake builds the optional
@@ -271,9 +279,9 @@ A manual single-budget deep probe also reaches its guard without a dispatch or
 bus miss:
 
 ```text
-smoke summary: dispatches=5000000 cart=943807 bios=4056193 unique=369 hot_overflow=0 last=$C116A4 pc=$C116C8 sr=$2108 sp=$0010F2B2 polls=23700433 watchdog=19149 vblank=89774 frame=89774 timer_irq=0 irqack=77854 irq_pending=$0004 scanline=97 sound=$04 port=$00 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 vram_nonzero=2304 vram_sum=$01A0C140 recent_loop=0
+smoke summary: dispatches=5000000 cart=943807 bios=4056193 unique=369 hot_overflow=0 last=$C116A4 last_cart=$000934 last_bios=$C116A4 pc=$C116C8 sr=$2108 sp=$0010F2B2 polls=23700433 watchdog=19149 vblank=89774 frame=89774 timer_irq=0 irqack=77854 irq_pending=$0004 last_irq_pc=$001FE2 last_irq_level=1 last_irq_vector=25 scanline=97 lspc=$0000 vram_addr=$0000 vram_mod=$0001 mslug_sync=$01310000003100 mslug_counters=$000401300000 mslug_vblank=$0000 mslug_bios_flags=$8202 sound=$04 port=$00 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 palette_writes=16684 palette_nonzero_writes=274 palette_last_addr=$400002 palette_last_value=$0000 palette_last_bank=0 palette_peak_nonzero=14 palette_peak_sum=$0000070A vram_nonzero=2304 vram_sum=$01A0C140 recent_loop=0
 dispatch hot: unique=369 overflow=0 top0=$C18500:622816 top1=$C184FC:155706 top2=$C184F8:155705 top3=$C184F4:155701 top4=$C1866C:155698
-progress oracle: ok budgets=5000000 final_pc=$C116C8 cart=943807 bios=4056193 unique=369 polls=23700433 vblank=89774 frame=89774 scanline=97 irqack=77854 watchdog=19149 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 vram_nonzero=2304 vram_sum=$01A0C140 final_recent_loop=0 max_recent_loop=0
+progress oracle: ok budgets=500000,5000000 final_pc=$C116C8 cart=943807 bios=4056193 last_cart=$000934 last_bios=$C116A4 unique=369 polls=23700433 vblank=89774 frame=89774 scanline=97 lspc=$0000 vram_addr=$0000 vram_mod=$0001 irqack=77854 last_irq=$001FE2:L1/V25 mslug_sync=$01310000003100 mslug_counters=$000401300000 mslug_vblank=$0000 mslug_bios_flags=$8202 watchdog=19149 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 palette_writes=16684 palette_nonzero_writes=274 palette_last=$400002:$0000:bank0 palette_peak_nonzero=14 palette_peak_sum=$0000070A vram_nonzero=2304 vram_sum=$01A0C140 final_recent_loop=0 max_recent_loop=0
 ```
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
