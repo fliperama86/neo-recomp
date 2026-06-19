@@ -1651,12 +1651,11 @@ static int emit_divide(FILE *out, const NgM68kInstr *instr) {
     if (instr->mnemonic == NG_M68K_DIVU) {
         fprintf(out, "    { uint16_t ng_divisor = (uint16_t)(%s);\n", src_expr);
         fprintf(out, "      if (ng_divisor == 0) {\n");
-        fprintf(out, "        g_ng_m68k.a[7] -= 4u;\n");
-        fprintf(out, "        ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+        fprintf(out, "        ng_push_exception_frame(0x%08Xu);\n",
                 (instr->addr + instr->byte_length) & 0x00FFFFFFu);
-        fprintf(out, "        g_ng_m68k.a[7] -= 2u;\n");
-        fprintf(out, "        ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
-        fprintf(out, "        ng_generated_call(ng68k_read32(0x00000014u));\n");
+        fprintf(out, "        uint32_t ng_vector_pc = ng68k_read32(0x00000014u);\n");
+        fprintf(out, "        if (ng_service_trace(ng_vector_pc, ng_trace_sr)) return;\n");
+        fprintf(out, "        ng_generated_call(ng_vector_pc);\n");
         fprintf(out, "        return;\n");
         fprintf(out, "      }\n");
         fprintf(out, "      uint32_t ng_dividend = g_ng_m68k.d[%u]; uint32_t ng_quotient = ng_dividend / ng_divisor; uint16_t ng_remainder = (uint16_t)(ng_dividend %% ng_divisor);\n",
@@ -1669,12 +1668,11 @@ static int emit_divide(FILE *out, const NgM68kInstr *instr) {
     } else {
         fprintf(out, "    { int16_t ng_divisor = (int16_t)(%s);\n", src_expr);
         fprintf(out, "      if (ng_divisor == 0) {\n");
-        fprintf(out, "        g_ng_m68k.a[7] -= 4u;\n");
-        fprintf(out, "        ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+        fprintf(out, "        ng_push_exception_frame(0x%08Xu);\n",
                 (instr->addr + instr->byte_length) & 0x00FFFFFFu);
-        fprintf(out, "        g_ng_m68k.a[7] -= 2u;\n");
-        fprintf(out, "        ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
-        fprintf(out, "        ng_generated_call(ng68k_read32(0x00000014u));\n");
+        fprintf(out, "        uint32_t ng_vector_pc = ng68k_read32(0x00000014u);\n");
+        fprintf(out, "        if (ng_service_trace(ng_vector_pc, ng_trace_sr)) return;\n");
+        fprintf(out, "        ng_generated_call(ng_vector_pc);\n");
         fprintf(out, "        return;\n");
         fprintf(out, "      }\n");
         fprintf(out, "      int32_t ng_dividend = (int32_t)g_ng_m68k.d[%u]; int32_t ng_quotient = ng_dividend / ng_divisor; int16_t ng_remainder = (int16_t)(ng_dividend %% ng_divisor);\n",

@@ -35,10 +35,10 @@ Last local verification: **8/8 passing** on 2026-06-19.
 | `JSR`/`BSR` return push | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; `emit_push_return_address()` in `recompiler/src/c_emitter.c`. | Generated code pushes the following PC as a 32-bit return address. |
 | `JSR`/`BSR` tail-dispatch | Done | `tests/test_c_emitter.c`; `recompiler/src/c_emitter.c`. | Generated code dispatches to the subroutine and returns from the host function instead of continuing host-side immediately. |
 | Post-`JSR`/`BSR` continuation discovery | Done | `tests/test_function_discovery.c`; `recompiler/src/function_discovery.c`. | Continuation addresses are added so `RTS` can return through the generated dispatch table. |
-| `RTS` stack return dispatch | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; `recompiler/src/c_emitter.c`. | `RTS` reads the return PC from `(A7)`, increments `A7` by 4, and dispatches to that PC. |
+| `RTS` stack return dispatch | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; `recompiler/src/c_emitter.c`. | `RTS` reads the return PC from `(A7)`, increments `A7` by 4, and dispatches to that PC. Generated-exec covers a stack-manipulating return pattern (`ADDQ.L #4,A7; RTS`) so a callee can skip its local return address and return to the caller's caller. |
 | Direct and control-EA `JMP`/`JSR` emission | Done | `tests/test_c_emitter.c`, `tests/test_m68k_decode.c`. | Static discovery is still only conservative for direct/control targets it can prove. |
 | `RTE`/`RTR` basic stack pop and dispatch | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; `recompiler/src/c_emitter.c`. | `RTE` is supervisor-guarded and restores SR through the generated SR helper, so returning to user mode switches from `SSP` back to `USP`. Broader interrupt recognition remains separate partial work. |
-| Basic exception vector stack path | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; `ng_push_exception_frame()` emitted by `recompiler/src/c_emitter.c`. | Covered for emitted trap-style paths, including user-to-supervisor stack selection before pushing SR/PC frames. Exact exception priorities and bus/address-error frames remain partial. |
+| Basic exception vector stack path | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; `ng_push_exception_frame()` emitted by `recompiler/src/c_emitter.c`. | Covered for emitted trap-style paths and divide-by-zero, including user-to-supervisor stack selection before pushing SR/PC frames. Exact exception priorities and bus/address-error frames remain partial. |
 | `STOP` decode/emission hook | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; runtime hook `ng_m68k_stop_until_interrupt()`. | Immediate SR install, supervisor enforcement, and the runtime stop hook are covered. Basic interrupt wake from `STOP` is tracked separately below. |
 | `MOVE USP` transfer emission | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; state fields in `include/ngrecomp/m68k_state.h`. | Transfer instructions are emitted and guarded by supervisor-mode privilege checks. |
 | Supervisor/user stack switching for emitted code | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; generated `ng_set_sr()` helper in `recompiler/src/c_emitter.c`. | Full-SR writes, `STOP`, exception entry, and `RTE` now switch active `A7` between `USP` and `SSP` when the S bit changes. |
@@ -50,7 +50,7 @@ Last local verification: **8/8 passing** on 2026-06-19.
 | Memory-mapped `REG_IRQACK` | Done | `tests/test_runtime_interrupts.c`; runtime `ng68k_write8()`/`ng68k_write16()` handling for `$3C000C`. | Word writes to `$3C000C` and low-byte writes to `$3C000D` clear the corresponding pending NeoGeo IRQ sources through `ng_neogeo_ack_interrupts()`. |
 | Codegen diagnostics for unsupported/decode failures | Done | `tests/test_c_emitter.c`; `NgEmitDiagnostics` and `ng_emit_c_checked()` in `recompiler/src/c_emitter.c`. | Checked C emission now records unsupported decoded instructions and decode errors and fails generation instead of silently relying only on generated runtime dispatch misses. |
 | Initial post-decode legality validator | Done | `tests/test_m68k_validate.c`; `recompiler/src/m68k_validate.c`. | A first explicit validator rejects `UNKNOWN`/`INVALID`, illegal control-EA uses, illegal `MOVE` destinations, invalid condition numbers, and selected data-alterable requirements. Checked emission now consults it before emitting an instruction. |
-| Basic trace exception entry | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; generated `ng_service_trace()` helper. | Generated code snapshots the SR T bit before executing each instruction. Linear fall-through instructions, taken `BRA`/`Bcc`, taken `DBcc`, `JSR`/`BSR`/`JMP`, `RTS`, `STOP`, `RTE`/`RTR`, `TRAP`, taken `TRAPV`, and failed `CHK` paths now vector through trace vector 9 after execution when trace was enabled at instruction start. Trace stacks the architectural next/target PC, or for traced instruction exceptions the exception-handler PC after that exception frame is built, plus current saved SR on `SSP`, and clears the live T bit during exception entry. |
+| Basic trace exception entry | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; generated `ng_service_trace()` helper. | Generated code snapshots the SR T bit before executing each instruction. Linear fall-through instructions, taken `BRA`/`Bcc`, taken `DBcc`, `JSR`/`BSR`/`JMP`, `RTS`, `STOP`, `RTE`/`RTR`, `TRAP`, taken `TRAPV`, failed `CHK`, and divide-by-zero paths now vector through trace vector 9 after execution when trace was enabled at instruction start. Trace stacks the architectural next/target PC, or for traced instruction exceptions the exception-handler PC after that exception frame is built, plus current saved SR on `SSP`, and clears the live T bit during exception entry. Generated-exec also covers no-trace behavior for not-executed illegal/privilege cases and trace-before-pending-interrupt priority. |
 | All 16 condition predicates available to generated code | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; condition predicate helper in `recompiler/src/c_emitter.c`. | Only selected branch/condition behavior is oracle-covered; full flag correctness is partial. |
 
 ## Partial / Needs Broader Proof
@@ -60,11 +60,11 @@ Last local verification: **8/8 passing** on 2026-06-19.
 | Opcode coverage | Partial | Current sweep proves every decoder-recognized non-`UNKNOWN` opcode emits without an unsupported stub, and checked emission fails on unsupported decoded instructions. | A spec-driven legality matrix and/or trusted-disassembler audit for every valid 68000 opcode/addressing form. |
 | Effective-address legality | Partial | Generic EA helpers, many decode/emission paths, and an initial post-decode validator exist. | Expand the validator to every instruction family's legal source/destination EA combinations and verify all valid EA forms per family. |
 | Condition codes | Partial | `N`/`Z` and selected `C`/`X`/`V` paths are implemented where tests cover them. | Oracle/fuzz coverage for exact `X/N/Z/V/C` behavior across arithmetic, logical, shifts/rotates, BCD, compare, extend, and divide edge cases. |
-| Arithmetic/divide semantics | Partial | `MULS/MULU`, `DIVS/DIVU`, `ADD/SUB/CMP`, extend arithmetic, BCD, and unary RMW paths exist. | Exact overflow, quotient/remainder, divide-by-zero, undefined/unaffected flags, and edge-case behavior against a trusted 68000 oracle. |
+| Arithmetic/divide semantics | Partial | `MULS/MULU`, `DIVS/DIVU`, `ADD/SUB/CMP`, extend arithmetic, BCD, and unary RMW paths exist. `DIVS/DIVU` divide-by-zero now enters the shared exception-frame path and honors trace-after-instruction-trap priority. | Exact overflow, quotient/remainder, undefined/unaffected flags, and edge-case behavior against a trusted 68000 oracle. |
 | `MOVEM` | Partial | Long/word register-list transfers and predecrement paths are emitted for covered cases. | Full ordering, mask, word sign-extension, and all valid EA modes verified against oracle fixtures. |
-| Exception stack semantics | Partial | Basic SR/PC exception frames, supervisor stack selection, and vector dispatch are emitted for covered generated paths. | Exact vector fetch ordering, address/bus error frames, and all exception priorities. |
+| Exception stack semantics | Partial | Basic SR/PC exception frames, supervisor stack selection, and vector dispatch are emitted for covered generated paths, including divide-by-zero. | Exact vector fetch ordering, address/bus error frames, and the full exception-priority matrix. |
 | Interrupt model | Partial | `STOP` and ordinary instruction boundaries can accept runtime-approved interrupts, stack a format-0 frame, update the interrupt mask, vector to a handler, and return via `RTE`. The default runtime has IPL mask, level-7-edge tracking, cartridge VBlank/timer/reset-pending source APIs, and memory-mapped `REG_IRQACK` clearing. | Interrupt priority against other exceptions, LSPC timer registers, and actual VBlank/timer scheduling. |
-| Trace mode | Partial | Generated code uses the T bit from instruction start and services trace exceptions after linear fall-through, taken branches/`DBcc`, subroutine calls, jumps, `RTS`, `STOP`, `RTE`/`RTR`, `TRAP`, taken `TRAPV`, and failed `CHK`, before the next instruction-boundary interrupt poll. Exception entry clears the live T bit while preserving saved SR. | Trace non-occurrence around not-executed illegal/privilege cases and pending exception interactions. |
+| Trace mode | Partial | Generated code uses the T bit from instruction start and services trace exceptions after linear fall-through, taken branches/`DBcc`, subroutine calls, jumps, `RTS`, `STOP`, `RTE`/`RTR`, `TRAP`, taken `TRAPV`, failed `CHK`, and divide-by-zero, before the next instruction-boundary interrupt poll. Exception entry clears the live T bit while preserving saved SR, not-executed illegal/privilege cases do not trace, and pending interrupts are taken after trace. | Broader spec/oracle coverage across every remaining exception class and generated path, especially address/bus-error paths once implemented. |
 | Function discovery / CFG | Partial | Direct calls, instruction-start continuations, `JSR`/`BSR` continuations, `STOP` continuations, tail jumps, and a known PC-index jump-table shape are discovered conservatively. | Conditional branch basic-block splitting, indirect jump tables beyond the current pattern, data-driven targets, and robust real-ROM CFG recovery without excessive duplicate generation. |
 | `g_ng_m68k.pc` | Partial | Dispatch uses function addresses and local labels; some stack frames include explicit return PCs. | Generated code does not consistently maintain architectural `PC` after each instruction or at every exception boundary. |
 | Real-ROM frontier tracking | Partial | `docs/progress.md` records the last Metal Slug frontier and notes it is stale. | Rerun the Metal Slug smoke and replace stale `DC.W` frontier data with the current first failure. |
@@ -75,7 +75,7 @@ Last local verification: **8/8 passing** on 2026-06-19.
 | Area | Status | Required work |
 | --- | --- | --- |
 | LSPC timer / VBlank scheduling | Missing | Implement LSPC timer registers, VBlank scheduling, and exception-priority rules. |
-| Full trace priority coverage | Missing | Complete trace non-occurrence around not-executed illegal/privilege cases and pending exception-priority interactions. |
+| Full exception/trace priority matrix | Missing | Broaden priority coverage across every generated exception class, address/bus errors once implemented, and nested exception/vector-fetch failure cases. |
 | Address/bus error precision | Missing | Handle odd word/long accesses and unmapped/bus-error cases with correct exception behavior if required by real software. |
 | Full oracle/fuzz harness | Missing | Add a trusted 68000 reference runner or generated randomized fixtures for every implemented instruction family, size, EA mode, and edge case. |
 | Cycle timing / prefetch | Missing | No cycle timing or prefetch behavior is modeled. Only add this once functional correctness and real-ROM needs demand it. |
@@ -95,16 +95,19 @@ should **not** replace the real supervisor/user stack switching tracked here.
 
 1. **LSPC timer / VBlank scheduling**: add tests for timer registers, VBlank
    scheduling, and interrupt priority against other exceptions.
-2. **Full trace priority coverage**: add tests for trace non-occurrence around
-   not-executed illegal/privilege cases and pending-interrupt priority.
-3. **Trusted oracle/fuzz harness**: compare generated C against an external or
+2. **Trusted oracle/fuzz harness**: compare generated C against an external or
    embedded 68000 reference for per-instruction semantic edge cases.
-4. **Real-ROM smoke refresh**: regenerate Metal Slug C, capture the current first
+3. **Real-ROM smoke refresh**: regenerate Metal Slug C, capture the current first
    frontier, add a regression, and update this tracker.
-5. **Broaden post-decode legality validator**: make invalid source/destination
+4. **Broaden post-decode legality validator**: make invalid source/destination
    effective-address combinations and CPU-family scope explicit for every
    decoded instruction family.
-6. **NeoGeo bus slices**: implement one hardware-visible region at a time with a
+5. **Game metadata and dispatch audits**: parse `games/*.toml`, classify direct/
+   computed/jump-table/unresolved targets, and fail smoke runs on dispatch gaps.
+6. **Full exception/trace priority matrix**: broaden coverage across every
+   generated exception class, address/bus errors once implemented, and nested
+   exception/vector-fetch failure cases.
+7. **NeoGeo bus slices**: implement one hardware-visible region at a time with a
    failing runtime/generated-exec test first.
 
 ## Update Rules

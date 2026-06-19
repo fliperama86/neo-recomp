@@ -93,12 +93,13 @@ For a concrete done/partial/missing checklist, see [`68k_correctness_tracker.md`
 Covered by executable generated-C validation:
 
 - control flow: direct and control-EA `JSR`, `BSR`, `RTS` stack-return
-  dispatch, tail `JMP`, local `BRA`, and selected `Bcc`
+  dispatch, a reference-inspired stack-manipulating return regression, tail
+  `JMP`, local `BRA`, and selected `Bcc`
 - system/exception-control paths: `TRAP`, `TRAPV`, `ILLEGAL`, A-line,
   F-line, `RESET`, `STOP`, `RTE`, and `RTR` are recognized. `TRAP`,
-  `TRAPV`, `ILLEGAL`, A-line, F-line, and failed `CHK` now push 68000-style
-  SR/PC exception frames and dispatch through the vector table; divide-by-zero
-  vectors through vector 5; `RTE`/`RTR` pop stack frames back into SR/CCR and
+  `TRAPV`, `ILLEGAL`, A-line, F-line, failed `CHK`, and divide-by-zero now
+  push 68000-style SR/PC exception frames and dispatch through the vector
+  table; `RTE`/`RTR` pop stack frames back into SR/CCR and
   PC. Full-SR writes, `STOP`, exception entry, and `RTE` use the
   generated SR helper to switch active `A7` between `USP` and `SSP` when the
   S bit changes. User-mode privileged operations now vector through
@@ -206,6 +207,18 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added the reference-inspired stack-manipulating return regression:
+  a callee executes `ADDQ.L #4,A7; RTS` and correctly skips the local
+  `JSR` continuation to dispatch to the caller's caller via the architectural
+  stack.
+- local: Closed another exception-priority gap from the official MC68000
+  exception model: `DIVS`/`DIVU` divide-by-zero now uses the shared
+  exception-frame path, switches user-mode faults onto `SSP`, clears live
+  trace during exception entry, and services trace to the divide handler PC
+  before handler execution when T was set at instruction start.
+- local: Added generated-exec regression coverage for trace non-occurrence
+  on not-executed illegal/privilege cases and for trace priority over a
+  pending post-instruction interrupt.
 - local: Added trace-priority handling for failed `CHK`: generated code now uses
   the shared exception frame path, then services trace to the CHK handler PC
   when tracing was enabled at instruction start.
@@ -413,14 +426,19 @@ Use this loop:
 
 Immediate next slice:
 
-- Rerun the Metal Slug `.neo` smoke with the new `$D101` support.
-- Confirm `$00067E` moves forward in generated C.
-- Pick the next `DC.W` frontier from the regenerated `build\mslug_recomp.c`.
+- Fact-check the NeoGeo LSPC timer/VBlank register behavior.
+- Add failing runtime tests for timer register state, VBlank/timer interrupt
+  requests, IRQACK clearing, and priority against the current IPL controller.
+- Implement the smallest scheduling slice that makes those tests pass.
+
+Real-ROM smoke remains a near follow-up once a local `.neo` input is available.
 
 Near follow-ups:
 
+- Parse `games/*.toml` into machine-checkable discovery/runtime metadata.
+- Add dispatch and interior-label audits so computed-control-flow misses fail smoke runs.
 - Migrate more instruction families onto the generic EA helpers instead of adding bespoke forms.
-- Add a decode/codegen legality layer so invalid source/destination EA combinations fail loudly.
+- Broaden the decode/codegen legality layer so invalid source/destination EA combinations fail loudly.
 - Add byte/word/long helpers for arithmetic flags instead of ad hoc emitted flag code.
 - Replace narrow condition handling with a tested condition-code helper table.
 - Start separating instruction semantics into reusable generated helper functions when repeated emitted C becomes noisy.

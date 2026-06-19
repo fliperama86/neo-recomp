@@ -18,17 +18,36 @@ set of patterns to adapt deliberately.
 | Area | `neo-recomp` now | `segagenesisrecomp` reference | Takeaway for `neo-recomp` |
 | --- | --- | --- | --- |
 | Target | Neo Geo P-ROM / 68000 bring-up. | Sega Genesis 68000 with playable Sonic milestones. | Keep NeoGeo hardware/runtime design separate; do not import Genesis assumptions. |
-| CPU correctness strategy | Synthetic generated-C oracle fixture plus unit tests and opcode emission sweep. | L1 decoder tests, synthetic decoder tests, validator tests, and L3 per-function oracle against `clown68000`. | Our next large harness should be a trusted 68000 oracle/fuzz layer, not only a hand-written mini interpreter. |
+| CPU correctness strategy | Synthetic generated-C oracle fixture plus unit tests and opcode emission sweep. Recent slices cover exception stack/trace behavior that the reference coverage audit still lists as stubbed or partial for several instruction traps. | L1 decoder tests, synthetic decoder tests, validator tests, and L3 per-function oracle against `clown68000`. | Our next large harness should be a trusted 68000 oracle/fuzz layer, not only a hand-written mini interpreter. |
 | Function discovery | Conservative static seeds from cartridge entry, direct call targets, continuations, tail jumps, and one PC-index jump-table shape. | Static worklist plus disassembly-generated seeds, labels, jump tables, code-address oracles, protected ranges, blacklists, dispatch-miss feedback, and interior-label auditing. | Add machine-checkable CFG/discovery inputs before expecting real-ROM boot progress. |
 | Unsupported behavior visibility | Checked emission now reports unsupported/decode failures through `NgEmitDiagnostics`; generated code still logs runtime dispatch misses. | Centralized codegen diagnostics count unsupported/TODO paths and can fail generation; dispatch audit classifies dynamic jump sites. | Extend diagnostics into dispatch/jump-table audits and unresolved dynamic control-flow classification. |
-| Opcode legality | Tracker marks this partial; an initial `m68k_validate.c` now rejects selected illegal post-decode forms. | Has `m68k_validator.c` as a post-decode MC68000 legality gate. Coverage doc still calls it non-exhaustive. | Broaden our validator into a spec-driven legality layer before broad real-ROM scanning. |
+| Opcode legality | Tracker marks this partial; an initial `m68k_validate.c` now rejects selected illegal post-decode forms. | Has `m68k_validator.c` as a post-decode MC68000 legality gate. Coverage doc still calls legality non-exhaustive. | Broaden our validator into a spec-driven legality layer before broad real-ROM scanning. |
 | Runtime model | Small runtime API boundary only; no real NeoGeo bus yet. | Full runner with Genesis bus, VDP/audio/input, cooperative fibers, VBlank integration, traces, and optional enhancements. | Our runtime needs an equivalent NeoGeo bus/interrupt loop, but only after CPU-visible semantics are stable. |
-| `RTS`/subroutine model | Current generated code now uses stack-backed return dispatch: `JSR`/`BSR` push return PC, `RTS` pops PC and dispatches. | Uses C calls for known `JSR` plus explicit return push/pop and special propagation for stack-skip idioms like `addq.l #4,sp; rts`. | Keep our stack-backed model for architectural correctness; later add tests for stack-skip idioms instead of relying on host call return. |
+| `RTS`/subroutine model | Current generated code uses stack-backed return dispatch: `JSR`/`BSR` push return PC, `RTS` pops PC and dispatches. A generated-exec regression covers a stack-skip idiom (`ADDQ.L #4,A7; RTS`). | Uses C calls for known `JSR` plus explicit return push/pop and special propagation for stack-skip idioms like `addq.l #4,sp; rts`. | Keep our stack-backed model for architectural correctness and retain stack-mutation regressions instead of relying on host call return. |
 | Supervisor/user stacks | Active `SSP`/`USP` switching is now covered for full-SR writes, exception entry, `STOP`, and `RTE`. | Runtime state comments assume `A7 = SSP` and `USP` is a separate shadow; good enough for Genesis game paths, not a complete user-mode model. | Do **not** copy this simplification; keep the official MC68000 stack model. |
 | Interrupts/STOP | Runtime-approved `STOP` wake, instruction-boundary interrupts, a basic IPL/level-7-edge runtime controller, cartridge VBlank/timer/reset-pending source APIs, and memory-mapped `REG_IRQACK` clearing are covered; timer/VBlank scheduling remains open. | Runtime has cooperative VBlank and STOP yield hooks, but many semantics are tuned to Genesis/Sonic. | Use it as a design reference for runtime scheduling, not as a 68000 spec oracle. |
 | Cycle timing | Missing. | Emits estimated per-instruction cycles and uses a cycle accumulator for VBlank/audio timing. | Add only after semantic correctness; make cycle estimates separately testable. |
 | Game config | Current `--game` is accepted but not actually parsed into discovery/runtime metadata. | TOML config drives output prefix, disassembly discovery files, RAM layout, jump tables, protected ranges, code-address oracles, and per-game hooks. | `neo-recomp` should parse `games/*.toml` for real metadata before serious real-ROM smoke work. |
 | Tracking docs | Added `docs/68k_correctness_tracker.md`; progress and finish plan exist. | Has `COVERAGE.md`, `PRINCIPLES.md`, debug docs, and generated dispatch audits. | Keep our tracker, and add machine-generated audits as implementation catches up. |
+
+## 2026-06-19 Follow-Up Contrast
+
+The reference audit is useful, but it is not a drop-in checklist for our current
+CPU work. Fact-checked local files show two different strengths:
+
+- `segagenesisrecomp/COVERAGE.md` still lists several CPU semantics as decoded
+  but stubbed or collapsed (`MOVEP`, BCD ops, `CHK`, `TRAP`, `STOP`, `TRAPV`,
+  `RTR`, `CMPM`, immediate-to-CCR/SR, and illegal/A/F-line classes).
+  `neo-recomp` has generated-exec coverage for those families or their basic
+  exception paths, so copying that implementation would regress CPU behavior.
+- The reference is ahead on **project scaffolding**: `game_config.c`, generated
+  dispatch audits, disassembly-sourced seeds/jump tables, interior-label checks,
+  and L3 oracle tests. Those are still actionable for us because they reduce
+  real-ROM guesswork.
+- The reference README advertises a stack-skip fix for `addq.l #4,sp; rts`
+  because its generated calls can behave like host calls. Our stack-backed
+  `JSR`/`RTS` model now has a generated-exec regression proving the
+  architectural SP mutation drives the return target.
 
 ## Reference Patterns Worth Adapting
 
@@ -94,7 +113,7 @@ These reinforce items already in `68k_correctness_tracker.md`:
    loop.
 3. Add **game TOML parsing** so `--game` drives real metadata instead of being a
    printed path.
-4. Add a **post-decode legality validator** and route invalid encodings to loud
-   diagnostics/trap behavior.
+4. **Broaden the post-decode legality validator** and route invalid encodings
+   to loud diagnostics/trap behavior.
 5. Add a **trusted oracle harness** for CPU semantics and per-function parity.
 6. Add **dispatch/jump-table audits** and treat dispatch misses as graph failures.

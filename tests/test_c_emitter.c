@@ -903,8 +903,10 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: DIVU.W #$0,D7 */") != NULL);
-        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x00000004u);") != NULL);
-        CHECK(strstr(text, "ng_generated_call(ng68k_read32(0x00000014u));") != NULL);
+        CHECK(strstr(text, "ng_push_exception_frame(0x00000004u);") != NULL);
+        CHECK(strstr(text, "uint32_t ng_vector_pc = ng68k_read32(0x00000014u);") != NULL);
+        CHECK(strstr(text, "if (ng_service_trace(ng_vector_pc, ng_trace_sr)) return;") != NULL);
+        CHECK(strstr(text, "ng_generated_call(ng_vector_pc);") != NULL);
 
         ng_program_rom_free(&rom);
     }

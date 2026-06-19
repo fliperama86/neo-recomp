@@ -2700,5 +2700,119 @@ int main(void) {
     CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T));
     CHECK(ng68k_read32(0x000001ECu) == 0x000005C4u);
 
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = (uint16_t)(SR_S | SR_T);
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    ng68k_write32(4u * 4u, 0x00000600u);
+    ng68k_write32(9u * 4u, 0x00000610u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x000005F0u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.a[7] == 0x000001EAu);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T));
+    CHECK(ng68k_read32(0x000001ECu) == 0x000005F2u);
+    CHECK(ng68k_read16(0x000001E4u) == 0x0000u);
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = SR_T;
+    g_ng_m68k.a[7] = 0x00000100u;
+    g_ng_m68k.ssp = 0x000001F0u;
+    ng68k_write32(8u * 4u, 0x00000390u);
+    ng68k_write32(9u * 4u, 0x00000610u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000370u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.a[7] == 0x000001EAu);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read16(0x000001EAu) == SR_T);
+    CHECK(ng68k_read32(0x000001ECu) == 0x00000370u);
+    CHECK(ng68k_read16(0x000001E4u) == 0x0000u);
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = 0;
+    g_ng_m68k.a[7] = 0x00000100u;
+    g_ng_m68k.ssp = 0x000001F0u;
+    ng68k_write32(5u * 4u, 0x00000630u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000620u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.a[7] == 0x000001EAu);
+    CHECK(g_ng_m68k.usp == 0x00000100u);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read16(0x000001EAu) == 0x0000u);
+    CHECK(ng68k_read32(0x000001ECu) == 0x00000624u);
+    CHECK(ng68k_read16(0x000000FAu) == 0x0000u);
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = (uint16_t)(SR_S | SR_T);
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    ng68k_write32(5u * 4u, 0x00000630u);
+    ng68k_write32(9u * 4u, 0x00000640u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000620u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.a[7] == 0x000001E4u);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read16(0x000001E4u) == SR_S);
+    CHECK(ng68k_read32(0x000001E6u) == 0x00000630u);
+    CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T));
+    CHECK(ng68k_read32(0x000001ECu) == 0x00000624u);
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = (uint16_t)(SR_S | SR_T);
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    ng68k_write32(9u * 4u, 0x00000450u);
+    ng68k_write32(26u * 4u, 0x000005D0u);
+    g_pending_interrupt_level = 2u;
+    g_pending_interrupt_vector = 26u;
+    g_pending_interrupt_after_poll = 2u;
+    g_interrupt_poll_count = 0;
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000440u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_pending_interrupt_level == 0);
+    CHECK(g_ng_m68k.a[7] == 0x000001E4u);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read16(0x000001E4u) == SR_S);
+    CHECK(ng68k_read32(0x000001E6u) == 0x00000450u);
+    CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T));
+    CHECK(ng68k_read32(0x000001ECu) == 0x00000442u);
+    g_pending_interrupt_after_poll = 0;
+    g_interrupt_poll_count = 0;
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = SR_S;
+    g_ng_m68k.a[7] = 0x000001ECu;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    ng68k_write32(0x000001ECu, 0x00000660u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000650u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.a[7] == 0x000001F0u);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read32(0x000001E8u) == 0x00000656u);
+
     return 0;
 }
