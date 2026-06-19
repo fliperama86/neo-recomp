@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `ADDX`/`SUBX` register and
+  predecrement forms plus byte-only `ABCD`/`SBCD` forms against the
+  Motorola/NXP Programmer's Reference Manual. The validator now requires exact
+  Dn-Dn or predecrement-pair EA payloads, matching source/destination register
+  fields, canonical form metadata, 2-byte instruction length, and no stray
+  immediate, condition, target, absolute, or displacement metadata.
+  `test_m68k_validate` covered malformed Dn payloads, predecrement payloads,
+  and stray top-level metadata red first.
 - local: Fact-checked MC68000 `CMPM (Ay)+,(Ax)+` against the
   Motorola/NXP Programmer's Reference Manual postincrement-only form. The
   validator now requires exact source/destination postincrement EA payloads,

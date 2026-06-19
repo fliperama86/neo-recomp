@@ -184,8 +184,9 @@ static int valid_extend_pair(const NgM68kInstr *instr) {
     if (instr->byte_length != 2u ||
         instr->immediate != 0u ||
         instr->condition != 0u ||
-        instr->src.reg >= 8u ||
-        instr->dst.reg >= 8u ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->displacement != 0 ||
         instr->src_reg != instr->src.reg ||
         instr->reg != instr->dst.reg) {
         return 0;
@@ -193,11 +194,15 @@ static int valid_extend_pair(const NgM68kInstr *instr) {
 
     if (instr->src.mode == NG_M68K_EA_DREG &&
         instr->dst.mode == NG_M68K_EA_DREG) {
-        return instr->form == NG_M68K_FORM_DREG_TO_DREG;
+        return ea_simple_register_payload(&instr->src) &&
+               ea_simple_register_payload(&instr->dst) &&
+               instr->form == NG_M68K_FORM_DREG_TO_DREG;
     }
 
     return instr->src.mode == NG_M68K_EA_APRE &&
            instr->dst.mode == NG_M68K_EA_APRE &&
+           ea_simple_register_payload(&instr->src) &&
+           ea_simple_register_payload(&instr->dst) &&
            instr->form == NG_M68K_FORM_NONE;
 }
 
