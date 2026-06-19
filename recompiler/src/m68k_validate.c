@@ -1656,20 +1656,42 @@ static int validate_dreg_to_data_alterable_binary(const NgM68kInstr *instr) {
 }
 
 static int validate_cmpm(const NgM68kInstr *instr) {
-    return valid_size(instr->size) &&
-           instr->byte_length == 2u &&
-           instr->immediate == 0u &&
-           instr->condition == 0u &&
-           instr->form == NG_M68K_FORM_NONE &&
-           instr->target == 0u &&
-           instr->absolute_addr == 0u &&
-           instr->displacement == 0 &&
-           instr->src.mode == NG_M68K_EA_APOST &&
-           ea_simple_register_payload(&instr->src) &&
-           instr->src_reg == instr->src.reg &&
-           instr->dst.mode == NG_M68K_EA_APOST &&
-           ea_simple_register_payload(&instr->dst) &&
-           instr->reg == instr->dst.reg;
+    uint16_t size_bits = 0u;
+    uint16_t expected_opcode = 0u;
+
+    if (instr->size == 1u) {
+        size_bits = 0x0000u;
+    } else if (instr->size == 2u) {
+        size_bits = 0x0040u;
+    } else if (instr->size == 4u) {
+        size_bits = 0x0080u;
+    } else {
+        return 0;
+    }
+
+    if (instr->byte_length != 2u ||
+        instr->immediate != 0u ||
+        instr->condition != 0u ||
+        instr->form != NG_M68K_FORM_NONE ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->displacement != 0 ||
+        instr->src.mode != NG_M68K_EA_APOST ||
+        !ea_simple_register_payload(&instr->src) ||
+        instr->src_reg != instr->src.reg ||
+        instr->dst.mode != NG_M68K_EA_APOST ||
+        !ea_simple_register_payload(&instr->dst) ||
+        instr->reg != instr->dst.reg) {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)(0xB000u |
+                                 ((uint16_t)instr->dst.reg << 9) |
+                                 0x0100u |
+                                 size_bits |
+                                 0x0008u |
+                                 instr->src.reg);
+    return instr->opcode == expected_opcode;
 }
 
 static int validate_add_sub_or_and(const NgM68kInstr *instr) {

@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `CMPM` validation so opcode size, source
+  postincrement register, and destination postincrement register bits
+  must match decoded metadata. `test_m68k_validate` covered mismatched
+  destination-register and size opcode metadata red first.
 - local: Tightened `MOVEA`/`ADDA`/`SUBA`/`CMPA` validation so
   opcode family, size/opmode, destination address register, and source
   EA bits must match decoded metadata. `test_m68k_validate` covered
