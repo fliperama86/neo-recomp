@@ -81,6 +81,7 @@ int main(void) {
     CHECK(strstr(text, "static int ng_service_trace(uint32_t return_pc, uint16_t trace_sr)") != NULL);
     CHECK(strstr(text, "static void ng_func_0007CC(void);") != NULL);
     CHECK(strstr(text, "case 0x000007CCu: ng_func_0007CC(); return;") != NULL);
+    CHECK(strstr(text, "default: ng_call_by_address(addr); return;") != NULL);
     CHECK(strstr(text, "static void ng_func_024E38(void)") != NULL);
     CHECK(strstr(text, "ng_log_dispatch_miss(0x00024E38u);") != NULL);
 

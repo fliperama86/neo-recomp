@@ -64,17 +64,18 @@ The generated C now compiles to an object. The current dispatch audit frontier i
 
 ```text
 function candidates: 397
-dispatch audit: sites=33 direct=31 missing_direct=2 computed=1 jump_tables=1 table_resolved=4 table_missing=0
+dispatch audit: sites=33 direct=31 missing_direct=0 external_direct=2 computed=1 jump_tables=1 table_resolved=4 table_missing=0
 $0006C8 COMPUTED JSR target=<runtime>
-$000862 DIRECT JMP target=$C00444 discovered=no
-$000984 DIRECT JSR target=$C004C2 discovered=no
+$000862 DIRECT JMP target=$C00444 discovered=no external=yes
+$000984 DIRECT JSR target=$C004C2 discovered=no external=yes
 ```
 
 The discovery candidate cap is now 1024; Metal Slug currently discovers 397
 candidate entry/instruction-boundary addresses without truncation. The previous
 missing direct P-ROM targets (`$05DC1C`, `$05DC34`, `$024FB8`) are now
-discovered, leaving only BIOS targets outside the loaded P-ROM image plus one
-computed runtime `JSR (A0)`.
+discovered. Direct BIOS/system-ROM targets are classified as external runtime
+fallbacks instead of missing P-ROM discovery, leaving one computed runtime
+`JSR (A0)` as the current dispatch frontier.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
@@ -1254,13 +1255,11 @@ Use this loop:
 
 Immediate next slice:
 
-- Continue CPU-side exception/arithmetic correctness with another
-  oracle-backed generated-exec slice, preferably the signed divide-by-zero
-  mirror or the next exception-priority edge.
-- Keep NeoGeo timer/VBlank integration queued until the current CPU semantics
+- Resolve or deliberately classify the current Metal Slug dispatch frontier:
+  `$0006C8` `JSR (A0)` after `MOVEA.L (A6),A0`.
+- Then rerun the Metal Slug smoke and update the audit/tracker again.
+- Keep NeoGeo timer/VBlank integration queued until the current CPU dispatch
   backlog is narrower.
-
-Real-ROM smoke remains a near follow-up once a local `.neo` input is available.
 
 Near follow-ups:
 

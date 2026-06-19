@@ -156,10 +156,11 @@ static int emit_dispatch_audit_file(const char *path,
         return 0;
     }
 
-    printf("dispatch audit: %s (sites=%u missing_direct=%u computed=%u jump_tables=%u)\n",
+    printf("dispatch audit: %s (sites=%u missing_direct=%u external_direct=%u computed=%u jump_tables=%u)\n",
            path,
            audit.count,
            audit.missing_direct_count,
+           audit.external_direct_count,
            audit.computed_count,
            audit.jump_table_count);
     return 1;

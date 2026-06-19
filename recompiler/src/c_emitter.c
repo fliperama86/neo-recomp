@@ -152,7 +152,7 @@ static void emit_dispatch(FILE *out, const NgFunctionDiscovery *discovery) {
         ng_c_symbol_for_addr(addr, symbol, (unsigned)sizeof(symbol));
         fprintf(out, "    case 0x%08Xu: %s(); return;\n", addr, symbol);
     }
-    fprintf(out, "    default: ng_log_dispatch_miss(addr); return;\n");
+    fprintf(out, "    default: ng_call_by_address(addr); return;\n");
     fprintf(out, "    }\n");
     fprintf(out, "}\n\n");
 }

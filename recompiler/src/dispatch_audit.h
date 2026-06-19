@@ -22,6 +22,7 @@ typedef struct NgDispatchAuditSite {
     uint8_t mnemonic;
     uint8_t target_known;
     uint8_t target_in_discovery;
+    uint8_t target_external;
     uint8_t resolved_entries;
     uint8_t missing_entries;
 } NgDispatchAuditSite;
@@ -31,6 +32,7 @@ typedef struct NgDispatchAudit {
     uint32_t count;
     uint32_t direct_count;
     uint32_t missing_direct_count;
+    uint32_t external_direct_count;
     uint32_t computed_count;
     uint32_t jump_table_count;
     uint32_t jump_table_resolved_entries;

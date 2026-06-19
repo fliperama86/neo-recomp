@@ -2,6 +2,7 @@
 
 #include "m68k_analyze.h"
 #include "m68k_validate.h"
+#include "neogeo_map.h"
 
 #include <string.h>
 
@@ -85,6 +86,15 @@ static void audit_record_direct(const NgProgramRom *rom,
 
     site->target_known = 1u;
     site->target_addr = instr->target & 0x00FFFFFFu;
+
+    NgAddressRegion region = ng_address_region(instr->target);
+    site->target_external = region != NG_REGION_P_ROM_FIXED &&
+                            region != NG_REGION_P_ROM_BANK;
+    if (site->target_external) {
+        ++audit->external_direct_count;
+        return;
+    }
+
     site->target_in_discovery =
         ng_program_rom_addr_is_mapped(rom, instr->target) &&
         ng_function_discovery_contains(discovery, instr->target);
@@ -218,10 +228,11 @@ int ng_dispatch_audit_write(FILE *out, const NgDispatchAudit *audit) {
     }
 
     fprintf(out,
-            "dispatch audit: sites=%u direct=%u missing_direct=%u computed=%u jump_tables=%u table_resolved=%u table_missing=%u%s\n",
+            "dispatch audit: sites=%u direct=%u missing_direct=%u external_direct=%u computed=%u jump_tables=%u table_resolved=%u table_missing=%u%s\n",
             audit->count,
             audit->direct_count,
             audit->missing_direct_count,
+            audit->external_direct_count,
             audit->computed_count,
             audit->jump_table_count,
             audit->jump_table_resolved_entries,
@@ -235,11 +246,12 @@ int ng_dispatch_audit_write(FILE *out, const NgDispatchAudit *audit) {
         switch (site->kind) {
         case NG_DISPATCH_AUDIT_DIRECT:
             fprintf(out,
-                    "$%06X DIRECT %s target=$%06X discovered=%s\n",
+                    "$%06X DIRECT %s target=$%06X discovered=%s%s\n",
                     site->site_addr & 0x00FFFFFFu,
                     mnemonic,
                     site->target_addr & 0x00FFFFFFu,
-                    site->target_in_discovery ? "yes" : "no");
+                    site->target_in_discovery ? "yes" : "no",
+                    site->target_external ? " external=yes" : "");
             break;
         case NG_DISPATCH_AUDIT_COMPUTED:
             fprintf(out,
