@@ -1903,6 +1903,7 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_LINK);
         CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
         CHECK(instr.reg == 5);
         CHECK(instr.displacement == -4);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));

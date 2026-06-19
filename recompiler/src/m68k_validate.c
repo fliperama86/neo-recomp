@@ -50,6 +50,21 @@ static int no_ea_operands(const NgM68kInstr *instr) {
            instr->dst.mode == NG_M68K_EA_NONE;
 }
 
+static int ea_is_empty(const NgM68kEa *ea) {
+    return ea->mode == NG_M68K_EA_NONE &&
+           ea->reg == 0u &&
+           ea->index_reg == 0u &&
+           ea->index_is_addr == 0u &&
+           ea->index_is_long == 0u &&
+           ea->displacement == 0 &&
+           ea->absolute_addr == 0u &&
+           ea->immediate == 0u;
+}
+
+static int no_ea_fields(const NgM68kInstr *instr) {
+    return ea_is_empty(&instr->src) && ea_is_empty(&instr->dst);
+}
+
 static int valid_size(uint8_t size) {
     return size == 1u || size == 2u || size == 4u;
 }
@@ -559,6 +574,28 @@ static int validate_movep(const NgM68kInstr *instr) {
     return 0;
 }
 
+static int validate_link_unlk(const NgM68kInstr *instr) {
+    if (instr->immediate != 0u ||
+        instr->condition != 0u ||
+        instr->form != NG_M68K_FORM_NONE ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->src_reg != 0u ||
+        instr->reg >= 8u ||
+        !no_ea_fields(instr)) {
+        return 0;
+    }
+
+    if (instr->mnemonic == NG_M68K_LINK) {
+        return instr->byte_length == 4u &&
+               instr->size == 2u;
+    }
+
+    return instr->byte_length == 2u &&
+           instr->size == 0u &&
+           instr->displacement == 0;
+}
+
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
@@ -885,13 +922,8 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_MOVE_USP:
         return validate_move_usp(instr);
     case NG_M68K_LINK:
-        return instr->byte_length == 4u &&
-               instr->reg < 8u &&
-               no_ea_operands(instr);
     case NG_M68K_UNLK:
-        return instr->byte_length == 2u &&
-               instr->reg < 8u &&
-               no_ea_operands(instr);
+        return validate_link_unlk(instr);
     case NG_M68K_MOVEP:
         return validate_movep(instr);
     case NG_M68K_MOVEM:

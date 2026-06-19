@@ -877,6 +877,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
     if ((op & 0xFFF8u) == 0x4E50u) {
         out->mnemonic = NG_M68K_LINK;
         out->byte_length = 4;
+        out->size = NG_M68K_SIZE_WORD;
         out->reg = (uint8_t)(op & 7u);
         out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
         return finish_decode(rom, addr, out);

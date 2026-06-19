@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `LINK`/`UNLK` stack-frame operations against
+  the Motorola/NXP Programmer's Reference Manual. `LINK` decode now records
+  the word-sized displacement used by the MC68000 encoding, and the validator
+  requires exact 4-byte `LINK` metadata or exact 2-byte unsized `UNLK`
+  metadata: address-register field range, no EA payload, no stray immediate,
+  condition, form, target, or absolute-address fields, and zero displacement
+  for `UNLK`. `test_m68k_decode` and `test_m68k_validate` covered the
+  malformed metadata red first.
 - local: Fact-checked MC68000 `MOVEP` peripheral data transfers against the
   Motorola/NXP Programmer's Reference Manual. The validator now requires exact
   4-byte word/long data-register-to-address-displacement or
