@@ -112,7 +112,8 @@ Covered by executable generated-C validation:
 - conditional branches: all 68000 `Bcc` condition predicates are emitted;
   generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
 - condition operations: `Scc <ea>` and `DBcc Dn,disp` share the same
-  condition predicate table, with generated-exec coverage for `SMI` and `DBF`
+  condition predicate table; generated-exec covers all 16 `Scc` predicates
+  across every `N/Z/V/C` combination, plus a `DBF` spot check
 - flags: `N`/`Z` for covered operations; `C`/`X` for tested byte
   subtract/extend-add paths and register-count-zero shift/rotate cases
 - data movement:
@@ -235,6 +236,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a deterministic generated-exec `Scc` condition matrix. The
+  fixture now evaluates all 16 condition predicates across all 16 `N/Z/V/C`
+  combinations, checks byte results, and verifies the CCR snapshot is unchanged
+  after each group.
 - local: Fact-checked `DIVU.W` quotient-overflow semantics. Generated-exec now
   covers an unsigned quotient larger than 16 bits, verifying `V` set, `C`
   clear, `X` preserved, and the destination data register left unchanged.
