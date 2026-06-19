@@ -190,6 +190,17 @@ returned pc=$C11142 sr=$2004 sp=$0010F300
 That extended probe is intentionally not the default documented seed list yet;
 it is the next frontier finder for small runtime bus slices.
 
+Continuing that local-only seed expansion through `$C11142`, `$C18694`, and
+`$C11FFA` exposed the first sound-port access. The runtime now treats `$320000`
+as a headless sound command/reply latch, preserving the previous default
+`0xFF` read value and recording 68000->Z80 commands without emulating the Z80 or
+YM2610. With those successive BIOS seeds, the current local frontier is:
+
+```text
+dispatch miss at $C11F98
+returned pc=$C11F98 sr=$2004 sp=$0010F2F8
+```
+
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
 

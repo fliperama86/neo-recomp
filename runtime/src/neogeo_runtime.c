@@ -25,6 +25,8 @@ static uint8_t g_ng_neogeo_p1cnt = 0xFFu;
 static uint8_t g_ng_neogeo_p2cnt = 0xFFu;
 static uint8_t g_ng_neogeo_status_b = 0xFFu;
 static uint8_t g_ng_neogeo_port_output;
+static uint8_t g_ng_neogeo_sound_command;
+static uint8_t g_ng_neogeo_sound_reply = 0xFFu;
 static uint8_t g_ng_neogeo_dipswitch = 0xFFu;
 static uint32_t g_ng_neogeo_watchdog_kicks;
 static uint8_t g_ng_m68k_interrupt_level;
@@ -69,6 +71,10 @@ static int ng_neogeo_is_p1cnt_addr(uint32_t addr) {
 
 static int ng_neogeo_is_p2cnt_addr(uint32_t addr) {
     return (addr & 0x00FE0001u) == NG_NEO_REG_P2CNT;
+}
+
+static int ng_neogeo_is_sound_addr(uint32_t addr) {
+    return (addr & 0x00FE0001u) == NG_NEO_REG_SOUND;
 }
 
 static int ng_neogeo_is_status_b_addr(uint32_t addr) {
@@ -129,6 +135,9 @@ uint8_t ng68k_read8(uint32_t addr) {
     }
     if (ng_neogeo_is_p2cnt_addr(addr)) {
         return g_ng_neogeo_p2cnt;
+    }
+    if (ng_neogeo_is_sound_addr(addr)) {
+        return g_ng_neogeo_sound_reply;
     }
     if (ng_neogeo_is_status_b_addr(addr)) {
         return g_ng_neogeo_status_b;
@@ -203,6 +212,10 @@ void ng68k_write8(uint32_t addr, uint8_t value) {
     }
     if (ng_neogeo_is_port_output_addr(addr)) {
         g_ng_neogeo_port_output = value;
+        return;
+    }
+    if (ng_neogeo_is_sound_addr(addr)) {
+        g_ng_neogeo_sound_command = value;
         return;
     }
     if (ng_neogeo_is_system_latch_addr(addr)) {
@@ -376,6 +389,8 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_interrupt_polls = 0;
     g_ng_neogeo_watchdog_kicks = 0;
     g_ng_neogeo_port_output = 0;
+    g_ng_neogeo_sound_command = 0;
+    g_ng_neogeo_sound_reply = 0xFFu;
     g_ng_neogeo_vram_addr = 0;
     g_ng_neogeo_vram_mod = 0;
     g_ng_neogeo_shadow_enabled = 0;
@@ -483,6 +498,14 @@ uint32_t ng_neogeo_interrupt_polls(void) {
 
 uint8_t ng_neogeo_port_output(void) {
     return g_ng_neogeo_port_output;
+}
+
+uint8_t ng_neogeo_sound_command(void) {
+    return g_ng_neogeo_sound_command;
+}
+
+uint8_t ng_neogeo_sound_reply(void) {
+    return g_ng_neogeo_sound_reply;
 }
 
 uint8_t ng_neogeo_shadow_enabled(void) {

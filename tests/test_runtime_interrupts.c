@@ -74,6 +74,19 @@ int main(void) {
     ng_neogeo_reset_runtime();
     CHECK(ng_neogeo_port_output() == 0x00u);
 
+    CHECK(ng_neogeo_sound_command() == 0x00u);
+    CHECK(ng_neogeo_sound_reply() == 0xFFu);
+    CHECK(ng68k_read8(NG_NEO_REG_SOUND) == 0xFFu);
+    CHECK(ng68k_read8(0x00330000u) == 0xFFu);
+    ng68k_write8(NG_NEO_REG_SOUND, 0x34u);
+    CHECK(ng_neogeo_sound_command() == 0x34u);
+    ng68k_write8(0x00330000u, 0x56u);
+    CHECK(ng_neogeo_sound_command() == 0x56u);
+    CHECK(ng_neogeo_sound_reply() == 0xFFu);
+    ng_neogeo_reset_runtime();
+    CHECK(ng_neogeo_sound_command() == 0x00u);
+    CHECK(ng_neogeo_sound_reply() == 0xFFu);
+
     CHECK(ng_neogeo_shadow_enabled() == 0u);
     CHECK(ng_neogeo_bios_vectors_enabled() == 0u);
     CHECK(ng_neogeo_board_fix_enabled() == 0u);

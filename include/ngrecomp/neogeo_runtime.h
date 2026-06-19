@@ -11,6 +11,7 @@ typedef int (*NgExternalDispatchHandler)(uint32_t addr);
 
 #define NG_NEO_REG_P1CNT     0x00300000u
 #define NG_NEO_REG_DIPSW     0x00300001u
+#define NG_NEO_REG_SOUND     0x00320000u
 #define NG_NEO_REG_P2CNT     0x00340000u
 #define NG_NEO_REG_STATUS_B  0x00380000u
 #define NG_NEO_REG_POUTPUT   0x00380001u
@@ -66,6 +67,8 @@ void ng_neogeo_advance_frame(void);
 uint32_t ng_neogeo_watchdog_kicks(void);
 uint32_t ng_neogeo_interrupt_polls(void);
 uint8_t ng_neogeo_port_output(void);
+uint8_t ng_neogeo_sound_command(void);
+uint8_t ng_neogeo_sound_reply(void);
 uint8_t ng_neogeo_shadow_enabled(void);
 uint8_t ng_neogeo_bios_vectors_enabled(void);
 uint8_t ng_neogeo_board_fix_enabled(void);
