@@ -162,10 +162,9 @@ ng68k_write8 miss at $300001 value=$FF
 
 The runtime now handles `$300001` as the active-low DIP switch read and watchdog
 kick write. The smoke harness also supports a trampoline-safe combined cart/BIOS
-dispatcher, uses an auto-VBlank interrupt interval for BIOS-backed smoke, and
-the runtime now covers default active-low P1/P2/status-B input reads plus the
-port-output latch. With the default BIOS seed list above, the current
-BIOS-backed checkpoint is:
+dispatcher, now uses scanline-driven VBlank for BIOS-backed smoke, and the
+runtime covers default active-low P1/P2/status-B input reads plus the port-output
+latch. At that point in the BIOS seed expansion, the checkpoint was:
 
 ```text
 starting cart entry $0007CC ssp=$0010F300
@@ -173,12 +172,12 @@ dispatch miss at $C00438
 returned pc=$C00438 sr=$2104 sp=$0010F2F6
 ```
 
-That means generated BIOS code can wait for VBlank, enter the generated cart
+That meant generated BIOS code could wait for VBlank, enter the generated cart
 VBlank handler, and return with the next missing BIOS entry at `$C00438`. With
-the larger discovery budget, the default BIOS seed list now reports
+the larger discovery budget at that stage, the BIOS seed list reported
 `BIOS candidates: 2139` without truncation; `$C00438` remains the default
-checkpoint because it is a separate BIOS handoff that is not yet reached by the
-current static seed list.
+checkpoint for that historical step because it is a separate BIOS handoff that
+was not yet reached by the static seed list.
 
 Generated dispatch now splits the per-address switch from the public dispatch
 entry and uses a pending-address loop, so nested `JMP`/`JSR`/`RTS`/exception
@@ -194,8 +193,8 @@ dispatch miss at $C11142
 returned pc=$C11142 sr=$2004 sp=$0010F300
 ```
 
-That extended probe is intentionally not the default documented seed list yet;
-it is the next frontier finder for small runtime bus slices.
+That extended probe became the next frontier finder for small runtime bus
+slices.
 
 Continuing that local-only seed expansion through `$C11142`, `$C18694`, and
 `$C11FFA` exposed the first sound-port access. The runtime now treats `$320000`
@@ -213,17 +212,18 @@ timeout:
 ```text
 starting cart entry $0007CC ssp=$0010F300
 returned pc=$C1862E sr=$2100 sp=$0010F2AE
-smoke summary: dispatches=100000 cart=3997 bios=96003 last=$C185A0 pc=$C1862E sr=$2100 sp=$0010F2AE polls=509882 watchdog=1991 vblank=1991 timer_irq=0 irqack=1992 irq_pending=$0000 scanline=0 sound=$00 port=$1B wram_nonzero=136 wram_sum=$00002775 vram_nonzero=0 vram_sum=$00000000 recent_loop=0
+smoke summary: dispatches=100000 cart=3997 bios=96003 last=$C185A0 pc=$C1862E sr=$2100 sp=$0010F2AE polls=525810 watchdog=1991 vblank=1991 frame=1991 timer_irq=0 irqack=1992 irq_pending=$0000 scanline=186 sound=$00 port=$1B wram_nonzero=136 wram_sum=$00002775 vram_nonzero=0 vram_sum=$00000000 recent_loop=0
 smoke budget reached at $C1862E after 100000 dispatches
-progress oracle: ok budgets=10000,50000,100000 final_pc=$C1862E polls=509882 vblank=1991 irqack=1992 watchdog=1991 wram_nonzero=136 final_recent_loop=0 max_recent_loop=50
+progress oracle: ok budgets=10000,50000,100000 final_pc=$C1862E polls=525810 vblank=1991 frame=1991 irqack=1992 watchdog=1991 wram_nonzero=136 final_recent_loop=0 max_recent_loop=50
 ```
 
 That is the first controlled "keeps running headless" checkpoint: no dispatch
 or bus miss before the budget. It is not yet a boot/attract correctness proof:
 the expanded BIOS probe still reports `BIOS candidates: 8192 (truncated)`, and
 the harness only has a first-pass state oracle (multi-budget dispatch counts,
-RAM/VRAM checksums, watchdog/poll/VBlank/IRQACK growth, pending-IRQ state, and
-a short recent-dispatch loop detector), not a frame or boot/attract-mode success oracle. The 50k checkpoint
+RAM/VRAM checksums, watchdog/poll/VBlank/frame/IRQACK growth, pending-IRQ
+state, current scanline, and a short recent-dispatch loop detector), not a
+boot/attract-mode success oracle. The 50k checkpoint
 can stop in a short BIOS polling loop, but the 100k final checkpoint leaves that
 loop (`final_recent_loop=0`).
 
@@ -1171,6 +1171,11 @@ and `V` are only trusted where generated-exec tests cover them.
   first. It now catches invalid `ADDQ/SUBQ` quick/address-register forms,
   non-alterable `TST`/`CMPI` targets, invalid `CHK` operands, multiply/divide
   destination mistakes, and non-data-register `EXT`/`SWAP` forms.
+- local: Switched the BIOS-backed Metal Slug smoke from direct poll-count
+  auto-VBlank injection to the runtime's scanline path. The harness now advances
+  one NTSC scanline per interrupt poll in BIOS mode, wraps every 264 scanlines,
+  reports `frame=` plus the current scanline in the smoke summary, and the
+  progress oracle requires frame growth across the 10k/50k/100k budgets.
 - local: Connected the LSPC timer model to NTSC frame/scanline advancement:
   runtime tests now cover 384-pixel scanlines, 264-scanline frame wrap,
   VBlank requests on frame start/wrap, and timer interrupts firing from

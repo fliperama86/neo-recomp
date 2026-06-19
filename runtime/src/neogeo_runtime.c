@@ -42,8 +42,10 @@ static uint32_t g_ng_neogeo_timer_reload_value;
 static uint32_t g_ng_neogeo_timer_counter_value;
 static uint8_t g_ng_neogeo_timer_counter_loaded;
 static uint16_t g_ng_neogeo_current_scanline;
+static uint32_t g_ng_neogeo_frame_count;
 static uint32_t g_ng_neogeo_interrupt_polls;
 static uint32_t g_ng_neogeo_auto_vblank_interval;
+static uint32_t g_ng_neogeo_auto_scanline_interval;
 static NgExternalDispatchHandler g_ng_external_dispatch_handler;
 
 static void ng_neogeo_reload_timer_counter(void) {
@@ -392,6 +394,7 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_timer_counter_value = 0;
     g_ng_neogeo_timer_counter_loaded = 0;
     g_ng_neogeo_current_scanline = 0;
+    g_ng_neogeo_frame_count = 0;
     g_ng_neogeo_interrupt_polls = 0;
     g_ng_neogeo_watchdog_kicks = 0;
     g_ng_neogeo_port_output = 0;
@@ -413,6 +416,10 @@ void ng_neogeo_reset_runtime(void) {
 
 void ng_neogeo_set_auto_vblank_interval(uint32_t interrupt_polls) {
     g_ng_neogeo_auto_vblank_interval = interrupt_polls;
+}
+
+void ng_neogeo_set_auto_scanline_interval(uint32_t interrupt_polls) {
+    g_ng_neogeo_auto_scanline_interval = interrupt_polls;
 }
 
 static void ng_neogeo_refresh_interrupt_level(void) {
@@ -454,6 +461,7 @@ void ng_neogeo_ack_interrupts(uint16_t ack_mask) {
 }
 
 void ng_neogeo_begin_vblank(void) {
+    ++g_ng_neogeo_frame_count;
     if (g_ng_neogeo_lspc_mode & NG_NEO_LSPCMODE_TIMER_RELOAD_ON_FRAME) {
         ng_neogeo_reload_timer_counter();
     }
@@ -559,6 +567,10 @@ uint16_t ng_neogeo_current_scanline(void) {
     return g_ng_neogeo_current_scanline;
 }
 
+uint32_t ng_neogeo_frame_count(void) {
+    return g_ng_neogeo_frame_count;
+}
+
 uint32_t ng_neogeo_vblank_interrupts(void) {
     return g_ng_neogeo_vblank_interrupts;
 }
@@ -615,6 +627,10 @@ uint32_t ng_neogeo_vram_checksum(void) {
 
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {
     ++g_ng_neogeo_interrupt_polls;
+    if (g_ng_neogeo_auto_scanline_interval != 0u &&
+        (g_ng_neogeo_interrupt_polls % g_ng_neogeo_auto_scanline_interval) == 0u) {
+        ng_neogeo_advance_scanline();
+    }
     if (g_ng_neogeo_auto_vblank_interval != 0u &&
         (g_ng_neogeo_interrupt_polls % g_ng_neogeo_auto_vblank_interval) == 0u) {
         ng_neogeo_request_vblank_interrupt();

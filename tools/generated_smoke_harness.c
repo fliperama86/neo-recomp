@@ -283,9 +283,9 @@ static void ng_generated_smoke_print_summary(void) {
     fprintf(stderr,
             "smoke summary: dispatches=%llu cart=%llu bios=%llu "
             "last=$%06X pc=$%06X sr=$%04X sp=$%08X polls=%u watchdog=%u "
-            "vblank=%u timer_irq=%u irqack=%u irq_pending=$%04X scanline=%u "
-            "sound=$%02X port=$%02X wram_nonzero=%u wram_sum=$%08X "
-            "vram_nonzero=%u vram_sum=$%08X recent_loop=%u\n",
+            "vblank=%u frame=%u timer_irq=%u irqack=%u irq_pending=$%04X "
+            "scanline=%u sound=$%02X port=$%02X wram_nonzero=%u "
+            "wram_sum=$%08X vram_nonzero=%u vram_sum=$%08X recent_loop=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             (unsigned long long)ng_generated_smoke_cart_dispatch_count(),
             (unsigned long long)ng_generated_smoke_bios_dispatch_count(),
@@ -296,6 +296,7 @@ static void ng_generated_smoke_print_summary(void) {
             ng_neogeo_interrupt_polls(),
             ng_neogeo_watchdog_kicks(),
             ng_neogeo_vblank_interrupts(),
+            ng_neogeo_frame_count(),
             ng_neogeo_timer_interrupts(),
             ng_neogeo_irq_ack_writes(),
             ng_neogeo_irq_pending(),
@@ -353,7 +354,8 @@ int ng_generated_smoke_run_with_bios(const char *neo_path,
     }
 
     ng_neogeo_reset_runtime();
-    ng_neogeo_set_auto_vblank_interval(bios_path ? 256u : 0u);
+    ng_neogeo_set_auto_vblank_interval(0);
+    ng_neogeo_set_auto_scanline_interval(bios_path ? 1u : 0u);
     ng_neogeo_set_program_rom(rom.data, rom.size);
     ng_neogeo_set_system_rom(bios_data, bios_size);
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
@@ -387,6 +389,7 @@ int ng_generated_smoke_run_with_bios(const char *neo_path,
     ng_generated_smoke_print_summary();
 
     ng_neogeo_set_external_dispatch(NULL);
+    ng_neogeo_set_auto_scanline_interval(0);
     ng_neogeo_set_auto_vblank_interval(0);
     ng_neogeo_set_system_rom(NULL, 0);
     ng_neogeo_set_program_rom(NULL, 0);
