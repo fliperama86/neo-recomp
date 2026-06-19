@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `BTST`/`BCHG`/`BCLR`/`BSET` validation so
+  static and dynamic bit-op opcode kind, source register, and destination
+  EA bits must match decoded metadata. `test_m68k_validate` covered
+  static/dynamic `BTST`, `BSET`, `BCLR`, and `BCHG` opcode mismatches
+  red first.
 - local: Tightened `JMP`/`JSR` validation so address-indirect and
   address-displacement/indexed forms reject stray top-level target metadata,
   absolute forms reject stray top-level absolute/displacement metadata, and

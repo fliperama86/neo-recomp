@@ -449,6 +449,50 @@ static int validate_static_bit_source(const NgM68kInstr *instr) {
            instr->immediate <= 0xFFu;
 }
 
+static int bit_op_kind(const NgM68kInstr *instr, uint8_t *out_kind) {
+    switch (instr->mnemonic) {
+    case NG_M68K_BTST:
+        *out_kind = 0u;
+        return 1;
+    case NG_M68K_BCHG:
+        *out_kind = 1u;
+        return 1;
+    case NG_M68K_BCLR:
+        *out_kind = 2u;
+        return 1;
+    case NG_M68K_BSET:
+        *out_kind = 3u;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int validate_bit_opcode(const NgM68kInstr *instr,
+                               int dynamic_bit_number) {
+    uint8_t kind = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t expected_opcode = 0u;
+
+    if (!bit_op_kind(instr, &kind) ||
+        !ea_opcode_field(&instr->dst, &ea_field)) {
+        return 0;
+    }
+
+    if (dynamic_bit_number) {
+        expected_opcode = (uint16_t)(0x0100u |
+                                     ((uint16_t)instr->src.reg << 9) |
+                                     ((uint16_t)kind << 6) |
+                                     ea_field);
+    } else {
+        expected_opcode = (uint16_t)(0x0800u |
+                                     ((uint16_t)kind << 6) |
+                                     ea_field);
+    }
+
+    return instr->opcode == expected_opcode;
+}
+
 static int validate_btst(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
     uint8_t base_len = instr->src.mode == NG_M68K_EA_DREG ? 2u : 4u;
@@ -467,6 +511,7 @@ static int validate_btst(const NgM68kInstr *instr) {
                                      instr->addr + base_len,
                                      dynamic_bit_number,
                                      &ext_len) &&
+           validate_bit_opcode(instr, dynamic_bit_number) &&
            validate_bit_destination_legacy_fields(instr, dynamic_bit_number) &&
            instr->byte_length == (uint8_t)(base_len + ext_len);
 }
@@ -490,11 +535,13 @@ static int validate_altering_bit_op(const NgM68kInstr *instr) {
 
     if (dynamic_bit_number) {
         return validate_dynamic_bit_source(instr) &&
+               validate_bit_opcode(instr, 1) &&
                validate_bit_destination_legacy_fields(instr, 1) &&
                instr->byte_length == (uint8_t)(base_len + ext_len);
     }
 
     return validate_static_bit_source(instr) &&
+           validate_bit_opcode(instr, 0) &&
            validate_bit_destination_legacy_fields(instr, 0) &&
            instr->byte_length == (uint8_t)(base_len + ext_len);
 }
