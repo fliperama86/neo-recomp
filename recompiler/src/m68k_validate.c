@@ -949,17 +949,37 @@ static int validate_move_legacy_fields(const NgM68kInstr *instr) {
 static int validate_move(const NgM68kInstr *instr) {
     uint8_t src_ext = 0u;
     uint8_t dst_ext = 0u;
+    uint8_t src_field = 0u;
+    uint8_t dst_field = 0u;
+    uint16_t size_base = 0u;
+    uint16_t expected_opcode = 0u;
 
     if (!valid_size(instr->size) ||
         instr->condition != 0u ||
         instr->target != 0u ||
         !move_source_ext_length(instr, &src_ext) ||
         !move_destination_ext_length(&instr->dst, &dst_ext) ||
+        !ea_opcode_field(&instr->src, &src_field) ||
+        !ea_opcode_field(&instr->dst, &dst_field) ||
         !validate_move_legacy_fields(instr)) {
         return 0;
     }
 
-    return instr->byte_length == (uint8_t)(2u + src_ext + dst_ext);
+    if (instr->size == 1u) {
+        size_base = 0x1000u;
+    } else if (instr->size == 2u) {
+        size_base = 0x3000u;
+    } else {
+        size_base = 0x2000u;
+    }
+
+    expected_opcode = (uint16_t)(size_base |
+                                 ((uint16_t)(dst_field & 7u) << 9) |
+                                 ((uint16_t)((dst_field >> 3) & 7u) << 6) |
+                                 src_field);
+
+    return instr->byte_length == (uint8_t)(2u + src_ext + dst_ext) &&
+           instr->opcode == expected_opcode;
 }
 
 static int exact_control_ea_ext_length(const NgM68kEa *ea,

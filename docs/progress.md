@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened generic `MOVE` validation so opcode size, source EA
+  bits, destination EA mode/register bits, extension lengths, and legacy
+  metadata must match decoded metadata. `test_m68k_validate` covered
+  mismatched destination-register and size opcode metadata red first.
 - local: Tightened `JMP`/`JSR`/`PEA`/`LEA` validation so
   opcode family, source EA bits, and `LEA` destination register bits
   must match decoded metadata. `test_m68k_validate` covered mismatched
