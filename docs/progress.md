@@ -95,6 +95,11 @@ Covered by executable generated-C validation:
 - control flow: direct and control-EA `JSR`, `BSR`, `RTS` stack-return
   dispatch, a reference-inspired stack-manipulating return regression, tail
   `JMP`, local `BRA`, and selected `Bcc`
+- CFG discovery: direct call/jump targets, `JSR`/`BSR`/`STOP` continuations,
+  instruction-boundary continuations for interrupt returns, taken `Bcc`
+  targets, `DBcc` branch targets except never-branching `DBT`, and tail
+  `BRA` targets are now seeded; `BRA` no longer causes discovery to scan
+  unreachable fall-through bytes as code
 - system/exception-control paths: `TRAP`, `TRAPV`, `ILLEGAL`, A-line,
   F-line, `RESET`, `STOP`, `RTE`, and `RTR` are recognized. `TRAP`,
   `TRAPV`, `ILLEGAL`, A-line, F-line, failed `CHK`, and divide-by-zero now

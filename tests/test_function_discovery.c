@@ -147,6 +147,40 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x40u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x6600u); /* BNE.W $000020 */
+        write16(&rom, 0x02u, 0x001Eu);
+        write16(&rom, 0x04u, 0x4E75u); /* fall-through return */
+        write16(&rom, 0x20u, 0x4E75u); /* taken target return */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x04u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x20u));
+        CHECK(discovery.count == 3u);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x40u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x6000u); /* BRA.W $000020 */
+        write16(&rom, 0x02u, 0x001Eu);
+        write16(&rom, 0x04u, 0x4E75u); /* unreachable fall-through data/code */
+        write16(&rom, 0x20u, 0x4E75u); /* taken target return */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x20u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x04u));
+        CHECK(discovery.count == 2u);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0xA0u);
         CHECK(rom.data != NULL);
 

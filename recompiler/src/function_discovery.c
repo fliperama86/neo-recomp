@@ -117,6 +117,17 @@ static int is_direct_function_target(const NgM68kInstr *instr) {
            instr->src.mode == NG_M68K_EA_PC_INDEX;
 }
 
+static int is_branch_target_candidate(const NgM68kInstr *instr) {
+    if (instr->mnemonic == NG_M68K_BRA ||
+        instr->mnemonic == NG_M68K_BCC) {
+        return 1;
+    }
+    if (instr->mnemonic == NG_M68K_DBCC) {
+        return instr->condition != 0u; /* DBT never decrements or branches. */
+    }
+    return 0;
+}
+
 static void scan_function_candidate(const NgProgramRom *rom,
                                     uint32_t start_addr,
                                     NgFunctionDiscovery *out) {
@@ -144,6 +155,9 @@ static void scan_function_candidate(const NgProgramRom *rom,
         if (is_direct_function_target(&instr)) {
             ng_function_discovery_add(out, rom, instr.target);
         }
+        if (is_branch_target_candidate(&instr)) {
+            ng_function_discovery_add(out, rom, instr.target);
+        }
         if ((instr.mnemonic == NG_M68K_JSR || instr.mnemonic == NG_M68K_BSR) &&
             instr.byte_length != 0) {
             ng_function_discovery_add(out, rom, pc + instr.byte_length);
@@ -153,6 +167,7 @@ static void scan_function_candidate(const NgProgramRom *rom,
         }
 
         if (instr.byte_length == 0 ||
+            instr.mnemonic == NG_M68K_BRA ||
             instr.mnemonic == NG_M68K_JMP ||
             instr.mnemonic == NG_M68K_RTS) {
             return;
