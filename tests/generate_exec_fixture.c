@@ -26,7 +26,10 @@ int main(int argc, char **argv) {
     NgFunctionDiscovery discovery;
     ng_function_discovery_init(&discovery);
     for (uint32_t i = 0; i < NG_EXEC_FIXTURE_ADDR_COUNT; ++i) {
-        discovery.addrs[discovery.count++] = ng_exec_fixture_addr(i);
+        if (!ng_function_discovery_add(&discovery, &rom, ng_exec_fixture_addr(i))) {
+            ng_program_rom_free(&rom);
+            return 1;
+        }
     }
 
     FILE *out = fopen(argv[1], "w");

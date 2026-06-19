@@ -144,8 +144,11 @@ Covered by executable generated-C validation:
     predecrement register-to-memory masks, including MC68000 predecrement mask
     reversal and initial-`A7` storage when `A7` is also in the saved register
     list; control-mode coverage now includes address-displacement and
-    absolute-word register-to-memory destinations plus address-displacement,
-    absolute-long, and PC-relative memory-to-register sources
+    address-indexed register-to-memory destinations, absolute-word
+    register-to-memory destinations, plus address-displacement,
+    address-indexed, absolute-long, and PC-relative memory-to-register sources
+    with sparse D/A masks and word-index sign extension covered for indexed
+    transfers
   - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests and
     generated-exec long Dn→alternate-byte-memory→Dn round-trip with flags preserved
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
@@ -249,6 +252,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `MOVEM` indexed control-mode ordering against the
+  Motorola/NXP Programmer's Reference Manual. Generated-exec now covers sparse
+  D/A-mask long transfers through `(d8,An,Dn.W)` in both directions,
+  including word-index sign extension, D0/D3/A1/A6 register-to-memory order,
+  D1/D4/A2/A5 memory-to-register order, CCR preservation, and effective
+  address computation before loading a listed base address register. The
+  generated-exec fixture generator now routes fixture seeds through the
+  bounded discovery helper and has a larger discovery budget for the growing
+  CPU fixture set.
 - local: Fact-checked nonzero shift/rotate flag semantics against the
   Motorola/NXP Programmer's Reference Manual. Generated-exec now covers
   `ASL.B`, `ASR.W`, `LSR.L`, `ROXR.B`, and `ROR.W` data-register cases plus
