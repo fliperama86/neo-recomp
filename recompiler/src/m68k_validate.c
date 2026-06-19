@@ -271,10 +271,14 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_CLR:
     case NG_M68K_NEG:
     case NG_M68K_NEGX:
-    case NG_M68K_NBCD:
     case NG_M68K_NOT:
+        return valid_size(instr->size) &&
+               instr->dst.mode != NG_M68K_EA_NONE &&
+               ea_is_data_alterable(&instr->dst);
+    case NG_M68K_NBCD:
     case NG_M68K_TAS:
-        return instr->dst.mode != NG_M68K_EA_NONE &&
+        return instr->size == 1u &&
+               instr->dst.mode != NG_M68K_EA_NONE &&
                ea_is_data_alterable(&instr->dst);
     case NG_M68K_ADDI:
     case NG_M68K_SUBI:

@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked unary RMW instruction sizes against the Motorola/NXP
+  Programmer's Reference Manual. The post-decode validator now rejects
+  malformed generic unary sizes for `CLR`/`NEG`/`NEGX`/`NOT` and enforces the
+  MC68000 byte-only size for `NBCD` and `TAS`, with `test_m68k_validate`
+  covering valid byte forms and invalid word/long/unsized forms first.
 - local: Fact-checked `MOVEM` PC-indexed memory-to-register transfers against
   the Motorola/NXP Programmer's Reference Manual. Generated-exec now covers
   `MOVEM.W (d8,PC,Dn.W),D5/A6`, verifying the extension-word PC base,
