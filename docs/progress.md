@@ -203,7 +203,8 @@ Covered by executable generated-C validation:
     abs, and postincrement memory destinations
   - generic `NEGX.B/W/L <ea>` paths covered so far by absolute byte memory
     destinations
-  - `NBCD <ea>` covered so far by absolute byte memory destinations
+  - `NBCD <ea>` covered so far by absolute byte memory destinations and
+    data-register sticky-`Z`/borrow-to-`X/C` edge cases
   - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
   - data-register `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` decode/emission,
     covered so far by generated-exec logical shift pairs and zero-count
@@ -218,6 +219,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generated-exec `NBCD` data-register edge coverage. The
+  fixture now checks the sticky-`Z` zero case with `X` clear and the tens
+  complement case with `X` set, including decimal borrow into `X/C`.
 - local: Fact-checked `ADD`/`SUB`/`CMP` condition-code rules.
   Generated-exec now covers byte `ADD` overflow plus carry into `X/C`, byte
   `SUB` borrow into `X/C`, and byte `CMP` overflow while preserving `X`.
