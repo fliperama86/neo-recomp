@@ -1985,7 +1985,7 @@ static int emit_instr(FILE *out,
         return 1;
     case NG_M68K_RESET:
         emit_require_supervisor(out, instr->addr);
-        fprintf(out, "    /* RESET privileged side effects are host-handled. */\n");
+        fprintf(out, "    ng_m68k_reset_devices();\n");
         return 1;
     case NG_M68K_STOP:
         emit_require_supervisor(out, instr->addr);

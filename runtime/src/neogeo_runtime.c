@@ -202,6 +202,12 @@ void ng_log_dispatch_miss(uint32_t addr) {
     fprintf(stderr, "dispatch miss at $%06X\n", addr & 0xFFFFFFu);
 }
 
+void ng_m68k_reset_devices(void) {
+    /* RESET asserts the 68000's external reset line. The default runtime has
+     * no attached secondary CPU/device reset model yet; keep the hook explicit
+     * so generated code has an architectural side-effect boundary. */
+}
+
 void ng_m68k_stop_until_interrupt(uint16_t sr) {
     fprintf(stderr, "m68k STOP until interrupt sr=$%04X\n", sr);
 }

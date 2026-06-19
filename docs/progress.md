@@ -116,8 +116,10 @@ Covered by executable generated-C validation:
   privilege-violation vector 8 with the faulting instruction PC. `STOP`
   installs the immediate SR, yields through the runtime stop hook when
   executed in supervisor mode, and can wake through a runtime-approved
-  interrupt that returns via `RTE`. Full device/interrupt timing remains
-  pending.
+  interrupt that returns via `RTE`. Supervisor-mode `RESET` now calls an
+  explicit runtime external-device reset hook without changing 68000 state;
+  the default hook is a no-op until NeoGeo device reset behavior is modeled.
+  Full device/interrupt timing remains pending.
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
 - conditional branches: all 68000 `Bcc` condition predicates are emitted;
   generated-exec covers the 14 real `Bcc` condition encodings (2-15; 0/1 are

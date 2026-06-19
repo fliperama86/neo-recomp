@@ -4,7 +4,7 @@
 #include <string.h>
 
 #define NG_EXEC_FIXTURE_SIZE 0x5F00u
-#define NG_EXEC_FIXTURE_ADDR_COUNT 132u
+#define NG_EXEC_FIXTURE_ADDR_COUNT 133u
 
 #if defined(__GNUC__) || defined(__clang__)
 #define NG_EXEC_FIXTURE_MAYBE_UNUSED __attribute__((unused))
@@ -1353,6 +1353,15 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
     }
 
     {
+        uint32_t pc = 0x5EC0u;
+        ng_exec_fixture_write16(data, pc, 0x4E70u); /* RESET */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x4E72u); /* STOP #$2700 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x2700u);
+    }
+
+    {
         uint32_t pc = 0x1200u;
         ng_exec_fixture_write16(data, pc, 0x33FCu); /* MOVE.W #$8001,$0000121E */
         pc += 2u;
@@ -1514,6 +1523,7 @@ static NG_EXEC_FIXTURE_MAYBE_UNUSED uint32_t ng_exec_fixture_addr(uint32_t index
         0x00005D00u,
         0x00005E00u,
         0x00005E80u,
+        0x00005EC0u,
     };
     return index < NG_EXEC_FIXTURE_ADDR_COUNT ? addrs[index] : 0;
 }

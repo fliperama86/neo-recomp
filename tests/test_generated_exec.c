@@ -37,6 +37,8 @@ static uint32_t g_oracle_pending_interrupt_after_poll;
 static uint32_t g_oracle_interrupt_poll_count;
 static uint8_t g_oracle_stop_interrupt_level;
 static uint8_t g_oracle_stop_interrupt_vector;
+static uint32_t g_reset_device_count;
+static uint32_t g_oracle_reset_device_count;
 
 void ng_generated_call(uint32_t addr);
 
@@ -460,6 +462,7 @@ static int oracle_exec(const uint8_t *program,
                 pc = oracle_privilege_violation(state, bus, pc);
                 continue;
             }
+            ++g_oracle_reset_device_count;
             pc += 2u;
             continue;
         }
@@ -2173,6 +2176,10 @@ void ng_m68k_stop_until_interrupt(uint16_t sr) {
     }
 }
 
+void ng_m68k_reset_devices(void) {
+    ++g_reset_device_count;
+}
+
 int main(void) {
     uint8_t program[NG_EXEC_FIXTURE_SIZE];
     NgM68kState expected_state;
@@ -3835,6 +3842,31 @@ int main(void) {
     CHECK(g_ng_m68k.a[6] == 0x00007FFDu);
     CHECK(ng68k_read16(0x0000127Cu) ==
           (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C));
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = SR_S;
+    expected_state.a[7] = 0x000001F0u;
+    expected_state.ssp = expected_state.a[7];
+    g_oracle_reset_device_count = 0;
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x00005EC0u,
+                      &expected_state, expected_bus, 0));
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = SR_S;
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    g_dispatch_miss_count = 0;
+    g_reset_device_count = 0;
+
+    ng_generated_call(0x00005EC0u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+    CHECK(g_ng_m68k.sr == expected_state.sr);
+    CHECK(g_reset_device_count == g_oracle_reset_device_count);
+    CHECK(g_reset_device_count == 1u);
 
     return 0;
 }

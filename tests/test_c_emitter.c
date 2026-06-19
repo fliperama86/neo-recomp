@@ -736,7 +736,7 @@ int main(void) {
 
         CHECK(strstr(text, "/* $000000: RESET */") != NULL);
         CHECK(strstr(text, "if (!ng_require_supervisor(0x00000000u)) return;") != NULL);
-        CHECK(strstr(text, "/* RESET privileged side effects are host-handled. */") != NULL);
+        CHECK(strstr(text, "ng_m68k_reset_devices();") != NULL);
         CHECK(strstr(text, "/* $000002: TRAP #3 */") != NULL);
         CHECK(strstr(text, "ng_push_exception_frame(0x00000004u);") != NULL);
         CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(0x0000008Cu);") != NULL);
