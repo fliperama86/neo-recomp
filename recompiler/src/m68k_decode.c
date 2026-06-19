@@ -938,7 +938,6 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         if (is_control_ea(ea_mode, ea_reg)) {
             out->mnemonic = ((op & 0xFFC0u) == 0x4E80u) ?
                 NG_M68K_JSR : NG_M68K_JMP;
-            out->size = NG_M68K_SIZE_LONG;
             out->byte_length = (uint8_t)(2u + decode_ea(rom, addr + 2u,
                                                         ea_mode, ea_reg,
                                                         out->size, &out->src));

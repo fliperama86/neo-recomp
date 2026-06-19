@@ -1239,6 +1239,7 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_JMP);
         CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 0);
         CHECK(instr.form == NG_M68K_FORM_AREG_INDIRECT);
         CHECK(instr.reg == 0);
         CHECK(instr.src.mode == NG_M68K_EA_AIND);
@@ -1253,6 +1254,7 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_JSR);
         CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 0);
         CHECK(instr.form == NG_M68K_FORM_AREG_INDIRECT);
         CHECK(instr.reg == 0);
         CHECK(instr.src.mode == NG_M68K_EA_AIND);
@@ -1267,6 +1269,7 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_JMP);
         CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 0);
         CHECK(instr.src.mode == NG_M68K_EA_ADISP);
         CHECK(instr.src.reg == 2);
         CHECK(instr.src.displacement == 0x10);

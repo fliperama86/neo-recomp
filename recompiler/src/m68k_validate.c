@@ -358,6 +358,106 @@ static int data_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
     return memory_alterable_ext_length(ea, out_ext);
 }
 
+static int control_source_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
+    switch (ea->mode) {
+    case NG_M68K_EA_AIND:
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    case NG_M68K_EA_ADISP:
+    case NG_M68K_EA_AINDEX:
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        if (ea->mode == NG_M68K_EA_AINDEX && ea->index_reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_W:
+    case NG_M68K_EA_PC_DISP:
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_L:
+        *out_ext = 4u;
+        return 1;
+    case NG_M68K_EA_PC_INDEX:
+        if (ea->index_reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int validate_control_transfer(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
+    if (instr->size != 0u ||
+        instr->dst.mode != NG_M68K_EA_NONE ||
+        instr->immediate != 0u ||
+        instr->src_reg != 0u ||
+        instr->condition != 0u ||
+        !control_source_ext_length(&instr->src, &ext_len) ||
+        instr->byte_length != (uint8_t)(2u + ext_len)) {
+        return 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_AIND) {
+        return instr->form == NG_M68K_FORM_AREG_INDIRECT &&
+               instr->reg == instr->src.reg;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_ABS_W ||
+        instr->src.mode == NG_M68K_EA_ABS_L) {
+        return instr->form == NG_M68K_FORM_ABS &&
+               instr->reg == 0u &&
+               instr->target == instr->src.absolute_addr;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_PC_DISP ||
+        instr->src.mode == NG_M68K_EA_PC_INDEX) {
+        return instr->form == NG_M68K_FORM_PC_RELATIVE &&
+               instr->reg == 0u &&
+               instr->target == instr->src.absolute_addr;
+    }
+
+    return instr->form == NG_M68K_FORM_NONE &&
+           instr->reg == 0u;
+}
+
+static int validate_pea(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
+    return instr->size == 4u &&
+           instr->dst.mode == NG_M68K_EA_NONE &&
+           instr->immediate == 0u &&
+           instr->src_reg == 0u &&
+           instr->reg == 0u &&
+           instr->condition == 0u &&
+           instr->form == NG_M68K_FORM_NONE &&
+           control_source_ext_length(&instr->src, &ext_len) &&
+           instr->byte_length == (uint8_t)(2u + ext_len);
+}
+
+static int validate_lea(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
+    return instr->size == 4u &&
+           instr->dst.mode == NG_M68K_EA_AREG &&
+           instr->dst.reg < 8u &&
+           instr->reg == instr->dst.reg &&
+           instr->immediate == 0u &&
+           instr->src_reg == 0u &&
+           instr->condition == 0u &&
+           control_source_ext_length(&instr->src, &ext_len) &&
+           instr->byte_length == (uint8_t)(2u + ext_len);
+}
+
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
@@ -658,17 +758,11 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
         return validate_branch(instr);
     case NG_M68K_JMP:
     case NG_M68K_JSR:
-        return instr->dst.mode == NG_M68K_EA_NONE &&
-               ea_is_control(&instr->src);
+        return validate_control_transfer(instr);
     case NG_M68K_PEA:
-        return instr->size == 4u &&
-               instr->dst.mode == NG_M68K_EA_NONE &&
-               ea_is_control(&instr->src);
+        return validate_pea(instr);
     case NG_M68K_LEA:
-        return instr->byte_length >= 2u &&
-               instr->size == 4u &&
-               ea_is_control(&instr->src) &&
-               instr->dst.mode == NG_M68K_EA_AREG;
+        return validate_lea(instr);
     case NG_M68K_MOVE:
         return valid_size(instr->size) &&
                ea_is_move_source(&instr->src, instr->size) &&

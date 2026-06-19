@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `JMP`, `JSR`, `PEA`, and `LEA` control-source
+  forms against the Motorola/NXP Programmer's Reference Manual. The validator
+  now requires exact control-source extension lengths, no stray source/immediate
+  metadata, unsized `JMP`/`JSR`, long-sized `PEA`/`LEA`, `LEA` destination
+  address-register consistency, and static `JMP`/`JSR` form/target consistency.
+  Decode now keeps generic `JMP`/`JSR` forms unsized. `test_m68k_decode` and
+  `test_m68k_validate` covered the malformed metadata red first.
 - local: Fact-checked MC68000 destination-only `CLR`/`NEG`/`NEGX`/`NOT`,
   `NBCD`, and `TAS` forms against the Motorola/NXP Programmer's Reference
   Manual. The validator now requires no source/immediate/count metadata,
