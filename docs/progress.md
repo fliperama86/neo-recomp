@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `MOVEP` validation so opcode data-register bits,
+  address-register bits, size bit, and direction bit must match the
+  decoded `Dn <-> (d16,An)` metadata. `test_m68k_validate` covered
+  mismatched register and direction opcode metadata red first.
 - local: Tightened `LINK`/`UNLK` validation so the opcode class and
   low register bits must match the decoded address-register metadata
   (`$4E50+n` for `LINK An,#disp`, `$4E58+n` for `UNLK An`).

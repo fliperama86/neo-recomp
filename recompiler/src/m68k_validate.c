@@ -1141,20 +1141,32 @@ static int validate_movep(const NgM68kInstr *instr) {
 
     if (instr->src.mode == NG_M68K_EA_DREG &&
         instr->dst.mode == NG_M68K_EA_ADISP) {
+        uint16_t expected_opcode =
+            (uint16_t)(0x0188u |
+                       ((uint16_t)instr->src.reg << 9) |
+                       ((instr->size == 4u) ? 0x0040u : 0u) |
+                       instr->dst.reg);
         return instr->src.reg < 8u &&
                instr->dst.reg < 8u &&
                instr->src_reg == instr->src.reg &&
                instr->reg == instr->src.reg &&
-               instr->displacement == instr->dst.displacement;
+               instr->displacement == instr->dst.displacement &&
+               instr->opcode == expected_opcode;
     }
 
     if (instr->src.mode == NG_M68K_EA_ADISP &&
         instr->dst.mode == NG_M68K_EA_DREG) {
+        uint16_t expected_opcode =
+            (uint16_t)(0x0108u |
+                       ((uint16_t)instr->dst.reg << 9) |
+                       ((instr->size == 4u) ? 0x0040u : 0u) |
+                       instr->src.reg);
         return instr->src.reg < 8u &&
                instr->dst.reg < 8u &&
                instr->src_reg == 0u &&
                instr->reg == instr->dst.reg &&
-               instr->displacement == instr->src.displacement;
+               instr->displacement == instr->src.displacement &&
+               instr->opcode == expected_opcode;
     }
 
     return 0;
