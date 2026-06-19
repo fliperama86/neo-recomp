@@ -1514,6 +1514,21 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x4A, 0xC3 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_TAS);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.form == NG_M68K_FORM_DREG);
+        CHECK(instr.reg == 3);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "TAS D3") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x48, 0x39, 0x00, 0x00, 0x01, 0x94 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
@@ -1524,6 +1539,21 @@ int main(void) {
         CHECK(instr.dst.absolute_addr == 0x00000194u);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "NBCD.B $000194") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x48, 0x03 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_NBCD);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
+        CHECK(instr.form == NG_M68K_FORM_DREG);
+        CHECK(instr.reg == 3);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "NBCD.B D3") == 0);
     }
 
     {

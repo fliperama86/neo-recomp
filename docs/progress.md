@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 destination-only `CLR`/`NEG`/`NEGX`/`NOT`,
+  `NBCD`, and `TAS` forms against the Motorola/NXP Programmer's Reference
+  Manual. The validator now requires no source/immediate/count metadata,
+  exact data-alterable destination instruction lengths, byte-only `NBCD`/`TAS`,
+  and data-register legacy-field consistency. Decode now records Dn legacy
+  metadata for `NBCD`/`TAS`. `test_m68k_decode` and `test_m68k_validate`
+  covered malformed metadata first.
 - local: Fact-checked MC68000 shift/rotate register-count, immediate-count,
   and memory one-bit forms against the Motorola/NXP Programmer's Reference
   Manual. The validator now enforces exact 2-byte register forms,

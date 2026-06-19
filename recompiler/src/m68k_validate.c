@@ -585,6 +585,38 @@ static int validate_shift_rotate(const NgM68kInstr *instr) {
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
+static int validate_unary_data_alterable(const NgM68kInstr *instr,
+                                         int byte_only) {
+    uint8_t ext_len = 0u;
+
+    if (instr->src.mode != NG_M68K_EA_NONE ||
+        instr->immediate != 0u ||
+        instr->src_reg != 0u ||
+        instr->condition != 0u ||
+        !data_alterable_ext_length(&instr->dst, &ext_len)) {
+        return 0;
+    }
+
+    if (byte_only) {
+        if (instr->size != 1u) {
+            return 0;
+        }
+    } else if (!valid_size(instr->size)) {
+        return 0;
+    }
+
+    if (instr->byte_length != (uint8_t)(2u + ext_len)) {
+        return 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        return instr->form == NG_M68K_FORM_DREG &&
+               instr->reg == instr->dst.reg;
+    }
+
+    return 1;
+}
+
 int ng_m68k_validate(const NgM68kInstr *instr) {
     if (!instr ||
         instr->byte_length == 0u ||
@@ -694,14 +726,10 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_NEG:
     case NG_M68K_NEGX:
     case NG_M68K_NOT:
-        return valid_size(instr->size) &&
-               instr->dst.mode != NG_M68K_EA_NONE &&
-               ea_is_data_alterable(&instr->dst);
+        return validate_unary_data_alterable(instr, 0);
     case NG_M68K_NBCD:
     case NG_M68K_TAS:
-        return instr->size == 1u &&
-               instr->dst.mode != NG_M68K_EA_NONE &&
-               ea_is_data_alterable(&instr->dst);
+        return validate_unary_data_alterable(instr, 1);
     case NG_M68K_ADDI:
     case NG_M68K_SUBI:
     case NG_M68K_ORI:

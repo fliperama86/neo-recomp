@@ -177,6 +177,21 @@ static void populate_move_legacy_fields(NgM68kInstr *out) {
     }
 }
 
+static void populate_unary_dst_legacy_fields(NgM68kInstr *out) {
+    if (out->dst.mode == NG_M68K_EA_DREG) {
+        out->form = NG_M68K_FORM_DREG;
+        out->reg = out->dst.reg;
+    } else if (out->dst.mode == NG_M68K_EA_ABS_W ||
+               out->dst.mode == NG_M68K_EA_ABS_L) {
+        out->form = NG_M68K_FORM_ABS;
+        out->absolute_addr = out->dst.absolute_addr;
+    } else if (out->dst.mode == NG_M68K_EA_ADISP) {
+        out->form = NG_M68K_FORM_AREG_DISP;
+        out->reg = out->dst.reg;
+        out->displacement = out->dst.displacement;
+    }
+}
+
 static int is_data_ea(uint8_t mode, uint8_t reg);
 static int is_data_alterable_ea(uint8_t mode, uint8_t reg);
 static int is_memory_alterable_ea(uint8_t mode, uint8_t reg);
@@ -1633,14 +1648,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
                 out->byte_length = 2;
                 return finish_decode(rom, addr, out);
             }
-            if (out->dst.mode == NG_M68K_EA_DREG) {
-                out->form = NG_M68K_FORM_DREG;
-                out->reg = out->dst.reg;
-            } else if (out->dst.mode == NG_M68K_EA_ABS_W ||
-                       out->dst.mode == NG_M68K_EA_ABS_L) {
-                out->form = NG_M68K_FORM_ABS;
-                out->absolute_addr = out->dst.absolute_addr;
-            }
+            populate_unary_dst_legacy_fields(out);
             return finish_decode(rom, addr, out);
         }
     }
@@ -1663,18 +1671,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
                 out->byte_length = 2;
                 return finish_decode(rom, addr, out);
             }
-            if (out->dst.mode == NG_M68K_EA_DREG) {
-                out->form = NG_M68K_FORM_DREG;
-                out->reg = out->dst.reg;
-            } else if (out->dst.mode == NG_M68K_EA_ABS_W ||
-                       out->dst.mode == NG_M68K_EA_ABS_L) {
-                out->form = NG_M68K_FORM_ABS;
-                out->absolute_addr = out->dst.absolute_addr;
-            } else if (out->dst.mode == NG_M68K_EA_ADISP) {
-                out->form = NG_M68K_FORM_AREG_DISP;
-                out->reg = out->dst.reg;
-                out->displacement = out->dst.displacement;
-            }
+            populate_unary_dst_legacy_fields(out);
             return finish_decode(rom, addr, out);
         }
     }
@@ -1691,6 +1688,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
                 out->mnemonic = NG_M68K_UNKNOWN;
                 out->byte_length = 2;
             }
+            populate_unary_dst_legacy_fields(out);
             return finish_decode(rom, addr, out);
         }
     }
@@ -1778,6 +1776,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
                 out->mnemonic = NG_M68K_UNKNOWN;
                 out->byte_length = 2;
             }
+            populate_unary_dst_legacy_fields(out);
             return finish_decode(rom, addr, out);
         }
     }
