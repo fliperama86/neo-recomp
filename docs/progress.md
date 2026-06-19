@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `JMP`/`JSR` validation so address-indirect and
+  address-displacement/indexed forms reject stray top-level target metadata,
+  absolute forms reject stray top-level absolute/displacement metadata, and
+  PC-displacement forms require decoded displacement metadata to match the
+  source EA. `test_m68k_validate` covered stray `JMP (An)` target,
+  missing/mismatched `JSR (d16,PC)` displacement, and stray absolute-source
+  metadata red first.
 - local: Tightened `PEA` validation so top-level target, absolute-address,
   and displacement metadata must stay empty while the control source EA carries
   the address payload. `test_m68k_validate` covered stray address-displacement

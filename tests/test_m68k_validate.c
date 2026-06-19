@@ -69,6 +69,17 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_JMP;
+    instr.opcode = 0x4ED0u;
+    instr.byte_length = 2u;
+    instr.src.mode = NG_M68K_EA_AIND;
+    instr.src.reg = 0u;
+    instr.form = NG_M68K_FORM_AREG_INDIRECT;
+    instr.reg = 0u;
+    instr.target = 0x100u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_JMP;
     instr.opcode = 0x4E90u;
     instr.byte_length = 2u;
     instr.src.mode = NG_M68K_EA_AIND;
@@ -118,8 +129,34 @@ int main(void) {
     instr.src.displacement = 2;
     instr.src.absolute_addr = 4u;
     instr.form = NG_M68K_FORM_PC_RELATIVE;
+    instr.displacement = 2;
     instr.target = 4u;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_JSR;
+    instr.opcode = 0x4EBAu;
+    instr.byte_length = 4u;
+    instr.src.mode = NG_M68K_EA_PC_DISP;
+    instr.src.reg = 2u;
+    instr.src.displacement = 2;
+    instr.src.absolute_addr = 4u;
+    instr.form = NG_M68K_FORM_PC_RELATIVE;
+    instr.target = 4u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_JSR;
+    instr.opcode = 0x4EBAu;
+    instr.byte_length = 4u;
+    instr.src.mode = NG_M68K_EA_PC_DISP;
+    instr.src.reg = 2u;
+    instr.src.displacement = 2;
+    instr.src.absolute_addr = 4u;
+    instr.form = NG_M68K_FORM_PC_RELATIVE;
+    instr.displacement = 4;
+    instr.target = 4u;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_JSR;
@@ -180,6 +217,18 @@ int main(void) {
     instr.form = NG_M68K_FORM_ABS;
     instr.target = 0x123456u;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_JSR;
+    instr.opcode = 0x4EB9u;
+    instr.byte_length = 6u;
+    instr.src.mode = NG_M68K_EA_ABS_L;
+    instr.src.reg = 1u;
+    instr.src.absolute_addr = 0x123456u;
+    instr.form = NG_M68K_FORM_ABS;
+    instr.target = 0x123456u;
+    instr.absolute_addr = 0x123456u;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_JSR;

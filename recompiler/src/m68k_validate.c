@@ -1050,7 +1050,8 @@ static int validate_control_transfer(const NgM68kInstr *instr) {
         instr->condition != 0u ||
         !exact_control_source_ext_length(instr, &ext_len) ||
         !ea_opcode_field(&instr->src, &ea_field) ||
-        instr->byte_length != (uint8_t)(2u + ext_len)) {
+        instr->byte_length != (uint8_t)(2u + ext_len) ||
+        instr->absolute_addr != 0u) {
         return 0;
     }
 
@@ -1062,25 +1063,37 @@ static int validate_control_transfer(const NgM68kInstr *instr) {
 
     if (instr->src.mode == NG_M68K_EA_AIND) {
         return instr->form == NG_M68K_FORM_AREG_INDIRECT &&
-               instr->reg == instr->src.reg;
+               instr->reg == instr->src.reg &&
+               instr->target == 0u &&
+               instr->displacement == 0;
     }
 
     if (instr->src.mode == NG_M68K_EA_ABS_W ||
         instr->src.mode == NG_M68K_EA_ABS_L) {
         return instr->form == NG_M68K_FORM_ABS &&
                instr->reg == 0u &&
-               instr->target == instr->src.absolute_addr;
+               instr->target == instr->src.absolute_addr &&
+               instr->displacement == 0;
     }
 
-    if (instr->src.mode == NG_M68K_EA_PC_DISP ||
-        instr->src.mode == NG_M68K_EA_PC_INDEX) {
+    if (instr->src.mode == NG_M68K_EA_PC_DISP) {
         return instr->form == NG_M68K_FORM_PC_RELATIVE &&
                instr->reg == 0u &&
-               instr->target == instr->src.absolute_addr;
+               instr->target == instr->src.absolute_addr &&
+               instr->displacement == instr->src.displacement;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_PC_INDEX) {
+        return instr->form == NG_M68K_FORM_PC_RELATIVE &&
+               instr->reg == 0u &&
+               instr->target == instr->src.absolute_addr &&
+               instr->displacement == 0;
     }
 
     return instr->form == NG_M68K_FORM_NONE &&
-           instr->reg == 0u;
+           instr->reg == 0u &&
+           instr->target == 0u &&
+           instr->displacement == 0;
 }
 
 static int validate_pea(const NgM68kInstr *instr) {
