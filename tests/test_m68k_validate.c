@@ -980,12 +980,23 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_CMPI;
+    instr.opcode = 0x0C00u;
     instr.byte_length = 4u;
     instr.size = 1u;
     instr.immediate = 0x7Fu;
     instr.dst.mode = NG_M68K_EA_DREG;
     instr.form = NG_M68K_FORM_IMM_TO_DREG;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPI;
+    instr.opcode = 0x0A00u;
+    instr.byte_length = 4u;
+    instr.size = 1u;
+    instr.immediate = 0x7Fu;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.form = NG_M68K_FORM_IMM_TO_DREG;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_CMPI;
@@ -1760,12 +1771,43 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_EORI;
+    instr.opcode = 0x0A80u;
     instr.byte_length = 6u;
     instr.size = 4u;
     instr.immediate = 0x12345678u;
     instr.dst.mode = NG_M68K_EA_DREG;
     instr.form = NG_M68K_FORM_IMM_TO_DREG;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_EORI;
+    instr.opcode = 0x0A40u;
+    instr.byte_length = 6u;
+    instr.size = 4u;
+    instr.immediate = 0x12345678u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.form = NG_M68K_FORM_IMM_TO_DREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ADDI;
+    instr.opcode = 0x0640u;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.immediate = 0x1234u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.form = NG_M68K_FORM_IMM_TO_DREG;
+    CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ADDI;
+    instr.opcode = 0x0440u;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.immediate = 0x1234u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.form = NG_M68K_FORM_IMM_TO_DREG;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ADDI;
@@ -1819,6 +1861,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_EORI;
+    instr.opcode = 0x0A00u;
     instr.byte_length = 4u;
     instr.size = 1u;
     instr.immediate = 0x7Fu;

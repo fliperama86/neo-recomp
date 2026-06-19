@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened immediate logical/arithmetic/compare validation so
+  `ORI`/`ANDI`/`SUBI`/`ADDI`/`EORI`/`CMPI` opcodes must match decoded
+  mnemonic, size, and destination EA bits in addition to immediate width
+  and length checks. `test_m68k_validate` covered cross-opcode and
+  opcode-size mismatches red first.
 - local: Tightened word-sized `CHK`, `MULU`/`MULS`, and
   `DIVU`/`DIVS` validation so opcode class, destination register,
   and source EA bits must match decoded metadata. `test_m68k_validate`

@@ -1704,23 +1704,80 @@ static int validate_immediate_dest_legacy_fields(const NgM68kInstr *instr) {
 static int validate_cmpi(const NgM68kInstr *instr) {
     uint8_t dst_ext = 0u;
     uint8_t imm_ext = instr->size == 4u ? 4u : 2u;
+    uint8_t ea_field = 0u;
+    uint16_t size_bits = 0u;
+    uint16_t expected_opcode = 0u;
 
-    return valid_size(instr->size) &&
-           exact_data_alterable_ext_length(&instr->dst, &dst_ext) &&
-           valid_immediate_width(instr->size, instr->immediate) &&
-           validate_immediate_dest_legacy_fields(instr) &&
-           instr->byte_length == (uint8_t)(2u + imm_ext + dst_ext);
+    if (instr->size == 1u) {
+        size_bits = 0x0000u;
+    } else if (instr->size == 2u) {
+        size_bits = 0x0040u;
+    } else if (instr->size == 4u) {
+        size_bits = 0x0080u;
+    } else {
+        return 0;
+    }
+
+    if (!exact_data_alterable_ext_length(&instr->dst, &dst_ext) ||
+        !ea_opcode_field(&instr->dst, &ea_field) ||
+        !valid_immediate_width(instr->size, instr->immediate) ||
+        !validate_immediate_dest_legacy_fields(instr) ||
+        instr->byte_length != (uint8_t)(2u + imm_ext + dst_ext)) {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)(0x0C00u | size_bits | ea_field);
+    return instr->opcode == expected_opcode;
 }
 
 static int validate_immediate_to_ea(const NgM68kInstr *instr) {
     uint8_t dst_ext = 0u;
     uint8_t imm_ext = instr->size == 4u ? 4u : 2u;
+    uint8_t ea_field = 0u;
+    uint16_t base_opcode = 0u;
+    uint16_t size_bits = 0u;
+    uint16_t expected_opcode = 0u;
 
-    return valid_size(instr->size) &&
-           exact_data_alterable_ext_length(&instr->dst, &dst_ext) &&
-           valid_immediate_width(instr->size, instr->immediate) &&
-           validate_immediate_dest_legacy_fields(instr) &&
-           instr->byte_length == (uint8_t)(2u + imm_ext + dst_ext);
+    switch (instr->mnemonic) {
+    case NG_M68K_ORI:
+        base_opcode = 0x0000u;
+        break;
+    case NG_M68K_ANDI:
+        base_opcode = 0x0200u;
+        break;
+    case NG_M68K_SUBI:
+        base_opcode = 0x0400u;
+        break;
+    case NG_M68K_ADDI:
+        base_opcode = 0x0600u;
+        break;
+    case NG_M68K_EORI:
+        base_opcode = 0x0A00u;
+        break;
+    default:
+        return 0;
+    }
+
+    if (instr->size == 1u) {
+        size_bits = 0x0000u;
+    } else if (instr->size == 2u) {
+        size_bits = 0x0040u;
+    } else if (instr->size == 4u) {
+        size_bits = 0x0080u;
+    } else {
+        return 0;
+    }
+
+    if (!exact_data_alterable_ext_length(&instr->dst, &dst_ext) ||
+        !ea_opcode_field(&instr->dst, &ea_field) ||
+        !valid_immediate_width(instr->size, instr->immediate) ||
+        !validate_immediate_dest_legacy_fields(instr) ||
+        instr->byte_length != (uint8_t)(2u + imm_ext + dst_ext)) {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)(base_opcode | size_bits | ea_field);
+    return instr->opcode == expected_opcode;
 }
 
 static int validate_word_data_to_dreg(const NgM68kInstr *instr) {
