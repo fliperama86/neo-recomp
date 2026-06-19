@@ -13,9 +13,10 @@ bank_window_size = 0x100000
 
 [functions]
 entry = []
-# VBlank vector handler from the cart vector table. BIOS-backed smoke needs this
-# so generated BIOS interrupt dispatch can enter generated cart code.
-extra = [0x0008F6]
+# BIOS-backed smoke can dispatch to cart-side entry points outside the static
+# cart reset entry: the VBlank vector handler, the cartridge header start
+# trampoline, and an init callback reached after BIOS helper expansion.
+extra = [0x0008F6, 0x000122, 0x001F84]
 
 [dispatch]
 # Callback target is loaded from RAM through A6 and dispatched via JSR (A0).

@@ -69,9 +69,11 @@ The generated C now compiles to an object, and the current Metal Slug smoke
 passes `--fail-on-dispatch-gaps`. The current dispatch audit is:
 
 ```text
-function candidates: 668
-dispatch audit: sites=48 direct=44 missing_direct=0 external_direct=5 computed=0 runtime_computed=3 jump_tables=1 table_resolved=4 table_missing=0
+function candidates: 1155
+dispatch audit: sites=73 direct=69 missing_direct=0 external_direct=5 computed=0 runtime_computed=3 jump_tables=1 table_resolved=4 table_missing=0
 $000900 DIRECT JMP target=$C00438 discovered=no external=yes
+$00092E DIRECT JSR target=$C004CE discovered=no external=yes
+$000940 DIRECT JSR target=$C0044A discovered=no external=yes
 $000862 DIRECT JMP target=$C00444 discovered=no external=yes
 $000984 DIRECT JSR target=$C004C2 discovered=no external=yes
 $0006C8 COMPUTED JSR target=<runtime> allowed=yes
@@ -79,12 +81,15 @@ $001F3C COMPUTED JSR target=<runtime> allowed=yes
 $05BF8A COMPUTED JMP target=<runtime> allowed=yes
 ```
 
-The discovery candidate cap is now 8192; Metal Slug currently discovers 668
+The discovery candidate cap is now 8192; Metal Slug currently discovers 1155
 candidate entry/instruction-boundary addresses without truncation after seeding
-the cart VBlank vector handler (`$0008F6`). The previous
+the cart VBlank vector handler (`$0008F6`), the cartridge header start
+trampoline (`$000122`), and the BIOS-reached init callback (`$001F84`). The previous
 missing direct P-ROM targets (`$05DC1C`, `$05DC34`, `$024FB8`) are now
 discovered. Direct BIOS/system-ROM targets are classified as external runtime
-fallbacks instead of missing P-ROM discovery. The RAM-loaded callback at
+fallbacks instead of missing P-ROM discovery; the current external BIOS targets
+visible from cart code are `$C00438`, `$C00444`, `$C0044A`, `$C004C2`, and
+`$C004CE`. The RAM-loaded callback at
 `$0006C8` (`MOVEA.L (A6),A0; JSR (A0)`) and the additional VBlank-reached
 computed sites (`$001F3C`, `$05BF8A`) are explicitly classified in
 `games/mslug.toml` as runtime-computed dispatch sites, so they remain visible in
@@ -198,19 +203,21 @@ as a headless sound command/reply latch, preserving the previous default
 `0xFF` read value and recording 68000->Z80 commands without emulating the Z80 or
 YM2610. The next BIOS step exposed a wider port-output mirror at `$380021`, so
 the port-output latch now accepts odd addresses under the documented
-`$380000/$390000` mirror. With the 8192-candidate budget and further local-only
-BIOS seeds through the `$C187xx`/`$C180xx` BIOS helper chain, the current local
-frontier is:
+`$380000/$390000` mirror. With the 8192-candidate budget, cart seeds for
+`$000122`/`$001F84`, all currently visible cart->BIOS direct targets
+(`$C00438`, `$C00444`, `$C0044A`, `$C004C2`, `$C004CE`), and further local-only
+BIOS seeds through the `$C187xx`/`$C180xx` helper chain, the latest local probe
+no longer returns a dispatch or bus miss before the harness timeout:
 
 ```text
-dispatch miss at $C18208
-returned pc=$C18208 sr=$2000 sp=$0010F2FC
+TIMEOUT after 3s
+starting cart entry $0007CC ssp=$0010F300
 ```
 
-That expanded local BIOS probe still reports `BIOS candidates: 8192
-(truncated)`, so the next work is still targeted BIOS frontier selection or
-more precise BIOS CFG discovery rather than blindly treating it as a complete
-BIOS recompilation.
+That is the first "keeps running headless" checkpoint, but it is not yet a
+boot/attract correctness proof: the expanded BIOS probe still reports
+`BIOS candidates: 8192 (truncated)`, and the harness currently has no frame, PC,
+or game-state success oracle beyond "no miss before timeout".
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.

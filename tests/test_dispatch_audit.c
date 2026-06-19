@@ -210,5 +210,33 @@ int main(void) {
     CHECK(!audit.truncated);
 
     ng_program_rom_free(&stop_rom);
+
+    {
+        const uint32_t seed_count = 1500u;
+        NgProgramRom many_rom = make_rom(seed_count * 2u);
+        uint32_t seeds[1500];
+        CHECK(many_rom.data != NULL);
+
+        for (uint32_t i = 0; i < seed_count; ++i) {
+            uint32_t addr = i * 2u;
+            write16(&many_rom, addr, 0x4E75u); /* RTS */
+            seeds[i] = addr;
+        }
+
+        NgFunctionDiscovery many_discovery;
+        CHECK(ng_function_discover_from_seeds(&many_rom,
+                                              seeds,
+                                              seed_count,
+                                              &many_discovery));
+        CHECK(many_discovery.count == seed_count);
+        CHECK(!many_discovery.truncated);
+        CHECK(ng_dispatch_audit_build(&many_rom, &many_discovery, &audit));
+        CHECK(audit.count == 0u);
+        CHECK(!audit.truncated);
+        CHECK(!ng_dispatch_audit_has_gaps(&audit));
+
+        ng_program_rom_free(&many_rom);
+    }
+
     return 0;
 }
