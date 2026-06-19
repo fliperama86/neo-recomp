@@ -166,5 +166,41 @@ int main(void) {
     ng68k_write8(NG_NEO_REG_TIMERSTOP + 1u, 0x01u);
     CHECK(ng_neogeo_timer_stop() == 0x0101u);
 
+    ng_neogeo_reset_runtime();
+    CHECK(ng_neogeo_current_scanline() == 0);
+    ng_neogeo_advance_scanline();
+    CHECK(ng_neogeo_current_scanline() == 1);
+    ng_neogeo_advance_frame();
+    CHECK(ng_neogeo_current_scanline() == 1);
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 1);
+    CHECK(vector == 25);
+    ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_VBLANK);
+
+    ng_neogeo_reset_runtime();
+    for (uint32_t i = 0; i < NG_NEO_NTSC_SCANLINES_PER_FRAME; ++i) {
+        ng_neogeo_advance_scanline();
+    }
+    CHECK(ng_neogeo_current_scanline() == 0);
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 1);
+    CHECK(vector == 25);
+    ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_VBLANK);
+
+    ng_neogeo_reset_runtime();
+    ng68k_write16(NG_NEO_REG_TIMERLOW,
+                  (uint16_t)(NG_NEO_NTSC_PIXELS_PER_SCANLINE - 1u));
+    ng68k_write16(NG_NEO_REG_LSPCMODE,
+                  NG_NEO_LSPCMODE_TIMER_ENABLE |
+                  NG_NEO_LSPCMODE_TIMER_RELOAD_ON_FRAME);
+    ng_neogeo_advance_frame();
+    CHECK(ng_m68k_take_interrupt(1, &level, &vector));
+    CHECK(level == 2);
+    CHECK(vector == 26);
+    ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_TIMER);
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 1);
+    CHECK(vector == 25);
+
     return 0;
 }

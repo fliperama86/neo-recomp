@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Connected the LSPC timer model to NTSC frame/scanline advancement:
+  runtime tests now cover 384-pixel scanlines, 264-scanline frame wrap,
+  VBlank requests on frame start/wrap, and timer interrupts firing from
+  frame-advanced pixel ticks.
 - local: Added A-line and F-line emulator exception regressions with trace
   enabled. They vector through MC68000 vectors 10/11, save the next PC,
   and intentionally do not create a trace exception because the trapped
@@ -437,8 +441,8 @@ Use this loop:
 
 Immediate next slice:
 
-- Connect the covered manual LSPC timer/VBlank scheduler to real frame,
-  scanline, or cycle advancement instead of test-only pixel-tick calls.
+- Connect the covered frame/scanline LSPC timer model to generated CPU cycle
+  accounting or host pacing.
 - Add priority tests for timer/VBlank interactions with CPU-generated
   exceptions once the next exception-priority slice is selected.
 

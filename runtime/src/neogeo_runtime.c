@@ -13,6 +13,7 @@ static uint16_t g_ng_neogeo_timer_stop;
 static uint32_t g_ng_neogeo_timer_reload_value;
 static uint32_t g_ng_neogeo_timer_counter_value;
 static uint8_t g_ng_neogeo_timer_counter_loaded;
+static uint16_t g_ng_neogeo_current_scanline;
 
 static void ng_neogeo_reload_timer_counter(void) {
     g_ng_neogeo_timer_counter_value = g_ng_neogeo_timer_reload_value;
@@ -136,6 +137,7 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_timer_reload_value = 0;
     g_ng_neogeo_timer_counter_value = 0;
     g_ng_neogeo_timer_counter_loaded = 0;
+    g_ng_neogeo_current_scanline = 0;
     ng_m68k_clear_interrupt_level();
 }
 
@@ -202,6 +204,22 @@ void ng_neogeo_advance_timer(uint32_t pixel_ticks) {
     }
 }
 
+void ng_neogeo_advance_scanline(void) {
+    ng_neogeo_advance_timer(NG_NEO_NTSC_PIXELS_PER_SCANLINE);
+    g_ng_neogeo_current_scanline =
+        (uint16_t)((g_ng_neogeo_current_scanline + 1u) %
+                   NG_NEO_NTSC_SCANLINES_PER_FRAME);
+    if (g_ng_neogeo_current_scanline == 0u) {
+        ng_neogeo_begin_vblank();
+    }
+}
+
+void ng_neogeo_advance_frame(void) {
+    ng_neogeo_begin_vblank();
+    ng_neogeo_advance_timer(NG_NEO_NTSC_PIXELS_PER_SCANLINE *
+                            NG_NEO_NTSC_SCANLINES_PER_FRAME);
+}
+
 uint16_t ng_neogeo_lspc_mode(void) {
     return g_ng_neogeo_lspc_mode;
 }
@@ -216,6 +234,10 @@ uint32_t ng_neogeo_timer_reload(void) {
 
 uint32_t ng_neogeo_timer_counter(void) {
     return g_ng_neogeo_timer_counter_value;
+}
+
+uint16_t ng_neogeo_current_scanline(void) {
+    return g_ng_neogeo_current_scanline;
 }
 
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {
