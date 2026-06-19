@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#define NG_EXEC_FIXTURE_SIZE 0x2A00u
-#define NG_EXEC_FIXTURE_ADDR_COUNT 100u
+#define NG_EXEC_FIXTURE_SIZE 0x3A00u
+#define NG_EXEC_FIXTURE_ADDR_COUNT 108u
 
 #if defined(__GNUC__) || defined(__clang__)
 #define NG_EXEC_FIXTURE_MAYBE_UNUSED __attribute__((unused))
@@ -830,6 +830,34 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
         pc += 2u;
         ng_exec_fixture_write16(data, pc, 0x2700u);
     }
+
+    for (uint32_t chunk = 0; chunk < 8u; ++chunk) {
+        uint32_t pc = 0x2A00u + chunk * 0x200u;
+        uint32_t first_flags = chunk * 2u;
+        for (uint32_t flags = first_flags; flags < first_flags + 2u; ++flags) {
+            for (uint32_t cond = 2u; cond < 16u; ++cond) {
+                uint32_t dest = 0x00000A00u + flags * 16u + cond;
+                ng_exec_fixture_write16(data, pc, 0x44FCu); /* MOVE #ccr,CCR */
+                pc += 2u;
+                ng_exec_fixture_write16(data, pc, (uint16_t)(0x0010u | flags));
+                pc += 2u;
+                ng_exec_fixture_write16(data, pc,
+                                        (uint16_t)(0x6006u | (cond << 8))); /* Bcc.S skips marker */
+                pc += 2u;
+                ng_exec_fixture_write16(data, pc, 0x50F9u); /* ST $abs.l */
+                pc += 2u;
+                ng_exec_fixture_write32(data, pc, dest);
+                pc += 4u;
+            }
+            ng_exec_fixture_write16(data, pc, 0x40F9u); /* MOVE SR,$abs.l */
+            pc += 2u;
+            ng_exec_fixture_write32(data, pc, 0x00000B00u + flags * 2u);
+            pc += 4u;
+        }
+        ng_exec_fixture_write16(data, pc, 0x4E72u); /* STOP #$2700 */
+        pc += 2u;
+        ng_exec_fixture_write16(data, pc, 0x2700u);
+    }
 }
 
 static NG_EXEC_FIXTURE_MAYBE_UNUSED uint32_t ng_exec_fixture_addr(uint32_t index) {
@@ -934,6 +962,14 @@ static NG_EXEC_FIXTURE_MAYBE_UNUSED uint32_t ng_exec_fixture_addr(uint32_t index
         0x00002080u,
         0x00002360u,
         0x00002640u,
+        0x00002A00u,
+        0x00002C00u,
+        0x00002E00u,
+        0x00003000u,
+        0x00003200u,
+        0x00003400u,
+        0x00003600u,
+        0x00003800u,
     };
     return index < NG_EXEC_FIXTURE_ADDR_COUNT ? addrs[index] : 0;
 }

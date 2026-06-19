@@ -110,7 +110,9 @@ Covered by executable generated-C validation:
   pending.
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
 - conditional branches: all 68000 `Bcc` condition predicates are emitted;
-  generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
+  generated-exec covers the 14 real `Bcc` condition encodings (2-15; 0/1 are
+  `BRA`/`BSR`) across every `N/Z/V/C` combination, plus older `BNE`, `BEQ`,
+  `BCC`, and `BMI` spot checks
 - condition operations: `Scc <ea>` and `DBcc Dn,disp` share the same
   condition predicate table; generated-exec covers all 16 `Scc` predicates
   across every `N/Z/V/C` combination, all 16 `DBcc` predicates across every
@@ -238,6 +240,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a deterministic generated-exec `Bcc` control-flow matrix. The
+  fixture now covers all 14 architectural `Bcc` condition encodings across all
+  16 `N/Z/V/C` combinations, using taken branches to skip a flag-neutral `ST`
+  marker and verifying CCR preservation.
 - local: Added a deterministic generated-exec `DBcc` condition matrix. The
   fixture now evaluates all 16 predicates across all 16 `N/Z/V/C`
   combinations, using a counter-exhaustion fall-through case to prove true
