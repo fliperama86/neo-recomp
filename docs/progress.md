@@ -124,8 +124,9 @@ Covered by executable generated-C validation:
   - `MOVE.B (d16,An),Dn`
   - generic `MOVE.B/W/L <ea>,<ea>` paths covered so far by data-register,
     immediate, postincrement, address-indirect, and indexed destination forms
-  - generic `MOVEA.L <ea>,An` paths covered so far by immediate and
-    address-register sources
+  - generic `MOVEA.W/L <ea>,An` paths covered so far by immediate and
+    address-register sources, including `MOVEA.W` sign-extension with CCR
+    preserved
   - `MOVE.L An,abs`
   - generic `LEA <ea>,An` control-address loads covered so far by PC-relative
     and displacement sources
@@ -223,6 +224,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `MOVEA.W` sign-extension. Generated-exec now covers
+  immediate word sources `#$FFFF`, `#$8000`, and `#$7FFF` loading into address
+  registers as sign-extended 32-bit values while preserving CCR.
 - local: Fact-checked `ADDQ`/`SUBQ` address-register behavior. The
   generated-exec oracle and fixture now cover word-sized quick operations using
   full 32-bit address arithmetic and preserving all CCR bits.
