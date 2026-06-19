@@ -149,8 +149,9 @@ scripts/run_mslug_headless.sh \
 The BIOS is user-provided. The smoke is not playable; success currently means
 reaching deterministic dispatch budgets without a dispatch/bus miss, with
 growing runtime counters (including scanline-driven frame/VBlank progress) and
-a non-looping final tail. By default it checks `10000 50000 100000`; override
-with `NG_MSLUG_PROGRESS_BUDGETS="..."` or run one budget with
+a non-looping final tail plus late VRAM writes. By default it checks
+`10000 50000 100000 500000`; override with
+`NG_MSLUG_PROGRESS_BUDGETS="..."` or run one budget with
 `NG_MSLUG_DISPATCH_BUDGET=...`.
 
 ## Decoder Slice

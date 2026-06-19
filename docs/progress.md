@@ -206,15 +206,15 @@ the port-output latch now accepts odd addresses under the documented
 `$000122`/`$001F84`, all currently visible cart->BIOS direct targets
 (`$C00438`, `$C00444`, `$C0044A`, `$C004C2`, `$C004CE`), and further local-only
 BIOS seeds through the `$C187xx`/`$C180xx` helper chain, the latest local probe
-now reaches a deterministic dispatch budget instead of relying on a wall-clock
-timeout:
+now reaches the deterministic 500k dispatch budget instead of relying on a
+wall-clock timeout, and it gets far enough to write headless VRAM:
 
 ```text
 starting cart entry $0007CC ssp=$0010F300
-returned pc=$C1862E sr=$2100 sp=$0010F2AE
-smoke summary: dispatches=100000 cart=3997 bios=96003 last=$C185A0 pc=$C1862E sr=$2100 sp=$0010F2AE polls=525810 watchdog=1991 vblank=1991 frame=1991 timer_irq=0 irqack=1992 irq_pending=$0000 scanline=186 sound=$00 port=$1B wram_nonzero=136 wram_sum=$00002775 vram_nonzero=0 vram_sum=$00000000 recent_loop=0
-smoke budget reached at $C1862E after 100000 dispatches
-progress oracle: ok budgets=10000,50000,100000 final_pc=$C1862E polls=525810 vblank=1991 frame=1991 irqack=1992 watchdog=1991 wram_nonzero=136 final_recent_loop=0 max_recent_loop=50
+returned pc=$C11646 sr=$2100 sp=$0010F2EE
+smoke summary: dispatches=500000 cart=13547 bios=486453 last=$C00438 pc=$C11646 sr=$2100 sp=$0010F2EE polls=2655844 watchdog=13587 vblank=10060 frame=10060 timer_irq=0 irqack=9290 irq_pending=$0004 scanline=4 sound=$03 port=$00 wram_nonzero=606 wram_sum=$0000FB79 vram_nonzero=2304 vram_sum=$019C9E00 recent_loop=0
+smoke budget reached at $C11646 after 500000 dispatches
+progress oracle: ok budgets=10000,50000,100000,500000 final_pc=$C11646 polls=2655844 vblank=10060 frame=10060 irqack=9290 watchdog=13587 wram_nonzero=606 vram_nonzero=2304 final_recent_loop=0 max_recent_loop=50
 ```
 
 That is the first controlled "keeps running headless" checkpoint: no dispatch
@@ -224,8 +224,8 @@ the harness only has a first-pass state oracle (multi-budget dispatch counts,
 RAM/VRAM checksums, watchdog/poll/VBlank/frame/IRQACK growth, pending-IRQ
 state, current scanline, and a short recent-dispatch loop detector), not a
 boot/attract-mode success oracle. The 50k checkpoint
-can stop in a short BIOS polling loop, but the 100k final checkpoint leaves that
-loop (`final_recent_loop=0`).
+can stop in a short BIOS polling loop, but the 500k final checkpoint leaves that
+loop (`final_recent_loop=0`) and now requires nonzero VRAM writes.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
@@ -1175,7 +1175,8 @@ and `V` are only trusted where generated-exec tests cover them.
   auto-VBlank injection to the runtime's scanline path. The harness now advances
   one NTSC scanline per interrupt poll in BIOS mode, wraps every 264 scanlines,
   reports `frame=` plus the current scanline in the smoke summary, and the
-  progress oracle requires frame growth across the 10k/50k/100k budgets.
+  progress oracle requires frame growth across the default
+  10k/50k/100k/500k budgets plus late VRAM writes at the 500k checkpoint.
 - local: Connected the LSPC timer model to NTSC frame/scanline advancement:
   runtime tests now cover 384-pixel scanlines, 264-scanline frame wrap,
   VBlank requests on frame start/wrap, and timer interrupts firing from

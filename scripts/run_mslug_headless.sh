@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 NEO_PATH="${1:-$HOME/Documents/Games/Mister/NEOGEO/mslug.neo}"
 BIOS_PATH="${2:-$HOME/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1}"
-DISPATCH_BUDGETS="${NG_MSLUG_PROGRESS_BUDGETS:-${NG_MSLUG_DISPATCH_BUDGET:-10000 50000 100000}}"
+DISPATCH_BUDGETS="${NG_MSLUG_PROGRESS_BUDGETS:-${NG_MSLUG_DISPATCH_BUDGET:-10000 50000 100000 500000}}"
 
 CFLAGS=(-std=c99 -Wall -Wextra -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
@@ -142,6 +142,9 @@ if (final["polls"] == 0 or final["watchdog"] == 0 or final["vblank"] == 0 or
     final["frame"] == 0 or final["irqack"] == 0 or final["wram_nonzero"] == 0):
     print("headless smoke did not show enough runtime progress in final summary", file=sys.stderr)
     raise SystemExit(1)
+if final["dispatches"] >= 500000 and final["vram_nonzero"] == 0:
+    print("late headless smoke did not reach VRAM writes", file=sys.stderr)
+    raise SystemExit(1)
 if final["recent_loop"] != 0:
     print(f"final budget stopped inside a recent dispatch loop period {final['recent_loop']}", file=sys.stderr)
     raise SystemExit(1)
@@ -163,6 +166,7 @@ print(
     f"final_pc=${final['pc']:06X} polls={final['polls']} "
     f"vblank={final['vblank']} frame={final['frame']} irqack={final['irqack']} "
     f"watchdog={final['watchdog']} wram_nonzero={final['wram_nonzero']} "
+    f"vram_nonzero={final['vram_nonzero']} "
     f"final_recent_loop={final['recent_loop']} max_recent_loop={max_recent_loop}"
 )
 PY
