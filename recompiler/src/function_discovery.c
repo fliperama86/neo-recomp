@@ -2,6 +2,7 @@
 
 #include "m68k_analyze.h"
 #include "m68k_decode.h"
+#include "m68k_validate.h"
 
 #include <string.h>
 
@@ -141,6 +142,13 @@ static void scan_function_candidate(const NgProgramRom *rom,
             return;
         }
 
+        if (instr.byte_length == 0 ||
+            !ng_m68k_validate(&instr) ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID) {
+            return;
+        }
+
         if (pc != start_addr) {
             ng_function_discovery_add(out, rom, pc);
         }
@@ -166,8 +174,7 @@ static void scan_function_candidate(const NgProgramRom *rom,
             ng_function_discovery_add(out, rom, pc + instr.byte_length);
         }
 
-        if (instr.byte_length == 0 ||
-            instr.mnemonic == NG_M68K_BRA ||
+        if (instr.mnemonic == NG_M68K_BRA ||
             instr.mnemonic == NG_M68K_JMP ||
             instr.mnemonic == NG_M68K_RTS ||
             instr.mnemonic == NG_M68K_RTE ||

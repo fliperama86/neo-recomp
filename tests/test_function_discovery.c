@@ -211,6 +211,23 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x20u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x7001u); /* MOVEQ #1,D0 */
+        write16(&rom, 0x02u, 0x15C0u); /* decoded UNKNOWN / invalid code frontier */
+        write16(&rom, 0x04u, 0x4E75u); /* data-looking fall-through must not be seeded */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(discovery.count == 1u);
+        CHECK(discovery.addrs[0] == 0x00u);
+        CHECK(!ng_function_discovery_contains(&discovery, 0x02u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x04u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0xA0u);
         CHECK(rom.data != NULL);
 

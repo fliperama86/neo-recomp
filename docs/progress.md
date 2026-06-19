@@ -101,7 +101,10 @@ Covered by executable generated-C validation:
   `BRA` targets are now seeded; `BRA` no longer causes discovery to scan
   unreachable fall-through bytes as code. `RTE`/`RTR` also terminate static
   candidate scanning because they resume from a stacked PC rather than the
-  following ROM word
+  following ROM word. Discovery now checks the post-decode validator before
+  seeding fall-through instruction starts, so `UNKNOWN`/`INVALID`/unvalidated
+  frontier words stop speculative scanning instead of becoming extra function
+  candidates
 - system/exception-control paths: `TRAP`, `TRAPV`, `ILLEGAL`, A-line,
   F-line, `RESET`, `STOP`, `RTE`, and `RTR` are recognized. `TRAP`,
   `TRAPV`, `ILLEGAL`, A-line, F-line, failed `CHK`, and divide-by-zero now
