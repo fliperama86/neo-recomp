@@ -252,6 +252,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 binary `ADD`/`SUB`/`CMP` and logical
+  `OR`/`AND`/`EOR` forms against the Motorola/NXP Programmer's Reference
+  Manual. The decoder now preserves source-register metadata for
+  `OR`/`AND <ea>,Dn`, and accepts valid word/long `ADD`/`SUB`/`CMP`
+  address-register sources while rejecting byte address-register sources.
+  The validator now enforces exact source/destination EA lengths,
+  source-register consistency, `ADD`/`SUB`/`OR`/`AND` memory-alterable
+  destination forms, and `EOR` data-alterable destinations.
+  `test_m68k_decode` and `test_m68k_validate` covered the failures first.
 - local: Fact-checked MC68000 `ADDQ`/`SUBQ` quick operations against
   the Motorola/NXP Programmer's Reference Manual. The validator now enforces
   quick counts 1-8 with no source operand, exact destination-EA instruction

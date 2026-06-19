@@ -373,6 +373,7 @@ static int decode_logic_binary(const NgProgramRom *rom,
         out->dst.mode = NG_M68K_EA_DREG;
         out->dst.reg = reg_field;
         out->reg = reg_field;
+        out->src_reg = ea_reg;
         return 1;
     }
 
@@ -670,7 +671,8 @@ static int decode_alu_ea_to_dreg(const NgProgramRom *rom,
     src_reg = (uint8_t)(op & 7u);
     dst_reg = (uint8_t)((op >> 9) & 7u);
 
-    if (!is_data_ea(src_mode, src_reg)) {
+    if (!is_data_ea(src_mode, src_reg) &&
+        !(src_mode == 1u && size_code != 0u)) {
         return 0;
     }
 

@@ -256,6 +256,145 @@ static int validate_quick_op(const NgM68kInstr *instr) {
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
+static int data_source_ext_length(const NgM68kEa *ea,
+                                  uint8_t size,
+                                  uint8_t *out_ext) {
+    switch (ea->mode) {
+    case NG_M68K_EA_DREG:
+    case NG_M68K_EA_AIND:
+    case NG_M68K_EA_APOST:
+    case NG_M68K_EA_APRE:
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    case NG_M68K_EA_ADISP:
+    case NG_M68K_EA_AINDEX:
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_W:
+    case NG_M68K_EA_PC_DISP:
+    case NG_M68K_EA_PC_INDEX:
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_L:
+        *out_ext = 4u;
+        return 1;
+    case NG_M68K_EA_IMM:
+        *out_ext = size == 4u ? 4u : 2u;
+        return valid_size(size);
+    default:
+        return 0;
+    }
+}
+
+static int addsubcmp_source_ext_length(const NgM68kEa *ea,
+                                       uint8_t size,
+                                       uint8_t *out_ext) {
+    if (ea->mode == NG_M68K_EA_AREG) {
+        if (size == 1u || ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    }
+    return data_source_ext_length(ea, size, out_ext);
+}
+
+static int memory_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
+    switch (ea->mode) {
+    case NG_M68K_EA_AIND:
+    case NG_M68K_EA_APOST:
+    case NG_M68K_EA_APRE:
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    case NG_M68K_EA_ADISP:
+    case NG_M68K_EA_AINDEX:
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_W:
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_L:
+        *out_ext = 4u;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int data_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
+    if (ea->mode == NG_M68K_EA_DREG) {
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    }
+    return memory_alterable_ext_length(ea, out_ext);
+}
+
+static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
+                                      int allow_areg_source) {
+    uint8_t ext_len = 0u;
+    int valid_src = allow_areg_source ?
+        addsubcmp_source_ext_length(&instr->src, instr->size, &ext_len) :
+        data_source_ext_length(&instr->src, instr->size, &ext_len);
+
+    return valid_size(instr->size) &&
+           instr->immediate == 0u &&
+           instr->src_reg == instr->src.reg &&
+           valid_src &&
+           instr->dst.mode == NG_M68K_EA_DREG &&
+           instr->dst.reg < 8u &&
+           instr->byte_length == (uint8_t)(2u + ext_len);
+}
+
+static int validate_dreg_to_memory_binary(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
+    return valid_size(instr->size) &&
+           instr->immediate == 0u &&
+           instr->src.mode == NG_M68K_EA_DREG &&
+           instr->src.reg < 8u &&
+           instr->src_reg == instr->src.reg &&
+           memory_alterable_ext_length(&instr->dst, &ext_len) &&
+           instr->byte_length == (uint8_t)(2u + ext_len);
+}
+
+static int validate_dreg_to_data_alterable_binary(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
+    return valid_size(instr->size) &&
+           instr->immediate == 0u &&
+           instr->src.mode == NG_M68K_EA_DREG &&
+           instr->src.reg < 8u &&
+           instr->src_reg == instr->src.reg &&
+           data_alterable_ext_length(&instr->dst, &ext_len) &&
+           instr->byte_length == (uint8_t)(2u + ext_len);
+}
+
+static int validate_add_sub_or_and(const NgM68kInstr *instr) {
+    int allow_areg_source =
+        instr->mnemonic == NG_M68K_ADD ||
+        instr->mnemonic == NG_M68K_SUB;
+
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        return validate_ea_to_dreg_binary(instr, allow_areg_source);
+    }
+    return validate_dreg_to_memory_binary(instr);
+}
+
 static int valid_scc_length(uint8_t byte_length) {
     return byte_length == 2u || byte_length == 4u || byte_length == 6u;
 }
@@ -538,26 +677,15 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_SUB:
     case NG_M68K_OR:
     case NG_M68K_AND:
-        if (!valid_size(instr->size)) {
-            return 0;
-        }
-        if (instr->dst.mode == NG_M68K_EA_DREG) {
-            return ea_is_data(&instr->src);
-        }
-        return instr->src.mode == NG_M68K_EA_DREG &&
-               ea_is_memory_alterable(&instr->dst);
+        return validate_add_sub_or_and(instr);
     case NG_M68K_CMP:
-        return valid_size(instr->size) &&
-               instr->dst.mode == NG_M68K_EA_DREG &&
-               ea_is_data(&instr->src);
+        return validate_ea_to_dreg_binary(instr, 1);
     case NG_M68K_CMPM:
         return valid_size(instr->size) &&
                instr->src.mode == NG_M68K_EA_APOST &&
                instr->dst.mode == NG_M68K_EA_APOST;
     case NG_M68K_EOR:
-        return valid_size(instr->size) &&
-               instr->src.mode == NG_M68K_EA_DREG &&
-               ea_is_data_alterable(&instr->dst);
+        return validate_dreg_to_data_alterable_binary(instr);
     case NG_M68K_BTST:
         return validate_btst(instr);
     case NG_M68K_BCHG:

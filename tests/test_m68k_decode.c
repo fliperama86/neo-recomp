@@ -509,6 +509,61 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0xD0, 0x49 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_ADD);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_AREG);
+        CHECK(instr.src.reg == 1);
+        CHECK(instr.src_reg == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 0);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "ADD.W A1,D0") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x96, 0x8A };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_SUB);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.src.mode == NG_M68K_EA_AREG);
+        CHECK(instr.src.reg == 2);
+        CHECK(instr.src_reg == 2);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "SUB.L A2,D3") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xB8, 0x4B };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_CMP);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_AREG);
+        CHECK(instr.src.reg == 3);
+        CHECK(instr.src_reg == 3);
+        CHECK(instr.dst.mode == NG_M68K_EA_DREG);
+        CHECK(instr.dst.reg == 4);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "CMP.W A3,D4") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xD0, 0x09 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_UNKNOWN);
+        CHECK(instr.byte_length == 2);
+    }
+
+    {
         const unsigned char bytes[] = { 0xD4, 0xFC, 0x00, 0x10 };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
@@ -562,6 +617,7 @@ int main(void) {
         CHECK(instr.size == 1);
         CHECK(instr.src.mode == NG_M68K_EA_DREG);
         CHECK(instr.src.reg == 7);
+        CHECK(instr.src_reg == 7);
         CHECK(instr.dst.mode == NG_M68K_EA_DREG);
         CHECK(instr.dst.reg == 3);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
@@ -577,6 +633,7 @@ int main(void) {
         CHECK(instr.size == 1);
         CHECK(instr.src.mode == NG_M68K_EA_DREG);
         CHECK(instr.src.reg == 7);
+        CHECK(instr.src_reg == 7);
         CHECK(instr.dst.mode == NG_M68K_EA_DREG);
         CHECK(instr.dst.reg == 3);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
