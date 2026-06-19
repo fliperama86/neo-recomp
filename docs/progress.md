@@ -206,6 +206,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added checked code-emission diagnostics. `ng_emit_c_checked()` now
+  reports unsupported decoded instructions and decode errors through
+  `NgEmitDiagnostics` and fails generation instead of only leaving runtime
+  dispatch misses.
 - local: Wired the first NeoGeo interrupt memory-map path: word writes to
   `$3C000C REG_IRQACK` and low-byte writes to `$3C000D` now clear pending IRQ
   sources through the runtime IRQACK handler, covered by runtime tests.

@@ -20,7 +20,7 @@ set of patterns to adapt deliberately.
 | Target | Neo Geo P-ROM / 68000 bring-up. | Sega Genesis 68000 with playable Sonic milestones. | Keep NeoGeo hardware/runtime design separate; do not import Genesis assumptions. |
 | CPU correctness strategy | Synthetic generated-C oracle fixture plus unit tests and opcode emission sweep. | L1 decoder tests, synthetic decoder tests, validator tests, and L3 per-function oracle against `clown68000`. | Our next large harness should be a trusted 68000 oracle/fuzz layer, not only a hand-written mini interpreter. |
 | Function discovery | Conservative static seeds from cartridge entry, direct call targets, continuations, tail jumps, and one PC-index jump-table shape. | Static worklist plus disassembly-generated seeds, labels, jump tables, code-address oracles, protected ranges, blacklists, dispatch-miss feedback, and interior-label auditing. | Add machine-checkable CFG/discovery inputs before expecting real-ROM boot progress. |
-| Unsupported behavior visibility | Current tests catch recognized-opcode emission stubs; generated code logs dispatch misses. | Centralized codegen diagnostics count unsupported/TODO paths and can fail generation; dispatch audit classifies dynamic jump sites. | Add a centralized diagnostic/fail-on-unsupported layer. |
+| Unsupported behavior visibility | Checked emission now reports unsupported/decode failures through `NgEmitDiagnostics`; generated code still logs runtime dispatch misses. | Centralized codegen diagnostics count unsupported/TODO paths and can fail generation; dispatch audit classifies dynamic jump sites. | Extend diagnostics into dispatch/jump-table audits and unresolved dynamic control-flow classification. |
 | Opcode legality | Tracker marks this partial; decoder has ad hoc legality checks. | Has `m68k_validator.c` as a post-decode MC68000 legality gate. Coverage doc still calls it non-exhaustive. | Build a spec-driven legality layer before broad real-ROM scanning. |
 | Runtime model | Small runtime API boundary only; no real NeoGeo bus yet. | Full runner with Genesis bus, VDP/audio/input, cooperative fibers, VBlank integration, traces, and optional enhancements. | Our runtime needs an equivalent NeoGeo bus/interrupt loop, but only after CPU-visible semantics are stable. |
 | `RTS`/subroutine model | Current generated code now uses stack-backed return dispatch: `JSR`/`BSR` push return PC, `RTS` pops PC and dispatches. | Uses C calls for known `JSR` plus explicit return push/pop and special propagation for stack-skip idioms like `addq.l #4,sp; rts`. | Keep our stack-backed model for architectural correctness; later add tests for stack-skip idioms instead of relying on host call return. |
@@ -89,8 +89,9 @@ These reinforce items already in `68k_correctness_tracker.md`:
 1. Add **LSPC timer / VBlank scheduling** beyond the current runtime-supplied
    polling/basic IPL/source APIs and `REG_IRQACK` clearing: timer registers,
    VBlank/timer scheduling, and interrupt priority.
-2. Add **codegen diagnostics/fail-on-unsupported** before the next serious
-   real-ROM smoke loop.
+2. Extend **codegen diagnostics** into dispatch/jump-table audits and unresolved
+   dynamic control-flow classification before the next serious real-ROM smoke
+   loop.
 3. Add **game TOML parsing** so `--game` drives real metadata instead of being a
    printed path.
 4. Add a **post-decode legality validator** and route invalid encodings to loud

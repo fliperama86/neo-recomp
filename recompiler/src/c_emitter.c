@@ -3,6 +3,7 @@
 #include "m68k_decode.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #define NG_EMIT_MAX_INSTRUCTIONS 192u
 #define NG_CCR_C 0x0001u
@@ -14,6 +15,34 @@
 
 void ng_c_symbol_for_addr(uint32_t addr, char *out, unsigned out_size) {
     snprintf(out, out_size, "ng_func_%06X", addr & 0xFFFFFFu);
+}
+
+void ng_emit_diagnostics_init(NgEmitDiagnostics *diagnostics) {
+    if (diagnostics) {
+        memset(diagnostics, 0, sizeof(*diagnostics));
+        diagnostics->first_unsupported_addr = 0xFFFFFFFFu;
+        diagnostics->first_decode_error_addr = 0xFFFFFFFFu;
+    }
+}
+
+static void emit_record_unsupported(NgEmitDiagnostics *diagnostics, uint32_t addr) {
+    if (!diagnostics) {
+        return;
+    }
+    if (diagnostics->unsupported_count == 0u) {
+        diagnostics->first_unsupported_addr = addr & 0x00FFFFFFu;
+    }
+    ++diagnostics->unsupported_count;
+}
+
+static void emit_record_decode_error(NgEmitDiagnostics *diagnostics, uint32_t addr) {
+    if (!diagnostics) {
+        return;
+    }
+    if (diagnostics->decode_error_count == 0u) {
+        diagnostics->first_decode_error_addr = addr & 0x00FFFFFFu;
+    }
+    ++diagnostics->decode_error_count;
 }
 
 static void ng_c_label_for_addr(uint32_t addr, char *out, unsigned out_size) {
@@ -1903,7 +1932,9 @@ static int emit_alu_ea_to_dreg(FILE *out, const NgM68kInstr *instr) {
     return 0;
 }
 
-static int emit_instr(FILE *out, const NgM68kInstr *instr) {
+static int emit_instr(FILE *out,
+                      const NgM68kInstr *instr,
+                      NgEmitDiagnostics *diagnostics) {
     char target_label[32];
 
     switch (instr->mnemonic) {
@@ -2459,6 +2490,7 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         break;
     }
 
+    emit_record_unsupported(diagnostics, instr->addr);
     fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n", instr->addr & 0x00FFFFFFu);
     fprintf(out, "    return;\n");
     return 0;
@@ -2483,7 +2515,10 @@ static void emit_stub_body(FILE *out, uint32_t addr) {
     fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n", addr & 0x00FFFFFFu);
 }
 
-static void emit_function_body(FILE *out, const NgProgramRom *rom, uint32_t start_addr) {
+static void emit_function_body(FILE *out,
+                               const NgProgramRom *rom,
+                               uint32_t start_addr,
+                               NgEmitDiagnostics *diagnostics) {
     uint32_t pc = start_addr;
     NgM68kInstr instrs[NG_EMIT_MAX_INSTRUCTIONS];
     uint32_t count = 0;
@@ -2493,6 +2528,7 @@ static void emit_function_body(FILE *out, const NgProgramRom *rom, uint32_t star
     for (uint32_t i = 0; i < NG_EMIT_MAX_INSTRUCTIONS; ++i) {
         NgM68kInstr instr;
         if (!ng_m68k_decode(rom, pc, &instr)) {
+            emit_record_decode_error(diagnostics, pc);
             fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n", pc & 0x00FFFFFFu);
             fprintf(out, "    return;\n");
             return;
@@ -2529,7 +2565,7 @@ static void emit_function_body(FILE *out, const NgProgramRom *rom, uint32_t star
         fprintf(out, "    /* $%06X: %s */\n", instrs[i].addr & 0x00FFFFFFu, text);
         fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
                 instrs[i].addr & 0x00FFFFFFu);
-        if (!emit_instr(out, &instrs[i])) {
+        if (!emit_instr(out, &instrs[i], diagnostics)) {
             return;
         }
     }
@@ -2557,14 +2593,15 @@ static void emit_function_body(FILE *out, const NgProgramRom *rom, uint32_t star
 
 static int emit_functions(FILE *out,
                           const NgProgramRom *rom,
-                          const NgFunctionDiscovery *discovery) {
+                          const NgFunctionDiscovery *discovery,
+                          NgEmitDiagnostics *diagnostics) {
     for (uint32_t i = 0; i < discovery->count; ++i) {
         char symbol[32];
         uint32_t addr = discovery->addrs[i] & 0xFFFFFFu;
         ng_c_symbol_for_addr(addr, symbol, (unsigned)sizeof(symbol));
         fprintf(out, "static void %s(void) {\n", symbol);
         if (rom) {
-            emit_function_body(out, rom, addr);
+            emit_function_body(out, rom, addr, diagnostics);
         } else {
             emit_stub_body(out, addr);
         }
@@ -2582,18 +2619,33 @@ int ng_emit_c_skeleton(FILE *out, const NgFunctionDiscovery *discovery) {
     emit_header(out);
     emit_declarations(out, discovery);
     emit_dispatch(out, discovery);
-    return emit_functions(out, NULL, discovery);
+    return emit_functions(out, NULL, discovery, NULL);
+}
+
+int ng_emit_c_checked(FILE *out,
+                      const NgProgramRom *rom,
+                      const NgFunctionDiscovery *discovery,
+                      NgEmitDiagnostics *diagnostics) {
+    NgEmitDiagnostics local_diagnostics;
+    NgEmitDiagnostics *active_diagnostics = diagnostics ? diagnostics : &local_diagnostics;
+
+    if (!out || !rom || !discovery) {
+        return 0;
+    }
+
+    ng_emit_diagnostics_init(active_diagnostics);
+    emit_header(out);
+    emit_declarations(out, discovery);
+    emit_dispatch(out, discovery);
+    if (!emit_functions(out, rom, discovery, active_diagnostics)) {
+        return 0;
+    }
+    return active_diagnostics->unsupported_count == 0u &&
+           active_diagnostics->decode_error_count == 0u;
 }
 
 int ng_emit_c(FILE *out,
               const NgProgramRom *rom,
               const NgFunctionDiscovery *discovery) {
-    if (!out || !rom || !discovery) {
-        return 0;
-    }
-
-    emit_header(out);
-    emit_declarations(out, discovery);
-    emit_dispatch(out, discovery);
-    return emit_functions(out, rom, discovery);
+    return ng_emit_c_checked(out, rom, discovery, NULL);
 }

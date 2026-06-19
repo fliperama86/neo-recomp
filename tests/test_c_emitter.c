@@ -776,6 +776,30 @@ int main(void) {
 
     {
         NgProgramRom rom = make_rom(0x04u);
+        NgEmitDiagnostics diagnostics;
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x15C0u); /* currently unknown/unsupported */
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(!ng_emit_c_checked(out, &rom, &discovery, &diagnostics));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(diagnostics.unsupported_count == 1u);
+        CHECK(diagnostics.decode_error_count == 0u);
+        CHECK(diagnostics.first_unsupported_addr == 0x00000000u);
+        CHECK(strstr(text, "/* $000000: DC.W $15C0 */") != NULL);
+        CHECK(strstr(text, "ng_log_dispatch_miss(0x00000000u);") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x04u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x4E72u); /* STOP #$2700 */
         write16(&rom, 0x02u, 0x2700u);
