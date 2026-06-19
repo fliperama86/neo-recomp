@@ -1086,7 +1086,7 @@ static int validate_control_transfer(const NgM68kInstr *instr) {
     uint16_t expected_opcode = 0u;
 
     if (instr->size != 0u ||
-        instr->dst.mode != NG_M68K_EA_NONE ||
+        !ea_is_empty(&instr->dst) ||
         instr->immediate != 0u ||
         instr->src_reg != 0u ||
         instr->condition != 0u ||
