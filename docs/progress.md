@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `CMPM (Ay)+,(Ax)+` against the
+  Motorola/NXP Programmer's Reference Manual postincrement-only form. The
+  validator now requires exact source/destination postincrement EA payloads,
+  clean register fields, 2-byte instruction length, and no stray immediate,
+  condition, target, form, absolute, or displacement metadata.
+  `test_m68k_validate` covered malformed postincrement payloads and stray
+  top-level metadata red first.
 - local: Fact-checked MC68000 binary `ADD`/`SUB`/`CMP`/`OR`/`AND`/`EOR`
   register/EA forms against the Motorola/NXP Programmer's Reference Manual
   source/destination EA tables. The validator now requires exact source and

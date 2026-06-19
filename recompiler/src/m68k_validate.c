@@ -1247,11 +1247,16 @@ static int validate_cmpm(const NgM68kInstr *instr) {
     return valid_size(instr->size) &&
            instr->byte_length == 2u &&
            instr->immediate == 0u &&
+           instr->condition == 0u &&
+           instr->form == NG_M68K_FORM_NONE &&
+           instr->target == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0 &&
            instr->src.mode == NG_M68K_EA_APOST &&
-           instr->src.reg < 8u &&
+           ea_simple_register_payload(&instr->src) &&
            instr->src_reg == instr->src.reg &&
            instr->dst.mode == NG_M68K_EA_APOST &&
-           instr->dst.reg < 8u &&
+           ea_simple_register_payload(&instr->dst) &&
            instr->reg == instr->dst.reg;
 }
 
