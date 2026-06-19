@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Refocused on pure MC68000 CPU legality and broadened the
+  post-decode validator. It now rejects invalid immediate logical/arithmetic
+  destinations, invalid `ADD`/`SUB`/`CMP`/`OR`/`AND`/`EOR` source/destination
+  shapes, and invalid bit-op alterability/size forms, with failing tests first.
 - local: Added a fact-checked cartridge-system BIOS/system ROM bus slice.
   `ng_neogeo_set_system_rom()` now backs `$C00000-$CFFFFF` reads, including
   the documented mirror area, while writes remain ignored/read-only.
@@ -495,7 +499,7 @@ Near follow-ups:
 - Parse `games/*.toml` beyond function/discovery-file/jump-table metadata into machine-checkable discovery/runtime metadata.
 - Add interior-label checks and broaden dispatch-audit target patterns beyond direct/computed/current table cases.
 - Migrate more instruction families onto the generic EA helpers instead of adding bespoke forms.
-- Broaden the decode/codegen legality layer so invalid source/destination EA combinations fail loudly.
+- Continue broadening the decode/codegen legality layer so every remaining invalid source/destination EA combination fails loudly.
 - Add byte/word/long helpers for arithmetic flags instead of ad hoc emitted flag code.
 - Replace narrow condition handling with a tested condition-code helper table.
 - Start separating instruction semantics into reusable generated helper functions when repeated emitted C becomes noisy.

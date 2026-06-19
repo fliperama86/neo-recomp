@@ -94,6 +94,44 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_TAS:
         return instr->dst.mode != NG_M68K_EA_NONE &&
                ea_is_data_alterable(&instr->dst);
+    case NG_M68K_ADDI:
+    case NG_M68K_SUBI:
+    case NG_M68K_ORI:
+    case NG_M68K_ANDI:
+    case NG_M68K_EORI:
+        return valid_size(instr->size) && ea_is_data_alterable(&instr->dst);
+    case NG_M68K_ADD:
+    case NG_M68K_SUB:
+    case NG_M68K_OR:
+    case NG_M68K_AND:
+        if (!valid_size(instr->size)) {
+            return 0;
+        }
+        if (instr->dst.mode == NG_M68K_EA_DREG) {
+            return ea_is_data(&instr->src);
+        }
+        return instr->src.mode == NG_M68K_EA_DREG &&
+               ea_is_memory_alterable(&instr->dst);
+    case NG_M68K_CMP:
+        return valid_size(instr->size) &&
+               instr->dst.mode == NG_M68K_EA_DREG &&
+               ea_is_data(&instr->src);
+    case NG_M68K_EOR:
+        return valid_size(instr->size) &&
+               instr->src.mode == NG_M68K_EA_DREG &&
+               ea_is_data_alterable(&instr->dst);
+    case NG_M68K_BTST:
+        return (instr->dst.mode == NG_M68K_EA_DREG ?
+                    instr->size == 4u :
+                    instr->size == 1u) &&
+               ea_is_data(&instr->dst);
+    case NG_M68K_BCHG:
+    case NG_M68K_BCLR:
+    case NG_M68K_BSET:
+        return (instr->dst.mode == NG_M68K_EA_DREG ?
+                    instr->size == 4u :
+                    instr->size == 1u) &&
+               ea_is_data_alterable(&instr->dst);
     case NG_M68K_ADDQ:
     case NG_M68K_SUBQ:
         if (instr->immediate < 1u || instr->immediate > 8u) {
