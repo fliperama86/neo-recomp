@@ -2556,5 +2556,23 @@ int main(void) {
     CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T | CCR_N));
     CHECK(ng68k_read32(0x000001ECu) == 0x00000466u);
 
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = (uint16_t)(SR_S | SR_T);
+    g_ng_m68k.d[0] = 0x00000001u;
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    ng68k_write32(9u * 4u, 0x00000490u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000480u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK((g_ng_m68k.d[0] & 0xFFFFu) == 0x0000u);
+    CHECK(g_ng_m68k.a[7] == 0x000001EAu);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T));
+    CHECK(ng68k_read32(0x000001ECu) == 0x00000486u);
+
     return 0;
 }

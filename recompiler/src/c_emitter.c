@@ -2459,7 +2459,11 @@ static int emit_instr(FILE *out,
                 instr->reg);
         fprintf(out, "      g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFF0000u) | (uint32_t)ng_counter;\n",
                 instr->reg, instr->reg);
-        fprintf(out, "      if (ng_counter != 0xFFFFu) goto %s;\n", target_label);
+        fprintf(out, "      if (ng_counter != 0xFFFFu) {\n");
+        fprintf(out, "        if (ng_service_trace(0x%08Xu)) return;\n",
+                instr->target & 0x00FFFFFFu);
+        fprintf(out, "        goto %s;\n", target_label);
+        fprintf(out, "      }\n");
         fprintf(out, "    }\n");
         return 1;
     }
@@ -2522,7 +2526,9 @@ static int addr_in_list(const uint32_t *addrs, uint32_t count, uint32_t addr) {
 }
 
 static int instr_has_local_branch_target(const NgM68kInstr *instr) {
-    return instr->mnemonic == NG_M68K_BRA || instr->mnemonic == NG_M68K_BCC;
+    return instr->mnemonic == NG_M68K_BRA ||
+           instr->mnemonic == NG_M68K_BCC ||
+           instr->mnemonic == NG_M68K_DBCC;
 }
 
 static void emit_stub_body(FILE *out, uint32_t addr) {

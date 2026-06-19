@@ -485,6 +485,8 @@ int main(void) {
         CHECK(strstr(text, "ng68k_write8(g_ng_m68k.a[0], (uint8_t)((((g_ng_m68k.sr & NG_CCR_N) != 0) ? 0xFFu : 0x00u)));") != NULL);
         CHECK(strstr(text, "/* $000114: DBcc.1 D7,$000110 */") != NULL);
         CHECK(strstr(text, "uint16_t ng_counter = (uint16_t)((g_ng_m68k.d[7] & 0xFFFFu) - 1u);") != NULL);
+        CHECK(strstr(text, "if (ng_counter != 0xFFFFu) {") != NULL);
+        CHECK(strstr(text, "if (ng_service_trace(0x00000110u)) return;") != NULL);
         CHECK(strstr(text, "/* $00011C: MULU.W #$4,D7 */") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[7] = (uint32_t)((uint32_t)(uint16_t)(g_ng_m68k.d[7] & 0xFFFFu) * (uint32_t)(uint16_t)(0x0004u));") != NULL);
         CHECK(strstr(text, "/* $000120: MULS.W #$FFFE,D7 */") != NULL);

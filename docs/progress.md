@@ -206,6 +206,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Extended trace exception coverage to taken `DBcc` paths. The generated
+  decrement-and-branch path now services trace with the taken target PC after
+  updating the counter and before jumping.
 - local: Extended trace exception coverage to taken `BRA`/`Bcc` paths. The
   generated branch path now services trace with the taken target PC before
   jumping, covered by a generated-exec `BMI` fixture.
