@@ -1761,7 +1761,20 @@ static int oracle_exec(const uint8_t *program,
                 return 0;
             }
             if (value < 0 || value > (int16_t)bound) {
-                return 0;
+                uint16_t saved_sr;
+                if (value < 0) {
+                    state->sr = (uint16_t)(state->sr | CCR_N);
+                } else {
+                    state->sr = (uint16_t)(state->sr & (uint16_t)~CCR_N);
+                }
+                saved_sr = state->sr;
+                oracle_set_sr(state, (uint16_t)(saved_sr | SR_S));
+                state->a[7] -= 4u;
+                bus_write32(bus, state->a[7], next_pc);
+                state->a[7] -= 2u;
+                bus_write16(bus, state->a[7], saved_sr);
+                pc = bus_read32(bus, 6u * 4u);
+                continue;
             }
             pc = next_pc;
             continue;
@@ -2773,6 +2786,51 @@ int main(void) {
     CHECK(ng68k_read32(0x000001E6u) == 0x000005D0u);
     CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T));
     CHECK(ng68k_read32(0x000001ECu) == 0x000005C4u);
+
+    {
+        const struct {
+            uint32_t d0;
+            uint16_t initial_sr;
+            uint16_t saved_sr;
+        } chk_cases[] = {
+            {0x0000FFFFu, SR_S, (uint16_t)(SR_S | CCR_N)},
+            {0x0000000Bu, (uint16_t)(SR_S | CCR_N), SR_S},
+        };
+
+        for (uint32_t i = 0; i < sizeof(chk_cases) / sizeof(chk_cases[0]); ++i) {
+            memset(&expected_state, 0, sizeof(expected_state));
+            memset(expected_bus, 0, sizeof(expected_bus));
+            expected_state.sr = chk_cases[i].initial_sr;
+            expected_state.d[0] = chk_cases[i].d0;
+            expected_state.a[7] = 0x000001F0u;
+            expected_state.ssp = expected_state.a[7];
+            bus_write32(expected_bus, 6u * 4u, 0x000005D0u);
+            CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x000005C0u,
+                              &expected_state, expected_bus, 0));
+
+            memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+            memset(g_bus, 0, sizeof(g_bus));
+            g_ng_m68k.sr = chk_cases[i].initial_sr;
+            g_ng_m68k.d[0] = chk_cases[i].d0;
+            g_ng_m68k.a[7] = 0x000001F0u;
+            g_ng_m68k.ssp = g_ng_m68k.a[7];
+            ng68k_write32(6u * 4u, 0x000005D0u);
+            g_dispatch_miss_count = 0;
+
+            ng_generated_call(0x000005C0u);
+
+            CHECK(g_dispatch_miss_count == 0);
+            CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+            CHECK(g_ng_m68k.d[0] == expected_state.d[0]);
+            CHECK(g_ng_m68k.a[7] == expected_state.a[7]);
+            CHECK(g_ng_m68k.sr == expected_state.sr);
+            CHECK(g_ng_m68k.a[7] == 0x000001EAu);
+            CHECK(g_ng_m68k.sr == 0x2700u);
+            CHECK(ng68k_read16(0x000001EAu) == chk_cases[i].saved_sr);
+            CHECK(ng68k_read32(0x000001ECu) == 0x000005C4u);
+            CHECK(g_ng_m68k.pc == 0x000005D4u);
+        }
+    }
 
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
     memset(g_bus, 0, sizeof(g_bus));

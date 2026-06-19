@@ -110,7 +110,10 @@ Covered by executable generated-C validation:
   `TRAPV`, `ILLEGAL`, A-line, F-line, failed `CHK`, and divide-by-zero now
   push 68000-style SR/PC exception frames and dispatch through the vector
   table; `RTE`/`RTR` pop stack frames back into SR/CCR and
-  PC. Generated-exec now specifically covers unprivileged `RTR` restoring only
+  PC. Generated-exec now oracle-checks failed `CHK.W` vector-6 entry for
+  negative values (`N` set in the saved SR) and above-bound values (`N`
+  cleared in the saved SR). Generated-exec now specifically covers
+  unprivileged `RTR` restoring only
   the CCR bits from the active user stack, preserving the supervisor/system
   byte, popping the return PC, and dispatching through that target. Full-SR
   writes, `STOP`, exception entry, and `RTE` use the
@@ -198,8 +201,9 @@ Covered by executable generated-C validation:
   - `CMPM.B/W/L (Ay)+,(Ax)+` covered so far by word postincrement memory
     comparisons plus byte compares where source `A7` postincrements by two
     for stack-pointer alignment while preserving `X`
-  - `CHK.W <ea>,Dn` covered so far by immediate in-range checks, with failed
-    checks vectoring through the CHK exception path in emitted C
+  - `CHK.W <ea>,Dn` covered so far by immediate in-range checks and
+    oracle-backed failed checks that vector through exception vector 6 while
+    saving `N` set for negative operands and cleared for above-bound operands
   - `ADDX/SUBX.B/W/L` register and predecrement-memory forms, covered so far
     by generated-exec byte add-extend and word subtract-extend paths
   - `ABCD/SBCD` register and predecrement-memory BCD extend forms, covered so
