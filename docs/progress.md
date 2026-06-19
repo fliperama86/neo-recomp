@@ -16,6 +16,9 @@ project orientation; update this file after each meaningful green slice.
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
   an unsupported-dispatch stub in the current synthetic sweep
+- Generated-code/runtime boundary: emitted C includes only
+  `ngrecomp/generated_abi.h`; the Neo Geo runtime is one implementation of that
+  ABI, while the recompiler CLI no longer links the runtime library
 - Real smoke input: `G:\Mister\NEOGEO\mslug.neo`
 - Real smoke command:
 

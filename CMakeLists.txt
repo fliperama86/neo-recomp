@@ -38,7 +38,7 @@ target_include_directories(neo-recomp PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/recompiler/src"
 )
-target_link_libraries(neo-recomp PRIVATE neo_recompiler_core neo_runtime)
+target_link_libraries(neo-recomp PRIVATE neo_recompiler_core)
 
 add_executable(generate-bios-recomp
     tools/generate_bios_recomp.c

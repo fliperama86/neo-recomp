@@ -68,7 +68,7 @@ int main(void) {
     CHECK(read_file(out, text, sizeof(text)));
     fclose(out);
 
-    CHECK(strstr(text, "#include \"ngrecomp/neogeo_runtime.h\"") != NULL);
+    CHECK(strstr(text, "#include \"ngrecomp/generated_abi.h\"") != NULL);
     CHECK(strstr(text, "#define NG_SR_S 0x2000u") != NULL);
     CHECK(strstr(text, "#define NG_SR_T 0x8000u") != NULL);
     CHECK(strstr(text, "static void ng_set_sr(uint16_t value)") != NULL);

@@ -1,5 +1,5 @@
 #include "exec_fixture.h"
-#include "ngrecomp/neogeo_runtime.h"
+#include "ngrecomp/generated_abi.h"
 
 #include <stdio.h>
 #include <string.h>
