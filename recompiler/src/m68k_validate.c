@@ -201,6 +201,11 @@ static int valid_no_operand_2byte(const NgM68kInstr *instr) {
            no_ea_operands(instr);
 }
 
+static int valid_fixed_no_operand_2byte(const NgM68kInstr *instr,
+                                        uint16_t opcode) {
+    return instr->opcode == opcode && valid_no_operand_2byte(instr);
+}
+
 static int valid_control_immediate_fields(const NgM68kInstr *instr) {
     return instr->reg == 0u &&
            instr->src_reg == 0u &&
@@ -1687,12 +1692,17 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
 
     switch (instr->mnemonic) {
     case NG_M68K_NOP:
+        return valid_fixed_no_operand_2byte(instr, 0x4E71u);
     case NG_M68K_RESET:
+        return valid_fixed_no_operand_2byte(instr, 0x4E70u);
     case NG_M68K_RTE:
+        return valid_fixed_no_operand_2byte(instr, 0x4E73u);
     case NG_M68K_RTR:
+        return valid_fixed_no_operand_2byte(instr, 0x4E77u);
     case NG_M68K_RTS:
+        return valid_fixed_no_operand_2byte(instr, 0x4E75u);
     case NG_M68K_TRAPV:
-        return valid_no_operand_2byte(instr);
+        return valid_fixed_no_operand_2byte(instr, 0x4E76u);
     case NG_M68K_ILLEGAL:
         return instr->byte_length == 2u &&
                instr->size == 0u &&

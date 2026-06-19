@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened fixed no-operand system/control validation so `NOP`,
+  `RESET`, `RTE`, `RTR`, `RTS`, and `TRAPV` now require their exact
+  MC68000 opcode words instead of accepting a mismatched opcode attached to
+  otherwise valid no-operand metadata. `test_m68k_validate` covered `NOP`
+  and `TRAPV` opcode mismatches red first.
 - local: Tightened `ORI`/`ANDI`/`EORI #imm,CCR/SR` validation so
   those no-EA forms now reject stray decoded register, form, address, or
   displacement metadata in addition to their existing exact size/immediate
