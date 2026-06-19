@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened exact control-source metadata for `JMP`, `JSR`,
+  `PEA`, and `LEA`. The validator now checks control EA payloads,
+  PC-relative extension-word bases, index displacement ranges, and decoded
+  mode/register fields; decode now fills the canonical mode/register metadata
+  for direct absolute-long and PC-displacement control forms.
+  `test_m68k_validate` and the opcode sweep covered malformed control-source
+  metadata red first.
 - local: Fact-checked MC68000 `MOVE` source and destination effective-address
   classes against the Motorola/NXP Programmer's Reference Manual. The
   post-decode validator now requires exact `MOVE` byte/word/long source and

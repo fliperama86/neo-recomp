@@ -699,6 +699,59 @@ static int control_source_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
     }
 }
 
+static int exact_control_source_ext_length(const NgM68kInstr *instr,
+                                           uint8_t *out_ext) {
+    const NgM68kEa *ea = &instr->src;
+    uint32_t ext_addr = instr->addr + 2u;
+
+    switch (ea->mode) {
+    case NG_M68K_EA_AIND:
+        if (!ea_simple_register_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    case NG_M68K_EA_ADISP:
+        if (!ea_address_displacement_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_AINDEX:
+        if (!ea_address_index_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_W:
+        if (!ea_abs_word_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_L:
+        if (!ea_abs_long_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 4u;
+        return 1;
+    case NG_M68K_EA_PC_DISP:
+        if (!ea_pc_displacement_payload(ea, ext_addr)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_PC_INDEX:
+        if (!ea_pc_index_payload(ea, ext_addr)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static int validate_control_transfer(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
 
@@ -707,7 +760,7 @@ static int validate_control_transfer(const NgM68kInstr *instr) {
         instr->immediate != 0u ||
         instr->src_reg != 0u ||
         instr->condition != 0u ||
-        !control_source_ext_length(&instr->src, &ext_len) ||
+        !exact_control_source_ext_length(instr, &ext_len) ||
         instr->byte_length != (uint8_t)(2u + ext_len)) {
         return 0;
     }
@@ -745,7 +798,7 @@ static int validate_pea(const NgM68kInstr *instr) {
            instr->reg == 0u &&
            instr->condition == 0u &&
            instr->form == NG_M68K_FORM_NONE &&
-           control_source_ext_length(&instr->src, &ext_len) &&
+           exact_control_source_ext_length(instr, &ext_len) &&
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
@@ -759,7 +812,7 @@ static int validate_lea(const NgM68kInstr *instr) {
            instr->immediate == 0u &&
            instr->src_reg == 0u &&
            instr->condition == 0u &&
-           control_source_ext_length(&instr->src, &ext_len) &&
+           exact_control_source_ext_length(instr, &ext_len) &&
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 

@@ -920,6 +920,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->target = ng_program_rom_read32(rom, addr + 2u);
         out->form = NG_M68K_FORM_ABS;
         out->src.mode = NG_M68K_EA_ABS_L;
+        out->src.reg = 1u;
         out->src.absolute_addr = out->target;
         return finish_decode(rom, addr, out);
     }
@@ -930,6 +931,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
         out->target = (uint32_t)((int32_t)(addr + 2u) + (int32_t)out->displacement);
         out->src.mode = NG_M68K_EA_PC_DISP;
+        out->src.reg = 2u;
         out->src.displacement = out->displacement;
         out->src.absolute_addr = out->target;
         return finish_decode(rom, addr, out);
@@ -1007,6 +1009,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
         out->target = (uint32_t)((int32_t)(addr + 2u) + (int32_t)out->displacement);
         out->src.mode = NG_M68K_EA_PC_DISP;
+        out->src.reg = 2u;
         out->src.displacement = out->displacement;
         out->src.absolute_addr = out->target;
         out->dst.mode = NG_M68K_EA_AREG;
@@ -1064,6 +1067,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         out->reg = (uint8_t)((op >> 9) & 7u);
         out->target = ng_program_rom_read32(rom, addr + 2u);
         out->src.mode = NG_M68K_EA_ABS_L;
+        out->src.reg = 1u;
         out->src.absolute_addr = out->target;
         out->dst.mode = NG_M68K_EA_AREG;
         out->dst.reg = out->reg;
