@@ -207,6 +207,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added A-line and F-line emulator exception regressions with trace
+  enabled. They vector through MC68000 vectors 10/11, save the next PC,
+  and intentionally do not create a trace exception because the trapped
+  opcode was not executed. The generated-exec fixture candidate capacity was
+  raised to keep the growing regression corpus explicit.
 - local: Added the first fact-checked LSPC timer/VBlank runtime slice:
   `REG_LSPCMODE`, `REG_TIMERHIGH`, `REG_TIMERLOW`, and `REG_TIMERSTOP`
   writes are modeled; odd-byte GPU/LSPC writes duplicate the byte into both
