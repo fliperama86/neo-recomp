@@ -999,8 +999,23 @@ int main(void) {
         CHECK(instr.size == 2);
         CHECK(instr.src.mode == NG_M68K_EA_IMM);
         CHECK(instr.src.immediate == 0x001Bu);
+        CHECK(instr.dst.mode == NG_M68K_EA_NONE);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "MOVE #$1B,CCR") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x46, 0xFC, 0x27, 0x00 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVE_SR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_IMM);
+        CHECK(instr.src.immediate == 0x2700u);
+        CHECK(instr.dst.mode == NG_M68K_EA_NONE);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVE #$2700,SR") == 0);
     }
 
     {
@@ -1010,10 +1025,17 @@ int main(void) {
         CHECK(instr.mnemonic == NG_M68K_MOVE_SR);
         CHECK(instr.byte_length == 6);
         CHECK(instr.size == 2);
+        CHECK(instr.src.mode == NG_M68K_EA_NONE);
         CHECK(instr.dst.mode == NG_M68K_EA_ABS_L);
         CHECK(instr.dst.absolute_addr == 0x00000188u);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "MOVE SR,$000188") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x42, 0xC0 };
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_UNKNOWN);
     }
 
     {

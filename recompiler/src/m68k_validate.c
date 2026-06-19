@@ -458,6 +458,37 @@ static int validate_lea(const NgM68kInstr *instr) {
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
+static int validate_move_sr_ccr(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
+    if (instr->size != 2u ||
+        instr->immediate != 0u ||
+        instr->src_reg != 0u ||
+        instr->reg != 0u ||
+        instr->condition != 0u ||
+        instr->form != NG_M68K_FORM_NONE) {
+        return 0;
+    }
+
+    if (instr->dst.mode != NG_M68K_EA_NONE) {
+        if (instr->mnemonic != NG_M68K_MOVE_SR ||
+            instr->src.mode != NG_M68K_EA_NONE ||
+            !data_alterable_ext_length(&instr->dst, &ext_len)) {
+            return 0;
+        }
+        return instr->byte_length == (uint8_t)(2u + ext_len);
+    }
+
+    if (instr->src.mode == NG_M68K_EA_NONE) {
+        return 0;
+    }
+
+    if (!data_source_ext_length(&instr->src, instr->size, &ext_len)) {
+        return 0;
+    }
+    return instr->byte_length == (uint8_t)(2u + ext_len);
+}
+
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
@@ -812,10 +843,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
         return 0;
     case NG_M68K_MOVE_SR:
     case NG_M68K_MOVE_CCR:
-        if (instr->dst.mode != NG_M68K_EA_NONE) {
-            return instr->size == 2u && ea_is_data_alterable(&instr->dst);
-        }
-        return instr->size == 2u && ea_is_data(&instr->src);
+        return validate_move_sr_ccr(instr);
     case NG_M68K_CLR:
     case NG_M68K_NEG:
     case NG_M68K_NEGX:

@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `MOVE SR,<ea>`, `MOVE <ea>,SR`, and
+  `MOVE <ea>,CCR` forms against the Motorola/NXP Programmer's Reference
+  Manual. The validator now requires exact word-sized data/data-alterable EA
+  lengths, one-sided source-vs-destination metadata, and no stray legacy fields
+  for status-register transfers. Decode now rejects the 68010+ `MOVE CCR,<ea>`
+  form for the MC68000 target and no longer lets its reserved size pattern fall
+  through as a bogus `CLR`. `test_m68k_decode` and `test_m68k_validate` covered
+  the malformed metadata red first.
 - local: Fact-checked MC68000 `JMP`, `JSR`, `PEA`, and `LEA` control-source
   forms against the Motorola/NXP Programmer's Reference Manual. The validator
   now requires exact control-source extension lengths, no stray source/immediate
