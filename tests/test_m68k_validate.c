@@ -3664,12 +3664,23 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVEM;
+    instr.opcode = 0x48E7u;
     instr.byte_length = 4u;
     instr.size = 4u;
     instr.immediate = 0x8000u;
     instr.dst.mode = NG_M68K_EA_APRE;
     instr.dst.reg = 7u;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVEM;
+    instr.opcode = 0x48A7u;
+    instr.byte_length = 4u;
+    instr.size = 4u;
+    instr.immediate = 0x8000u;
+    instr.dst.mode = NG_M68K_EA_APRE;
+    instr.dst.reg = 7u;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVEM;
@@ -3683,6 +3694,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVEM;
+    instr.opcode = 0x4CBAu;
     instr.byte_length = 6u;
     instr.size = 2u;
     instr.immediate = 0x0003u;
@@ -3691,6 +3703,18 @@ int main(void) {
     instr.src.displacement = 2;
     instr.src.absolute_addr = 6u;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVEM;
+    instr.opcode = 0x48BAu;
+    instr.byte_length = 6u;
+    instr.size = 2u;
+    instr.immediate = 0x0003u;
+    instr.src.mode = NG_M68K_EA_PC_DISP;
+    instr.src.reg = 2u;
+    instr.src.displacement = 2;
+    instr.src.absolute_addr = 6u;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVEM;
@@ -3756,12 +3780,23 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVEM;
+    instr.opcode = 0x4C9Cu;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.immediate = 0x0003u;
     instr.src.mode = NG_M68K_EA_APOST;
     instr.src.reg = 4u;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVEM;
+    instr.opcode = 0x489Cu;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.immediate = 0x0003u;
+    instr.src.mode = NG_M68K_EA_APOST;
+    instr.src.reg = 4u;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVEM;

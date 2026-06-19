@@ -1221,6 +1221,9 @@ static int movem_mem_to_reg_ext_length(const NgM68kInstr *instr,
 
 static int validate_movem(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t size_bit = 0u;
+    uint16_t expected_opcode = 0u;
 
     if (!valid_word_or_long(instr->size) ||
         instr->immediate > 0xFFFFu ||
@@ -1234,16 +1237,28 @@ static int validate_movem(const NgM68kInstr *instr) {
         return 0;
     }
 
+    size_bit = instr->size == 4u ? 0x0040u : 0u;
+
     if (instr->src.mode == NG_M68K_EA_NONE &&
         instr->dst.mode != NG_M68K_EA_NONE) {
-        return movem_reg_to_mem_ext_length(&instr->dst, &ext_len) &&
-               instr->byte_length == (uint8_t)(4u + ext_len);
+        if (!movem_reg_to_mem_ext_length(&instr->dst, &ext_len) ||
+            !ea_opcode_field(&instr->dst, &ea_field) ||
+            instr->byte_length != (uint8_t)(4u + ext_len)) {
+            return 0;
+        }
+        expected_opcode = (uint16_t)(0x4880u | size_bit | ea_field);
+        return instr->opcode == expected_opcode;
     }
 
     if (instr->dst.mode == NG_M68K_EA_NONE &&
         instr->src.mode != NG_M68K_EA_NONE) {
-        return movem_mem_to_reg_ext_length(instr, &ext_len) &&
-               instr->byte_length == (uint8_t)(4u + ext_len);
+        if (!movem_mem_to_reg_ext_length(instr, &ext_len) ||
+            !ea_opcode_field(&instr->src, &ea_field) ||
+            instr->byte_length != (uint8_t)(4u + ext_len)) {
+            return 0;
+        }
+        expected_opcode = (uint16_t)(0x4C80u | size_bit | ea_field);
+        return instr->opcode == expected_opcode;
     }
 
     return 0;
