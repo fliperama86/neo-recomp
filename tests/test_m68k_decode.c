@@ -828,8 +828,10 @@ int main(void) {
         CHECK(instr.size == 2);
         CHECK(instr.src.mode == NG_M68K_EA_DREG);
         CHECK(instr.src.reg == 1);
+        CHECK(instr.src_reg == 1);
         CHECK(instr.dst.mode == NG_M68K_EA_DREG);
         CHECK(instr.dst.reg == 7);
+        CHECK(instr.reg == 7);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "LSR.W D1,D7") == 0);
     }

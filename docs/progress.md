@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 shift/rotate register-count, immediate-count,
+  and memory one-bit forms against the Motorola/NXP Programmer's Reference
+  Manual. The validator now enforces exact 2-byte register forms,
+  immediate counts 1-8, dynamic Dn count metadata, Dn destination register
+  consistency, word-only memory forms, exact memory-EA instruction lengths,
+  and one-bit memory counts. `test_m68k_validate` covered malformed
+  metadata first.
 - local: Fact-checked MC68000 `ADDX`/`SUBX` extended arithmetic and
   `ABCD`/`SBCD` packed-BCD pair forms against the Motorola/NXP Programmer's
   Reference Manual. The validator now requires exact 2-byte register-pair or

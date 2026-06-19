@@ -553,20 +553,36 @@ static int validate_branch(const NgM68kInstr *instr) {
 }
 
 static int validate_shift_rotate(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
     if (instr->dst.mode == NG_M68K_EA_DREG) {
-        if (!valid_size(instr->size)) {
+        if (!valid_size(instr->size) ||
+            instr->byte_length != 2u ||
+            instr->immediate > 8u ||
+            instr->dst.reg >= 8u ||
+            instr->reg != instr->dst.reg ||
+            instr->condition != 0u) {
             return 0;
         }
         if (instr->src.mode != NG_M68K_EA_NONE) {
-            return instr->src.mode == NG_M68K_EA_DREG;
+            return instr->src.mode == NG_M68K_EA_DREG &&
+                   instr->src.reg < 8u &&
+                   instr->src_reg == instr->src.reg &&
+                   instr->immediate == 0u;
         }
-        return instr->immediate >= 1u && instr->immediate <= 8u;
+        return instr->src_reg == 0u &&
+               instr->immediate >= 1u &&
+               instr->immediate <= 8u;
     }
 
     return instr->src.mode == NG_M68K_EA_NONE &&
            instr->size == 2u &&
            instr->immediate == 1u &&
-           ea_is_memory_alterable(&instr->dst);
+           instr->src_reg == 0u &&
+           instr->reg == 0u &&
+           instr->condition == 0u &&
+           memory_alterable_ext_length(&instr->dst, &ext_len) &&
+           instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
 int ng_m68k_validate(const NgM68kInstr *instr) {
