@@ -212,6 +212,22 @@ static int valid_no_operand_2byte(const NgM68kInstr *instr) {
            instr->immediate == 0u &&
            instr->reg == 0u &&
            instr->src_reg == 0u &&
+           instr->condition == 0u &&
+           instr->form == NG_M68K_FORM_NONE &&
+           instr->target == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0 &&
+           no_ea_operands(instr);
+}
+
+static int valid_control_immediate_fields(const NgM68kInstr *instr) {
+    return instr->reg == 0u &&
+           instr->src_reg == 0u &&
+           instr->condition == 0u &&
+           instr->form == NG_M68K_FORM_NONE &&
+           instr->target == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0 &&
            no_ea_operands(instr);
 }
 
@@ -1592,19 +1608,17 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                (instr->immediate == 0u ||
                 instr->immediate == 10u ||
                 instr->immediate == 11u) &&
-               instr->reg == 0u &&
-               instr->src_reg == 0u &&
-               no_ea_operands(instr);
+               valid_control_immediate_fields(instr);
     case NG_M68K_STOP:
         return instr->byte_length == 4u &&
                instr->size == 0u &&
                instr->immediate <= 0xFFFFu &&
-               no_ea_operands(instr);
+               valid_control_immediate_fields(instr);
     case NG_M68K_TRAP:
         return instr->byte_length == 2u &&
                instr->size == 0u &&
                instr->immediate <= 15u &&
-               no_ea_operands(instr);
+               valid_control_immediate_fields(instr);
     case NG_M68K_BRA:
     case NG_M68K_BSR:
     case NG_M68K_BCC:

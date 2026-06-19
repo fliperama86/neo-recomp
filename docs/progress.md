@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened exact metadata for unsized system/control forms
+  (`NOP`, `RESET`, `RTE`, `RTR`, `RTS`, `TRAPV`, `ILLEGAL`/A-line/F-line)
+  plus immediate control forms (`STOP`, `TRAP`). The validator now rejects
+  stray register, condition, form, target, absolute, displacement, and EA
+  payload fields while preserving the canonical immediate/vector payloads for
+  `STOP`, `TRAP`, and emulator-exception classes. `test_m68k_validate` covered
+  malformed stray metadata red first.
 - local: Fact-checked MC68000 `ADDX`/`SUBX` register and
   predecrement forms plus byte-only `ABCD`/`SBCD` forms against the
   Motorola/NXP Programmer's Reference Manual. The validator now requires exact
