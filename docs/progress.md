@@ -11,7 +11,7 @@ project orientation; update this file after each meaningful green slice.
 - Branch: `main`
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
-- Current test status: 7/7 passing
+- Current test status: 8/8 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
@@ -206,6 +206,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added an initial post-decode MC68000 legality validator and wired
+  checked emission through it. Validator coverage currently rejects
+  `UNKNOWN`/`INVALID`, illegal control-EA uses, invalid `MOVE` destinations,
+  invalid condition numbers, and selected data-alterable requirements.
 - local: Added checked code-emission diagnostics. `ng_emit_c_checked()` now
   reports unsupported decoded instructions and decode errors through
   `NgEmitDiagnostics` and fails generation instead of only leaving runtime

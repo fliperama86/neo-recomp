@@ -22,7 +22,7 @@ Current verification command:
 ctest --test-dir build --output-on-failure
 ```
 
-Last local verification: **7/7 passing** on 2026-06-19.
+Last local verification: **8/8 passing** on 2026-06-19.
 
 ## Done and Covered
 
@@ -49,6 +49,7 @@ Last local verification: **7/7 passing** on 2026-06-19.
 | NeoGeo cartridge interrupt source model | Done | `tests/test_runtime_interrupts.c`; runtime `ng_neogeo_request_*_interrupt()` and `ng_neogeo_ack_interrupts()`. | VBlank, timer, and reset-pending sources map to cartridge-system autovector levels 1, 2, and 3 respectively, with IRQACK-style bits selecting which pending sources to clear. Highest pending level drives the runtime IPL controller. |
 | Memory-mapped `REG_IRQACK` | Done | `tests/test_runtime_interrupts.c`; runtime `ng68k_write8()`/`ng68k_write16()` handling for `$3C000C`. | Word writes to `$3C000C` and low-byte writes to `$3C000D` clear the corresponding pending NeoGeo IRQ sources through `ng_neogeo_ack_interrupts()`. |
 | Codegen diagnostics for unsupported/decode failures | Done | `tests/test_c_emitter.c`; `NgEmitDiagnostics` and `ng_emit_c_checked()` in `recompiler/src/c_emitter.c`. | Checked C emission now records unsupported decoded instructions and decode errors and fails generation instead of silently relying only on generated runtime dispatch misses. |
+| Initial post-decode legality validator | Done | `tests/test_m68k_validate.c`; `recompiler/src/m68k_validate.c`. | A first explicit validator rejects `UNKNOWN`/`INVALID`, illegal control-EA uses, illegal `MOVE` destinations, invalid condition numbers, and selected data-alterable requirements. Checked emission now consults it before emitting an instruction. |
 | All 16 condition predicates available to generated code | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; condition predicate helper in `recompiler/src/c_emitter.c`. | Only selected branch/condition behavior is oracle-covered; full flag correctness is partial. |
 
 ## Partial / Needs Broader Proof
@@ -56,7 +57,7 @@ Last local verification: **7/7 passing** on 2026-06-19.
 | Area | Status | Current behavior | Missing before it is trusted |
 | --- | --- | --- | --- |
 | Opcode coverage | Partial | Current sweep proves every decoder-recognized non-`UNKNOWN` opcode emits without an unsupported stub, and checked emission fails on unsupported decoded instructions. | A spec-driven legality matrix and/or trusted-disassembler audit for every valid 68000 opcode/addressing form. |
-| Effective-address legality | Partial | Generic EA helpers and many decode/emission paths exist. | Reject every illegal source/destination EA combination with tests; verify all valid EA forms per instruction family. |
+| Effective-address legality | Partial | Generic EA helpers, many decode/emission paths, and an initial post-decode validator exist. | Expand the validator to every instruction family's legal source/destination EA combinations and verify all valid EA forms per family. |
 | Condition codes | Partial | `N`/`Z` and selected `C`/`X`/`V` paths are implemented where tests cover them. | Oracle/fuzz coverage for exact `X/N/Z/V/C` behavior across arithmetic, logical, shifts/rotates, BCD, compare, extend, and divide edge cases. |
 | Arithmetic/divide semantics | Partial | `MULS/MULU`, `DIVS/DIVU`, `ADD/SUB/CMP`, extend arithmetic, BCD, and unary RMW paths exist. | Exact overflow, quotient/remainder, divide-by-zero, undefined/unaffected flags, and edge-case behavior against a trusted 68000 oracle. |
 | `MOVEM` | Partial | Long/word register-list transfers and predecrement paths are emitted for covered cases. | Full ordering, mask, word sign-extension, and all valid EA modes verified against oracle fixtures. |
@@ -96,8 +97,9 @@ should **not** replace the real supervisor/user stack switching tracked here.
    embedded 68000 reference for per-instruction semantic edge cases.
 3. **Real-ROM smoke refresh**: regenerate Metal Slug C, capture the current first
    frontier, add a regression, and update this tracker.
-4. **Post-decode legality validator**: make invalid source/destination
-   effective-address combinations and CPU-family scope explicit and tested.
+4. **Broaden post-decode legality validator**: make invalid source/destination
+   effective-address combinations and CPU-family scope explicit for every
+   decoded instruction family.
 5. **NeoGeo bus slices**: implement one hardware-visible region at a time with a
    failing runtime/generated-exec test first.
 

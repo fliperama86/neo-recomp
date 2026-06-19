@@ -1,6 +1,7 @@
 #include "c_emitter.h"
 
 #include "m68k_decode.h"
+#include "m68k_validate.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -2539,7 +2540,8 @@ static void emit_function_body(FILE *out,
             !addr_in_list(label_targets, label_count, instr.target)) {
             label_targets[label_count++] = instr.target;
         }
-        if (instr.byte_length == 0 ||
+        if (!ng_m68k_validate(&instr) ||
+            instr.byte_length == 0 ||
             instr.mnemonic == NG_M68K_JMP ||
             instr.mnemonic == NG_M68K_RTS ||
             instr.mnemonic == NG_M68K_STOP ||
@@ -2565,6 +2567,13 @@ static void emit_function_body(FILE *out,
         fprintf(out, "    /* $%06X: %s */\n", instrs[i].addr & 0x00FFFFFFu, text);
         fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
                 instrs[i].addr & 0x00FFFFFFu);
+        if (!ng_m68k_validate(&instrs[i])) {
+            emit_record_unsupported(diagnostics, instrs[i].addr);
+            fprintf(out, "    ng_log_dispatch_miss(0x%08Xu);\n",
+                    instrs[i].addr & 0x00FFFFFFu);
+            fprintf(out, "    return;\n");
+            return;
+        }
         if (!emit_instr(out, &instrs[i], diagnostics)) {
             return;
         }

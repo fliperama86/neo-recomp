@@ -19,6 +19,7 @@ add_library(neo_recompiler_core
     recompiler/src/function_discovery.c
     recompiler/src/m68k_analyze.c
     recompiler/src/m68k_decode.c
+    recompiler/src/m68k_validate.c
     recompiler/src/m68k_stub.c
     recompiler/src/neogeo_map.c
     recompiler/src/p_rom.c
