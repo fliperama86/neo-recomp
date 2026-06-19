@@ -165,7 +165,8 @@ Covered by executable generated-C validation:
   - `ADDX/SUBX.B/W/L` register and predecrement-memory forms, covered so far
     by generated-exec byte add-extend and word subtract-extend paths
   - `ABCD/SBCD` register and predecrement-memory BCD extend forms, covered so
-    far by generated-exec register BCD arithmetic
+    far by generated-exec register BCD arithmetic plus predecrement-memory
+    sticky-`Z`/`X`/`C` edge behavior
   - generic `OR.B/W/L <ea>,Dn` and `AND.B/W/L <ea>,Dn` paths covered so far
     by data-register sources
   - generic `OR.B/W/L Dn,<ea>`, `AND.B/W/L Dn,<ea>`, and
@@ -214,6 +215,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked packed-BCD `ABCD`/`SBCD` condition-code rules.
+  Generated-exec now covers predecrement-memory BCD arithmetic, including
+  address predecrement writes, sticky zero on an `ABCD` zero result, decimal
+  carry into `X/C`, and subsequent `SBCD` nonzero clearing of `Z/X/C`.
 - local: Fact-checked `MOVEM.W` memory-to-register transfers against the
   Motorola/NXP programmer's reference. Generated-exec now covers word transfers
   sign-extending into both a data register and an address register, while
