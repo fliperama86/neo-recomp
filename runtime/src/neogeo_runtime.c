@@ -2,14 +2,22 @@
 
 #include <stdio.h>
 
-#define NG_REG_IRQACK 0x003C000Cu
-
 NgM68kState g_ng_m68k;
 
 static uint8_t g_ng_m68k_interrupt_level;
 static uint8_t g_ng_m68k_interrupt_vector;
 static uint8_t g_ng_m68k_level7_edge;
 static uint16_t g_ng_neogeo_irq_pending;
+static uint16_t g_ng_neogeo_lspc_mode;
+static uint16_t g_ng_neogeo_timer_stop;
+static uint32_t g_ng_neogeo_timer_reload_value;
+static uint32_t g_ng_neogeo_timer_counter_value;
+static uint8_t g_ng_neogeo_timer_counter_loaded;
+
+static void ng_neogeo_reload_timer_counter(void) {
+    g_ng_neogeo_timer_counter_value = g_ng_neogeo_timer_reload_value;
+    g_ng_neogeo_timer_counter_loaded = 1u;
+}
 
 uint8_t ng68k_read8(uint32_t addr) {
     fprintf(stderr, "ng68k_read8 miss at $%06X\n", addr & 0xFFFFFFu);
@@ -29,18 +37,59 @@ uint32_t ng68k_read32(uint32_t addr) {
 }
 
 void ng68k_write8(uint32_t addr, uint8_t value) {
-    if ((addr & 0x00FFFFFFu) == (NG_REG_IRQACK + 1u)) {
+    switch (addr & 0x00FFFFFFu) {
+    case NG_NEO_REG_LSPCMODE + 1u:
+        ng68k_write16(NG_NEO_REG_LSPCMODE,
+                      (uint16_t)(((uint16_t)value << 8) | value));
+        return;
+    case NG_NEO_REG_TIMERHIGH + 1u:
+        ng68k_write16(NG_NEO_REG_TIMERHIGH,
+                      (uint16_t)(((uint16_t)value << 8) | value));
+        return;
+    case NG_NEO_REG_TIMERLOW + 1u:
+        ng68k_write16(NG_NEO_REG_TIMERLOW,
+                      (uint16_t)(((uint16_t)value << 8) | value));
+        return;
+    case NG_NEO_REG_IRQACK + 1u:
         ng_neogeo_ack_interrupts(value);
         return;
+    case NG_NEO_REG_TIMERSTOP + 1u:
+        ng68k_write16(NG_NEO_REG_TIMERSTOP,
+                      (uint16_t)(((uint16_t)value << 8) | value));
+        return;
+    default:
+        break;
     }
     fprintf(stderr, "ng68k_write8 miss at $%06X value=$%02X\n",
             addr & 0xFFFFFFu, value);
 }
 
 void ng68k_write16(uint32_t addr, uint16_t value) {
-    if ((addr & 0x00FFFFFFu) == NG_REG_IRQACK) {
+    switch (addr & 0x00FFFFFFu) {
+    case NG_NEO_REG_LSPCMODE:
+        g_ng_neogeo_lspc_mode = value;
+        return;
+    case NG_NEO_REG_TIMERHIGH:
+        g_ng_neogeo_timer_reload_value =
+            (g_ng_neogeo_timer_reload_value & 0x0000FFFFu) |
+            ((uint32_t)value << 16);
+        return;
+    case NG_NEO_REG_TIMERLOW:
+        g_ng_neogeo_timer_reload_value =
+            (g_ng_neogeo_timer_reload_value & 0xFFFF0000u) |
+            (uint32_t)value;
+        if (g_ng_neogeo_lspc_mode & NG_NEO_LSPCMODE_TIMER_RELOAD_ON_WRITE) {
+            ng_neogeo_reload_timer_counter();
+        }
+        return;
+    case NG_NEO_REG_IRQACK:
         ng_neogeo_ack_interrupts(value);
         return;
+    case NG_NEO_REG_TIMERSTOP:
+        g_ng_neogeo_timer_stop = value;
+        return;
+    default:
+        break;
     }
     ng68k_write8(addr, (uint8_t)(value >> 8));
     ng68k_write8(addr + 1, (uint8_t)value);
@@ -80,6 +129,16 @@ void ng_m68k_clear_interrupt_level(void) {
     g_ng_m68k_level7_edge = 0;
 }
 
+void ng_neogeo_reset_runtime(void) {
+    g_ng_neogeo_irq_pending = 0;
+    g_ng_neogeo_lspc_mode = 0;
+    g_ng_neogeo_timer_stop = 0;
+    g_ng_neogeo_timer_reload_value = 0;
+    g_ng_neogeo_timer_counter_value = 0;
+    g_ng_neogeo_timer_counter_loaded = 0;
+    ng_m68k_clear_interrupt_level();
+}
+
 static void ng_neogeo_refresh_interrupt_level(void) {
     if (g_ng_neogeo_irq_pending & NG_NEO_IRQACK_RESET) {
         ng_m68k_set_interrupt_level(3, 27);
@@ -111,6 +170,52 @@ void ng_neogeo_ack_interrupts(uint16_t ack_mask) {
     g_ng_neogeo_irq_pending = (uint16_t)(g_ng_neogeo_irq_pending &
                                          (uint16_t)~(ack_mask & 0x0007u));
     ng_neogeo_refresh_interrupt_level();
+}
+
+void ng_neogeo_begin_vblank(void) {
+    if (g_ng_neogeo_lspc_mode & NG_NEO_LSPCMODE_TIMER_RELOAD_ON_FRAME) {
+        ng_neogeo_reload_timer_counter();
+    }
+    ng_neogeo_request_vblank_interrupt();
+}
+
+void ng_neogeo_advance_timer(uint32_t pixel_ticks) {
+    while (pixel_ticks != 0u && g_ng_neogeo_timer_counter_loaded) {
+        uint64_t ticks_until_zero =
+            (uint64_t)g_ng_neogeo_timer_counter_value + 1u;
+
+        if ((uint64_t)pixel_ticks < ticks_until_zero) {
+            g_ng_neogeo_timer_counter_value -= pixel_ticks;
+            return;
+        }
+
+        pixel_ticks = (uint32_t)((uint64_t)pixel_ticks - ticks_until_zero);
+        g_ng_neogeo_timer_counter_value = 0;
+        if (g_ng_neogeo_lspc_mode & NG_NEO_LSPCMODE_TIMER_ENABLE) {
+            ng_neogeo_request_timer_interrupt();
+        }
+        if (g_ng_neogeo_lspc_mode & NG_NEO_LSPCMODE_TIMER_RELOAD_ON_ZERO) {
+            ng_neogeo_reload_timer_counter();
+        } else {
+            g_ng_neogeo_timer_counter_loaded = 0;
+        }
+    }
+}
+
+uint16_t ng_neogeo_lspc_mode(void) {
+    return g_ng_neogeo_lspc_mode;
+}
+
+uint16_t ng_neogeo_timer_stop(void) {
+    return g_ng_neogeo_timer_stop;
+}
+
+uint32_t ng_neogeo_timer_reload(void) {
+    return g_ng_neogeo_timer_reload_value;
+}
+
+uint32_t ng_neogeo_timer_counter(void) {
+    return g_ng_neogeo_timer_counter_value;
 }
 
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {

@@ -207,6 +207,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added the first fact-checked LSPC timer/VBlank runtime slice:
+  `REG_LSPCMODE`, `REG_TIMERHIGH`, `REG_TIMERLOW`, and `REG_TIMERSTOP`
+  writes are modeled; odd-byte GPU/LSPC writes duplicate the byte into both
+  halves; `ng_neogeo_begin_vblank()` requests VBlank and reloads the timer
+  when configured; `ng_neogeo_advance_timer()` advances by pixel ticks and
+  requests timer IRQs with reload-on-write/frame/zero behavior.
 - local: Added the reference-inspired stack-manipulating return regression:
   a callee executes `ADDQ.L #4,A7; RTS` and correctly skips the local
   `JSR` continuation to dispatch to the caller's caller via the architectural
@@ -426,10 +432,10 @@ Use this loop:
 
 Immediate next slice:
 
-- Fact-check the NeoGeo LSPC timer/VBlank register behavior.
-- Add failing runtime tests for timer register state, VBlank/timer interrupt
-  requests, IRQACK clearing, and priority against the current IPL controller.
-- Implement the smallest scheduling slice that makes those tests pass.
+- Connect the covered manual LSPC timer/VBlank scheduler to real frame,
+  scanline, or cycle advancement instead of test-only pixel-tick calls.
+- Add priority tests for timer/VBlank interactions with CPU-generated
+  exceptions once the next exception-priority slice is selected.
 
 Real-ROM smoke remains a near follow-up once a local `.neo` input is available.
 

@@ -15,6 +15,7 @@ int main(void) {
     uint8_t vector = 0;
 
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    ng_neogeo_reset_runtime();
     ng_m68k_clear_interrupt_level();
     CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
 
@@ -82,6 +83,88 @@ int main(void) {
     CHECK(vector == 25);
     ng68k_write8(0x003C000Du, NG_NEO_IRQACK_VBLANK);
     CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+
+    ng_neogeo_reset_runtime();
+    CHECK(ng_neogeo_lspc_mode() == 0);
+    CHECK(ng_neogeo_timer_reload() == 0);
+    CHECK(ng_neogeo_timer_counter() == 0);
+    ng68k_write16(NG_NEO_REG_TIMERHIGH, 0x1234u);
+    ng68k_write16(NG_NEO_REG_TIMERLOW, 0x5678u);
+    CHECK(ng_neogeo_timer_reload() == 0x12345678u);
+    CHECK(ng_neogeo_timer_counter() == 0);
+    ng68k_write16(NG_NEO_REG_LSPCMODE,
+                  NG_NEO_LSPCMODE_TIMER_ENABLE |
+                  NG_NEO_LSPCMODE_TIMER_RELOAD_ON_WRITE);
+    CHECK(ng_neogeo_lspc_mode() == (NG_NEO_LSPCMODE_TIMER_ENABLE |
+                                    NG_NEO_LSPCMODE_TIMER_RELOAD_ON_WRITE));
+    ng68k_write16(NG_NEO_REG_TIMERHIGH, 0x0000u);
+    ng68k_write16(NG_NEO_REG_TIMERLOW, 0x0004u);
+    CHECK(ng_neogeo_timer_reload() == 0x00000004u);
+    CHECK(ng_neogeo_timer_counter() == 0x00000004u);
+    ng_neogeo_advance_timer(4);
+    CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+    ng_neogeo_advance_timer(1);
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 2);
+    CHECK(vector == 26);
+    ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_TIMER);
+    CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+
+    ng_neogeo_reset_runtime();
+    ng68k_write16(NG_NEO_REG_LSPCMODE,
+                  NG_NEO_LSPCMODE_TIMER_ENABLE |
+                  NG_NEO_LSPCMODE_TIMER_RELOAD_ON_WRITE |
+                  NG_NEO_LSPCMODE_TIMER_RELOAD_ON_ZERO);
+    ng68k_write16(NG_NEO_REG_TIMERLOW, 0x0001u);
+    CHECK(ng_neogeo_timer_counter() == 1u);
+    ng_neogeo_advance_timer(2);
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 2);
+    CHECK(vector == 26);
+    CHECK(ng_neogeo_timer_counter() == 1u);
+    ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_TIMER);
+    ng_neogeo_advance_timer(1);
+    CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+    ng_neogeo_advance_timer(1);
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 2);
+    CHECK(vector == 26);
+
+    ng_neogeo_reset_runtime();
+    ng68k_write16(NG_NEO_REG_TIMERLOW, 0x0002u);
+    ng68k_write16(NG_NEO_REG_LSPCMODE,
+                  NG_NEO_LSPCMODE_TIMER_ENABLE |
+                  NG_NEO_LSPCMODE_TIMER_RELOAD_ON_FRAME);
+    ng_neogeo_begin_vblank();
+    CHECK(ng_neogeo_timer_counter() == 2u);
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 1);
+    CHECK(vector == 25);
+    ng_neogeo_advance_timer(3);
+    CHECK(ng_m68k_take_interrupt(1, &level, &vector));
+    CHECK(level == 2);
+    CHECK(vector == 26);
+    ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_TIMER);
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 1);
+    CHECK(vector == 25);
+    ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_VBLANK);
+    CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+
+    ng_neogeo_reset_runtime();
+    ng68k_write16(NG_NEO_REG_TIMERLOW, 0x0000u);
+    ng_neogeo_advance_timer(16);
+    CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+    ng68k_write16(NG_NEO_REG_TIMERSTOP, 0x0001u);
+    CHECK(ng_neogeo_timer_stop() == 0x0001u);
+
+    ng_neogeo_reset_runtime();
+    ng68k_write8(NG_NEO_REG_LSPCMODE + 1u,
+                 NG_NEO_LSPCMODE_TIMER_ENABLE |
+                 NG_NEO_LSPCMODE_TIMER_RELOAD_ON_WRITE);
+    CHECK(ng_neogeo_lspc_mode() == 0x3030u);
+    ng68k_write8(NG_NEO_REG_TIMERSTOP + 1u, 0x01u);
+    CHECK(ng_neogeo_timer_stop() == 0x0101u);
 
     return 0;
 }

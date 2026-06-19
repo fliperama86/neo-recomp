@@ -9,6 +9,17 @@ extern NgM68kState g_ng_m68k;
 #define NG_NEO_IRQACK_TIMER  0x0002u
 #define NG_NEO_IRQACK_VBLANK 0x0004u
 
+#define NG_NEO_REG_LSPCMODE  0x003C0006u
+#define NG_NEO_REG_TIMERHIGH 0x003C0008u
+#define NG_NEO_REG_TIMERLOW  0x003C000Au
+#define NG_NEO_REG_IRQACK    0x003C000Cu
+#define NG_NEO_REG_TIMERSTOP 0x003C000Eu
+
+#define NG_NEO_LSPCMODE_TIMER_ENABLE          0x0010u
+#define NG_NEO_LSPCMODE_TIMER_RELOAD_ON_WRITE 0x0020u
+#define NG_NEO_LSPCMODE_TIMER_RELOAD_ON_FRAME 0x0040u
+#define NG_NEO_LSPCMODE_TIMER_RELOAD_ON_ZERO  0x0080u
+
 uint8_t  ng68k_read8(uint32_t addr);
 uint16_t ng68k_read16(uint32_t addr);
 uint32_t ng68k_read32(uint32_t addr);
@@ -28,3 +39,11 @@ void ng_neogeo_request_vblank_interrupt(void);
 void ng_neogeo_request_timer_interrupt(void);
 void ng_neogeo_request_reset_interrupt(void);
 void ng_neogeo_ack_interrupts(uint16_t ack_mask);
+
+void ng_neogeo_reset_runtime(void);
+void ng_neogeo_begin_vblank(void);
+void ng_neogeo_advance_timer(uint32_t pixel_ticks);
+uint16_t ng_neogeo_lspc_mode(void);
+uint16_t ng_neogeo_timer_stop(void);
+uint32_t ng_neogeo_timer_reload(void);
+uint32_t ng_neogeo_timer_counter(void);
