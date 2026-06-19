@@ -276,6 +276,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fixed `LINK A7,#disp` stack-frame semantics so the value pushed on
+  the stack is the old predecrement `A7`, not the already-decremented stack
+  pointer. The generated-exec fixture now covers `LINK A7,#-4` red first and
+  checks both final `A7` and the saved longword at the frame slot.
 - local: Added generated-exec/oracle coverage proving exception entry clears
   the live trace bit while preserving the saved SR. The new `ILLEGAL` fixture
   starts with `T` set, has the handler store live `SR`, and checks the stacked

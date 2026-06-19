@@ -477,7 +477,8 @@ int main(void) {
         CHECK(strstr(text, "g_ng_m68k.a[7] -= 4u;") != NULL);
         CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], (uint32_t)((uint32_t)(g_ng_m68k.a[0] + (int32_t)16)));") != NULL);
         CHECK(strstr(text, "/* $000100: LINK A5,#-4 */") != NULL);
-        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], g_ng_m68k.a[5]);") != NULL);
+        CHECK(strstr(text, "{ uint32_t ng_old_an = g_ng_m68k.a[5];") != NULL);
+        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], ng_old_an);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[7] = (uint32_t)((int32_t)g_ng_m68k.a[7] + (int32_t)-4);") != NULL);
         CHECK(strstr(text, "/* $000104: UNLK A5 */") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[5] = ng68k_read32(g_ng_m68k.a[7]);") != NULL);
