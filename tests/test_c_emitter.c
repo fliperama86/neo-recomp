@@ -706,6 +706,9 @@ int main(void) {
         CHECK(strstr(text, "/* $000000: CHK.W #$A,D0 */") != NULL);
         CHECK(strstr(text, "int16_t ng_bound = (int16_t)(0x000Au); int16_t ng_value = (int16_t)(g_ng_m68k.d[0] & 0xFFFFu);") != NULL);
         CHECK(strstr(text, "if (ng_value < 0 || ng_value > ng_bound)") != NULL);
+        CHECK(strstr(text, "ng_push_exception_frame(0x00000004u);") != NULL);
+        CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(0x00000018u);") != NULL);
+        CHECK(strstr(text, "if (ng_service_trace(ng_pc, ng_trace_sr)) return;") != NULL);
 
         ng_program_rom_free(&rom);
     }

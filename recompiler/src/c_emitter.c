@@ -1095,12 +1095,11 @@ static int emit_chk(FILE *out, const NgM68kInstr *instr) {
             src_expr, instr->dst.reg);
     fprintf(out, "      if (ng_value < 0 || ng_value > ng_bound) {\n");
     fprintf(out, "        if (ng_value < 0) g_ng_m68k.sr |= NG_CCR_N; else g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & (uint16_t)~NG_CCR_N);\n");
-    fprintf(out, "        g_ng_m68k.a[7] -= 4u;\n");
-    fprintf(out, "        ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+    fprintf(out, "        ng_push_exception_frame(0x%08Xu);\n",
             (instr->addr + instr->byte_length) & 0x00FFFFFFu);
-    fprintf(out, "        g_ng_m68k.a[7] -= 2u;\n");
-    fprintf(out, "        ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
-    fprintf(out, "        ng_generated_call(ng68k_read32(0x00000018u));\n");
+    fprintf(out, "        uint32_t ng_pc = ng68k_read32(0x00000018u);\n");
+    fprintf(out, "        if (ng_service_trace(ng_pc, ng_trace_sr)) return;\n");
+    fprintf(out, "        ng_generated_call(ng_pc);\n");
     fprintf(out, "        return;\n");
     fprintf(out, "      }\n");
     fprintf(out, "    }\n");
