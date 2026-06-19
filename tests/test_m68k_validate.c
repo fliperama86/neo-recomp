@@ -1093,7 +1093,11 @@ int main(void) {
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.src.mode = NG_M68K_EA_APOST;
+    instr.src.reg = 5u;
+    instr.src_reg = 5u;
     instr.dst.mode = NG_M68K_EA_APOST;
+    instr.dst.reg = 6u;
+    instr.reg = 6u;
     CHECK(ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
@@ -1102,6 +1106,67 @@ int main(void) {
     instr.size = 2u;
     instr.src.mode = NG_M68K_EA_AIND;
     instr.dst.mode = NG_M68K_EA_APOST;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPM;
+    instr.byte_length = 4u;
+    instr.size = 4u;
+    instr.src.mode = NG_M68K_EA_APOST;
+    instr.src.reg = 5u;
+    instr.src_reg = 5u;
+    instr.dst.mode = NG_M68K_EA_APOST;
+    instr.dst.reg = 6u;
+    instr.reg = 6u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPM;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.src.mode = NG_M68K_EA_APOST;
+    instr.src.reg = 5u;
+    instr.src_reg = 4u;
+    instr.dst.mode = NG_M68K_EA_APOST;
+    instr.dst.reg = 6u;
+    instr.reg = 6u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPM;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.src.mode = NG_M68K_EA_APOST;
+    instr.src.reg = 5u;
+    instr.src_reg = 5u;
+    instr.dst.mode = NG_M68K_EA_APOST;
+    instr.dst.reg = 6u;
+    instr.reg = 7u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPM;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.src.mode = NG_M68K_EA_APOST;
+    instr.src.reg = 8u;
+    instr.src_reg = 8u;
+    instr.dst.mode = NG_M68K_EA_APOST;
+    instr.dst.reg = 6u;
+    instr.reg = 6u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPM;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.immediate = 1u;
+    instr.src.mode = NG_M68K_EA_APOST;
+    instr.src.reg = 5u;
+    instr.src_reg = 5u;
+    instr.dst.mode = NG_M68K_EA_APOST;
+    instr.dst.reg = 6u;
+    instr.reg = 6u;
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));

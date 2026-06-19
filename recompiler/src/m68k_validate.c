@@ -384,6 +384,18 @@ static int validate_dreg_to_data_alterable_binary(const NgM68kInstr *instr) {
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
+static int validate_cmpm(const NgM68kInstr *instr) {
+    return valid_size(instr->size) &&
+           instr->byte_length == 2u &&
+           instr->immediate == 0u &&
+           instr->src.mode == NG_M68K_EA_APOST &&
+           instr->src.reg < 8u &&
+           instr->src_reg == instr->src.reg &&
+           instr->dst.mode == NG_M68K_EA_APOST &&
+           instr->dst.reg < 8u &&
+           instr->reg == instr->dst.reg;
+}
+
 static int validate_add_sub_or_and(const NgM68kInstr *instr) {
     int allow_areg_source =
         instr->mnemonic == NG_M68K_ADD ||
@@ -681,9 +693,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_CMP:
         return validate_ea_to_dreg_binary(instr, 1);
     case NG_M68K_CMPM:
-        return valid_size(instr->size) &&
-               instr->src.mode == NG_M68K_EA_APOST &&
-               instr->dst.mode == NG_M68K_EA_APOST;
+        return validate_cmpm(instr);
     case NG_M68K_EOR:
         return validate_dreg_to_data_alterable_binary(instr);
     case NG_M68K_BTST:

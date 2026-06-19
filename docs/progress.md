@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `CMPM (Ay)+,(Ax)+` metadata against
+  the Motorola/NXP Programmer's Reference Manual. The validator now requires
+  byte/word/long size, exact 2-byte length, postincrement source and
+  destination address-register operands, source/destination register bounds,
+  matching legacy register fields, and no stray immediate.
+  `test_m68k_validate` covered the malformed metadata first.
 - local: Fact-checked MC68000 binary `ADD`/`SUB`/`CMP` and logical
   `OR`/`AND`/`EOR` forms against the Motorola/NXP Programmer's Reference
   Manual. The decoder now preserves source-register metadata for

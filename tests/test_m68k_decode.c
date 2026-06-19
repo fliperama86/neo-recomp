@@ -1525,8 +1525,10 @@ int main(void) {
         CHECK(instr.size == 2);
         CHECK(instr.src.mode == NG_M68K_EA_APOST);
         CHECK(instr.src.reg == 5);
+        CHECK(instr.src_reg == 5);
         CHECK(instr.dst.mode == NG_M68K_EA_APOST);
         CHECK(instr.dst.reg == 6);
+        CHECK(instr.reg == 6);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "CMPM.W (A5)+,(A6)+") == 0);
     }
