@@ -69,6 +69,14 @@ int main(void) {
     fclose(out);
 
     CHECK(strstr(text, "#include \"ngrecomp/neogeo_runtime.h\"") != NULL);
+    CHECK(strstr(text, "#define NG_SR_S 0x2000u") != NULL);
+    CHECK(strstr(text, "static void ng_set_sr(uint16_t value)") != NULL);
+    CHECK(strstr(text, "g_ng_m68k.usp = g_ng_m68k.a[7];") != NULL);
+    CHECK(strstr(text, "g_ng_m68k.ssp = g_ng_m68k.a[7];") != NULL);
+    CHECK(strstr(text, "g_ng_m68k.a[7] = (value & NG_SR_S) ? g_ng_m68k.ssp : g_ng_m68k.usp;") != NULL);
+    CHECK(strstr(text, "static void ng_push_exception_frame(uint32_t return_pc)") != NULL);
+    CHECK(strstr(text, "static int ng_require_supervisor(uint32_t fault_pc)") != NULL);
+    CHECK(strstr(text, "static int ng_service_interrupt(uint32_t return_pc)") != NULL);
     CHECK(strstr(text, "static void ng_func_0007CC(void);") != NULL);
     CHECK(strstr(text, "case 0x000007CCu: ng_func_0007CC(); return;") != NULL);
     CHECK(strstr(text, "static void ng_func_024E38(void)") != NULL);
@@ -497,11 +505,12 @@ int main(void) {
         CHECK(strstr(text, "/* $00015C: ANDI #$1F,CCR */") != NULL);
         CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((g_ng_m68k.sr & 0x1Fu) & 0x001Fu));") != NULL);
         CHECK(strstr(text, "/* $000160: ORI #$0100,SR */") != NULL);
-        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr | 0x0100u);") != NULL);
+        CHECK(strstr(text, "if (!ng_require_supervisor(0x00000160u)) return;") != NULL);
+        CHECK(strstr(text, "ng_set_sr((uint16_t)(g_ng_m68k.sr | 0x0100u));") != NULL);
         CHECK(strstr(text, "/* $000164: EORI #$0100,SR */") != NULL);
-        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr ^ 0x0100u);") != NULL);
+        CHECK(strstr(text, "ng_set_sr((uint16_t)(g_ng_m68k.sr ^ 0x0100u));") != NULL);
         CHECK(strstr(text, "/* $000168: ANDI #$FFFF,SR */") != NULL);
-        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFFFu);") != NULL);
+        CHECK(strstr(text, "ng_set_sr((uint16_t)(g_ng_m68k.sr & 0xFFFFu));") != NULL);
         CHECK(strstr(text, "/* $00016C: MOVE SR,$000188 */") != NULL);
         CHECK(strstr(text, "ng68k_write16(0x00000188u, (uint16_t)(g_ng_m68k.sr));") != NULL);
         CHECK(strstr(text, "/* $00017A: LSL.W $00018A */") != NULL);
@@ -519,8 +528,10 @@ int main(void) {
         CHECK(strstr(text, "uint32_t ng_dst_addr = g_ng_m68k.a[6]; g_ng_m68k.a[6] += 2u;") != NULL);
         CHECK(strstr(text, "uint16_t ng_src = ng68k_read16(ng_src_addr); uint16_t ng_dst = ng68k_read16(ng_dst_addr);") != NULL);
         CHECK(strstr(text, "/* $0001BE: MOVE A5,USP */") != NULL);
+        CHECK(strstr(text, "if (!ng_require_supervisor(0x000001BEu)) return;") != NULL);
         CHECK(strstr(text, "g_ng_m68k.usp = g_ng_m68k.a[5];") != NULL);
         CHECK(strstr(text, "/* $0001C0: MOVE USP,A4 */") != NULL);
+        CHECK(strstr(text, "if (!ng_require_supervisor(0x000001C0u)) return;") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[4] = g_ng_m68k.usp;") != NULL);
 
         ng_program_rom_free(&rom);
@@ -705,11 +716,34 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: RESET */") != NULL);
+        CHECK(strstr(text, "if (!ng_require_supervisor(0x00000000u)) return;") != NULL);
         CHECK(strstr(text, "/* RESET privileged side effects are host-handled. */") != NULL);
         CHECK(strstr(text, "/* $000002: TRAP #3 */") != NULL);
-        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x00000004u);") != NULL);
-        CHECK(strstr(text, "ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);") != NULL);
+        CHECK(strstr(text, "ng_push_exception_frame(0x00000004u);") != NULL);
         CHECK(strstr(text, "ng_generated_call(ng68k_read32(0x0000008Cu));") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x06u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x46FCu); /* MOVE #$0000,SR */
+        write16(&rom, 0x02u, 0x0000u);
+        write16(&rom, 0x04u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: MOVE #$0,SR */") != NULL);
+        CHECK(strstr(text, "if (!ng_require_supervisor(0x00000000u)) return;") != NULL);
+        CHECK(strstr(text, "ng_set_sr((uint16_t)(0x0000u));") != NULL);
 
         ng_program_rom_free(&rom);
     }
@@ -730,6 +764,7 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: TRAPV */") != NULL);
+        CHECK(strstr(text, "ng_push_exception_frame(0x00000002u);") != NULL);
         CHECK(strstr(text, "ng_generated_call(ng68k_read32(0x0000001Cu));") != NULL);
         CHECK(strstr(text, "/* $000002: RTS */") != NULL);
         CHECK(strstr(text, "ng_log_dispatch_miss(0x00000000u);") == NULL);
@@ -753,8 +788,10 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: STOP #$2700 */") != NULL);
-        CHECK(strstr(text, "g_ng_m68k.sr = 0x2700u;") != NULL);
+        CHECK(strstr(text, "if (!ng_require_supervisor(0x00000000u)) return;") != NULL);
+        CHECK(strstr(text, "ng_set_sr(0x2700u);") != NULL);
         CHECK(strstr(text, "ng_m68k_stop_until_interrupt(0x2700u);") != NULL);
+        CHECK(strstr(text, "if (ng_service_interrupt(0x00000004u)) return;") != NULL);
         CHECK(strstr(text, "ng_log_dispatch_miss(0x00000000u);") == NULL);
 
         ng_program_rom_free(&rom);
@@ -846,8 +883,10 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: RTE */") != NULL);
+        CHECK(strstr(text, "if (!ng_require_supervisor(0x00000000u)) return;") != NULL);
         CHECK(strstr(text, "uint16_t ng_sr = ng68k_read16(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 2u;") != NULL);
         CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;") != NULL);
+        CHECK(strstr(text, "ng_set_sr(ng_sr);") != NULL);
         CHECK(strstr(text, "ng_generated_call(ng_pc);") != NULL);
 
         ng_program_rom_free(&rom);
@@ -901,7 +940,8 @@ int main(void) {
         CHECK(strstr(text, "/* $000000: BCLR #7,$10FD80 */") != NULL);
         CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << (7u)); uint8_t ng_value = ng68k_read8(0x0010FD80u);") != NULL);
         CHECK(strstr(text, "ng68k_write8(0x0010FD80u, (uint8_t)(ng_value & (uint8_t)~ng_mask));") != NULL);
-        CHECK(strstr(text, "g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xF8FFu);") != NULL);
+        CHECK(strstr(text, "if (!ng_require_supervisor(0x00000008u)) return;") != NULL);
+        CHECK(strstr(text, "ng_set_sr((uint16_t)(g_ng_m68k.sr & 0xF8FFu));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | ng68k_read8(0x0010FDAEu);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[0] = ng68k_read32(0x00000018u + (uint32_t)(int16_t)(g_ng_m68k.d[0] & 0xFFFFu));") != NULL);
         CHECK(strstr(text, "ng_generated_call(g_ng_m68k.a[0]);") != NULL);

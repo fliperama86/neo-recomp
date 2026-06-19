@@ -96,6 +96,9 @@ static void scan_function_candidate(const NgProgramRom *rom,
             instr.byte_length != 0) {
             ng_function_discovery_add(out, rom, pc + instr.byte_length);
         }
+        if (instr.mnemonic == NG_M68K_STOP && instr.byte_length != 0) {
+            ng_function_discovery_add(out, rom, pc + instr.byte_length);
+        }
 
         if (instr.byte_length == 0 ||
             instr.mnemonic == NG_M68K_JMP ||

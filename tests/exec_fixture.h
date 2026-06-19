@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#define NG_EXEC_FIXTURE_SIZE 0x2EEu
-#define NG_EXEC_FIXTURE_ADDR_COUNT 8u
+#define NG_EXEC_FIXTURE_SIZE 0x412u
+#define NG_EXEC_FIXTURE_ADDR_COUNT 25u
 
 static void ng_exec_fixture_write16(uint8_t *data, uint32_t addr, uint16_t value) {
     data[addr] = (uint8_t)(value >> 8);
@@ -310,8 +310,8 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
     ng_exec_fixture_write16(data, 0x2C0u, 0x13FCu); /* MOVE.B #$80,$00100E */
     ng_exec_fixture_write16(data, 0x2C2u, 0x0080u);
     ng_exec_fixture_write32(data, 0x2C4u, 0x0000100Eu);
-    ng_exec_fixture_write16(data, 0x2C8u, 0x4E72u); /* STOP #$0018 */
-    ng_exec_fixture_write16(data, 0x2CAu, 0x0018u);
+    ng_exec_fixture_write16(data, 0x2C8u, 0x4E72u); /* STOP #$2018 */
+    ng_exec_fixture_write16(data, 0x2CAu, 0x2018u);
 
     ng_exec_fixture_write16(data, 0x2D0u, 0x4EB9u); /* JSR $000002E0 */
     ng_exec_fixture_write32(data, 0x2D2u, 0x000002E0u);
@@ -324,6 +324,48 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
     ng_exec_fixture_write16(data, 0x2E6u, 0x23D7u); /* MOVE.L (A7),$001000 */
     ng_exec_fixture_write32(data, 0x2E8u, 0x00001000u);
     ng_exec_fixture_write16(data, 0x2ECu, 0x4E75u); /* RTS */
+
+    ng_exec_fixture_write16(data, 0x2F0u, 0x46FCu); /* MOVE #$0000,SR */
+    ng_exec_fixture_write16(data, 0x2F2u, 0x0000u);
+    ng_exec_fixture_write16(data, 0x2F4u, 0x4E40u); /* TRAP #0 */
+    ng_exec_fixture_write16(data, 0x2F6u, 0x4E72u); /* STOP #$1111, not reached */
+    ng_exec_fixture_write16(data, 0x2F8u, 0x1111u);
+    ng_exec_fixture_write16(data, 0x300u, 0x4E72u); /* STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x302u, 0x2700u);
+
+    ng_exec_fixture_write16(data, 0x330u, 0x4E73u); /* RTE */
+    ng_exec_fixture_write16(data, 0x340u, 0x4E40u); /* TRAP #0 */
+
+    ng_exec_fixture_write16(data, 0x350u, 0x4E40u); /* TRAP #0 */
+    ng_exec_fixture_write16(data, 0x360u, 0x4E72u); /* STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x362u, 0x2700u);
+
+    ng_exec_fixture_write16(data, 0x370u, 0x46FCu); /* MOVE #$2700,SR */
+    ng_exec_fixture_write16(data, 0x372u, 0x2700u);
+    ng_exec_fixture_write16(data, 0x374u, 0x4E72u); /* STOP #$1111, not reached on privilege trap */
+    ng_exec_fixture_write16(data, 0x376u, 0x1111u);
+    ng_exec_fixture_write16(data, 0x390u, 0x4E72u); /* privilege handler: STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x392u, 0x2700u);
+    ng_exec_fixture_write16(data, 0x3A0u, 0x4E72u); /* STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x3A2u, 0x2700u);
+    ng_exec_fixture_write16(data, 0x3B0u, 0x4E73u); /* RTE */
+    ng_exec_fixture_write16(data, 0x3C0u, 0x4E60u); /* MOVE A0,USP */
+    ng_exec_fixture_write16(data, 0x3C2u, 0x4E72u); /* STOP #$1111, not reached on privilege trap */
+    ng_exec_fixture_write16(data, 0x3C4u, 0x1111u);
+    ng_exec_fixture_write16(data, 0x3D0u, 0x4E70u); /* RESET */
+    ng_exec_fixture_write16(data, 0x3D2u, 0x4E72u); /* STOP #$1111, not reached on privilege trap */
+    ng_exec_fixture_write16(data, 0x3D4u, 0x1111u);
+    ng_exec_fixture_write16(data, 0x3E0u, 0x007Cu); /* ORI #$0100,SR */
+    ng_exec_fixture_write16(data, 0x3E2u, 0x0100u);
+    ng_exec_fixture_write16(data, 0x3E4u, 0x4E72u); /* STOP #$1111, not reached on privilege trap */
+    ng_exec_fixture_write16(data, 0x3E6u, 0x1111u);
+
+    ng_exec_fixture_write16(data, 0x400u, 0x4E72u); /* STOP #$2000 */
+    ng_exec_fixture_write16(data, 0x402u, 0x2000u);
+    ng_exec_fixture_write16(data, 0x404u, 0x7007u); /* MOVEQ #7,D0, resumed after interrupt RTE */
+    ng_exec_fixture_write16(data, 0x406u, 0x4E72u); /* STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x408u, 0x2700u);
+    ng_exec_fixture_write16(data, 0x410u, 0x4E73u); /* RTE */
 }
 
 static uint32_t ng_exec_fixture_addr(uint32_t index) {
@@ -336,6 +378,23 @@ static uint32_t ng_exec_fixture_addr(uint32_t index) {
         0x000002D6u,
         0x000002DCu,
         0x000002E0u,
+        0x000002F0u,
+        0x00000300u,
+        0x00000330u,
+        0x00000340u,
+        0x00000350u,
+        0x00000360u,
+        0x00000370u,
+        0x00000390u,
+        0x000003A0u,
+        0x000003B0u,
+        0x000003C0u,
+        0x000003D0u,
+        0x000003E0u,
+        0x00000400u,
+        0x00000404u,
+        0x00000406u,
+        0x00000410u,
     };
     return index < NG_EXEC_FIXTURE_ADDR_COUNT ? addrs[index] : 0;
 }

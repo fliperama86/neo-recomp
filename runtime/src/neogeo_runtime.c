@@ -47,3 +47,10 @@ void ng_log_dispatch_miss(uint32_t addr) {
 void ng_m68k_stop_until_interrupt(uint16_t sr) {
     fprintf(stderr, "m68k STOP until interrupt sr=$%04X\n", sr);
 }
+
+int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {
+    (void)current_mask;
+    (void)level;
+    (void)vector;
+    return 0;
+}

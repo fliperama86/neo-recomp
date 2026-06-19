@@ -10,6 +10,7 @@
 #define NG_CCR_Z 0x0004u
 #define NG_CCR_N 0x0008u
 #define NG_CCR_X 0x0010u
+#define NG_SR_S 0x2000u
 
 void ng_c_symbol_for_addr(uint32_t addr, char *out, unsigned out_size) {
     snprintf(out, out_size, "ng_func_%06X", addr & 0xFFFFFFu);
@@ -28,6 +29,53 @@ static void emit_header(FILE *out) {
     fprintf(out, "#define NG_CCR_Z 0x0004u\n");
     fprintf(out, "#define NG_CCR_N 0x0008u\n\n");
     fprintf(out, "#define NG_CCR_X 0x0010u\n\n");
+    fprintf(out, "#define NG_SR_S 0x2000u\n\n");
+    fprintf(out, "void ng_generated_call(uint32_t addr);\n\n");
+    fprintf(out, "static void ng_set_sr(uint16_t value) {\n");
+    fprintf(out, "    uint16_t old_sr = g_ng_m68k.sr;\n");
+    fprintf(out, "    if ((old_sr ^ value) & NG_SR_S) {\n");
+    fprintf(out, "        if (old_sr & NG_SR_S) {\n");
+    fprintf(out, "            g_ng_m68k.ssp = g_ng_m68k.a[7];\n");
+    fprintf(out, "        } else {\n");
+    fprintf(out, "            g_ng_m68k.usp = g_ng_m68k.a[7];\n");
+    fprintf(out, "        }\n");
+    fprintf(out, "        g_ng_m68k.a[7] = (value & NG_SR_S) ? g_ng_m68k.ssp : g_ng_m68k.usp;\n");
+    fprintf(out, "    }\n");
+    fprintf(out, "    g_ng_m68k.sr = value;\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "static void ng_push_exception_frame(uint32_t return_pc) {\n");
+    fprintf(out, "    uint16_t saved_sr = g_ng_m68k.sr;\n");
+    fprintf(out, "    ng_set_sr((uint16_t)(saved_sr | NG_SR_S));\n");
+    fprintf(out, "    g_ng_m68k.a[7] -= 4u;\n");
+    fprintf(out, "    ng68k_write32(g_ng_m68k.a[7], return_pc & 0x00FFFFFFu);\n");
+    fprintf(out, "    g_ng_m68k.a[7] -= 2u;\n");
+    fprintf(out, "    ng68k_write16(g_ng_m68k.a[7], saved_sr);\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "static int ng_require_supervisor(uint32_t fault_pc) {\n");
+    fprintf(out, "    if (g_ng_m68k.sr & NG_SR_S) return 1;\n");
+    fprintf(out, "    ng_push_exception_frame(fault_pc);\n");
+    fprintf(out, "    ng_generated_call(ng68k_read32(0x00000020u));\n");
+    fprintf(out, "    return 0;\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "static void ng_push_interrupt_frame(uint32_t return_pc, uint8_t level) {\n");
+    fprintf(out, "    uint16_t saved_sr = g_ng_m68k.sr;\n");
+    fprintf(out, "    uint16_t next_sr = (uint16_t)((saved_sr | NG_SR_S) & 0xF8FFu);\n");
+    fprintf(out, "    next_sr = (uint16_t)(next_sr | (uint16_t)((level & 7u) << 8));\n");
+    fprintf(out, "    ng_set_sr(next_sr);\n");
+    fprintf(out, "    g_ng_m68k.a[7] -= 4u;\n");
+    fprintf(out, "    ng68k_write32(g_ng_m68k.a[7], return_pc & 0x00FFFFFFu);\n");
+    fprintf(out, "    g_ng_m68k.a[7] -= 2u;\n");
+    fprintf(out, "    ng68k_write16(g_ng_m68k.a[7], saved_sr);\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "static int ng_service_interrupt(uint32_t return_pc) {\n");
+    fprintf(out, "    uint8_t level = 0;\n");
+    fprintf(out, "    uint8_t vector = 0;\n");
+    fprintf(out, "    uint8_t current_mask = (uint8_t)((g_ng_m68k.sr >> 8) & 7u);\n");
+    fprintf(out, "    if (!ng_m68k_take_interrupt(current_mask, &level, &vector)) return 0;\n");
+    fprintf(out, "    ng_push_interrupt_frame(return_pc, level);\n");
+    fprintf(out, "    ng_generated_call(ng68k_read32((uint32_t)vector * 4u));\n");
+    fprintf(out, "    return 1;\n");
+    fprintf(out, "}\n\n");
     fprintf(out, "static void ng_set_nz16(uint16_t value) {\n");
     fprintf(out, "    g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
     fprintf(out, "    if (value == 0) g_ng_m68k.sr |= NG_CCR_Z;\n");
@@ -130,11 +178,8 @@ static int emit_branch_condition(FILE *out,
 static void emit_exception_vector_call(FILE *out,
                                        uint8_t vector,
                                        uint32_t return_pc) {
-    fprintf(out, "    g_ng_m68k.a[7] -= 4u;\n");
-    fprintf(out, "    ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+    fprintf(out, "    ng_push_exception_frame(0x%08Xu);\n",
             return_pc & 0x00FFFFFFu);
-    fprintf(out, "    g_ng_m68k.a[7] -= 2u;\n");
-    fprintf(out, "    ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
     fprintf(out, "    ng_generated_call(ng68k_read32(0x%08Xu));\n",
             (uint32_t)vector * 4u);
     fprintf(out, "    return;\n");
@@ -144,6 +189,11 @@ static void emit_push_return_address(FILE *out, uint32_t return_pc) {
     fprintf(out, "    g_ng_m68k.a[7] -= 4u;\n");
     fprintf(out, "    ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
             return_pc & 0x00FFFFFFu);
+}
+
+static void emit_require_supervisor(FILE *out, uint32_t fault_pc) {
+    fprintf(out, "    if (!ng_require_supervisor(0x%08Xu)) return;\n",
+            fault_pc & 0x00FFFFFFu);
 }
 
 static const char *ng_read_fn_for_size(uint8_t size) {
@@ -635,11 +685,14 @@ static int emit_move_sr_ccr(FILE *out, const NgM68kInstr *instr) {
     }
 
     if (instr->src.mode != NG_M68K_EA_NONE) {
+        if (instr->mnemonic == NG_M68K_MOVE_SR) {
+            emit_require_supervisor(out, instr->addr);
+        }
         if (!emit_ea_read(out, instr, &instr->src, 2u, expr, (unsigned)sizeof(expr))) {
             return 0;
         }
         if (instr->mnemonic == NG_M68K_MOVE_SR) {
-            fprintf(out, "    g_ng_m68k.sr = (uint16_t)(%s);\n", expr);
+            fprintf(out, "    ng_set_sr((uint16_t)(%s));\n", expr);
         } else {
             fprintf(out, "    g_ng_m68k.sr = (uint16_t)((g_ng_m68k.sr & 0xFFE0u) | ((%s) & 0x001Fu));\n",
                     expr);
@@ -670,15 +723,18 @@ static int emit_immediate_to_sr_ccr(FILE *out, const NgM68kInstr *instr) {
                 imm & 0xFFu);
         return 1;
     case NG_M68K_ORI_TO_SR:
-        fprintf(out, "    g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr | 0x%04Xu);\n",
+        emit_require_supervisor(out, instr->addr);
+        fprintf(out, "    ng_set_sr((uint16_t)(g_ng_m68k.sr | 0x%04Xu));\n",
                 imm & 0xFFFFu);
         return 1;
     case NG_M68K_ANDI_TO_SR:
-        fprintf(out, "    g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0x%04Xu);\n",
+        emit_require_supervisor(out, instr->addr);
+        fprintf(out, "    ng_set_sr((uint16_t)(g_ng_m68k.sr & 0x%04Xu));\n",
                 imm & 0xFFFFu);
         return 1;
     case NG_M68K_EORI_TO_SR:
-        fprintf(out, "    g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr ^ 0x%04Xu);\n",
+        emit_require_supervisor(out, instr->addr);
+        fprintf(out, "    ng_set_sr((uint16_t)(g_ng_m68k.sr ^ 0x%04Xu));\n",
                 imm & 0xFFFFu);
         return 1;
     default:
@@ -1855,12 +1911,16 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         fprintf(out, "    /* NOP */\n");
         return 1;
     case NG_M68K_RESET:
+        emit_require_supervisor(out, instr->addr);
         fprintf(out, "    /* RESET privileged side effects are host-handled. */\n");
         return 1;
     case NG_M68K_STOP:
-        fprintf(out, "    g_ng_m68k.sr = 0x%04Xu;\n", instr->immediate & 0xFFFFu);
+        emit_require_supervisor(out, instr->addr);
+        fprintf(out, "    ng_set_sr(0x%04Xu);\n", instr->immediate & 0xFFFFu);
         fprintf(out, "    ng_m68k_stop_until_interrupt(0x%04Xu);\n",
                 instr->immediate & 0xFFFFu);
+        fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
+                (instr->addr + instr->byte_length) & 0x00FFFFFFu);
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_ILLEGAL:
@@ -1874,19 +1934,17 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         return 0;
     case NG_M68K_TRAPV:
         fprintf(out, "    if (g_ng_m68k.sr & NG_CCR_V) {\n");
-        fprintf(out, "      g_ng_m68k.a[7] -= 4u;\n");
-        fprintf(out, "      ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+        fprintf(out, "      ng_push_exception_frame(0x%08Xu);\n",
                 (instr->addr + instr->byte_length) & 0x00FFFFFFu);
-        fprintf(out, "      g_ng_m68k.a[7] -= 2u;\n");
-        fprintf(out, "      ng68k_write16(g_ng_m68k.a[7], g_ng_m68k.sr);\n");
         fprintf(out, "      ng_generated_call(ng68k_read32(0x0000001Cu));\n");
         fprintf(out, "      return;\n");
         fprintf(out, "    }\n");
         return 1;
     case NG_M68K_RTE:
+        emit_require_supervisor(out, instr->addr);
         fprintf(out, "    { uint16_t ng_sr = ng68k_read16(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 2u;\n");
         fprintf(out, "      uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;\n");
-        fprintf(out, "      g_ng_m68k.sr = ng_sr;\n");
+        fprintf(out, "      ng_set_sr(ng_sr);\n");
         fprintf(out, "      ng_generated_call(ng_pc);\n");
         fprintf(out, "    }\n");
         fprintf(out, "    return;\n");
@@ -2045,6 +2103,7 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         }
         break;
     case NG_M68K_MOVE_USP:
+        emit_require_supervisor(out, instr->addr);
         if (instr->src.mode == NG_M68K_EA_AREG) {
             fprintf(out, "    g_ng_m68k.usp = g_ng_m68k.a[%u];\n", instr->src.reg);
             return 1;

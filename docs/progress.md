@@ -1,6 +1,6 @@
 # Progress Tracker
 
-Last updated: 2026-06-18
+Last updated: 2026-06-19
 
 This is the live working document for `neo-recomp`. Keep the README focused on
 project orientation; update this file after each meaningful green slice.
@@ -12,6 +12,8 @@ project orientation; update this file after each meaningful green slice.
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
 - Current test status: 6/6 passing
+- Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
+- Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
   an unsupported-dispatch stub in the current synthetic sweep
 - Real smoke input: `G:\Mister\NEOGEO\mslug.neo`
@@ -86,17 +88,25 @@ with the next set of generated-code misses.
 
 ## Supported Generated Behavior
 
+For a concrete done/partial/missing checklist, see [`68k_correctness_tracker.md`](68k_correctness_tracker.md).
+
 Covered by executable generated-C validation:
 
-- control flow: direct and control-EA `JSR`/tail `JMP`, local `BRA`,
-  selected `Bcc`
+- control flow: direct and control-EA `JSR`, `BSR`, `RTS` stack-return
+  dispatch, tail `JMP`, local `BRA`, and selected `Bcc`
 - system/exception-control paths: `TRAP`, `TRAPV`, `ILLEGAL`, A-line,
   F-line, `RESET`, `STOP`, `RTE`, and `RTR` are recognized. `TRAP`,
   `TRAPV`, `ILLEGAL`, A-line, F-line, and failed `CHK` now push 68000-style
   SR/PC exception frames and dispatch through the vector table; divide-by-zero
   vectors through vector 5; `RTE`/`RTR` pop stack frames back into SR/CCR and
-  PC. `STOP` installs the immediate SR and yields through the runtime stop
-  hook. Full privilege/device/interrupt timing remains pending.
+  PC. Full-SR writes, `STOP`, exception entry, and `RTE` use the
+  generated SR helper to switch active `A7` between `USP` and `SSP` when the
+  S bit changes. User-mode privileged operations now vector through
+  privilege-violation vector 8 with the faulting instruction PC. `STOP`
+  installs the immediate SR, yields through the runtime stop hook when
+  executed in supervisor mode, and can wake through a runtime-approved
+  interrupt that returns via `RTE`. Full device/interrupt timing remains
+  pending.
 - branches: tested `BNE`, `BEQ`, `BCC`; `BCS` emission exists for carry cases
 - conditional branches: all 68000 `Bcc` condition predicates are emitted;
   generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
@@ -196,6 +206,27 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added basic interrupt entry from `STOP`: generated code now services
+  runtime-approved interrupts after the stop hook, stacks an SR/PC frame on
+  `SSP`, raises supervisor mode and the interrupt mask to the accepted level,
+  vectors to the supplied handler, discovers the post-`STOP` continuation, and
+  returns through `RTE`. Generated-exec covers both an accepted level-4
+  autovector and a masked interrupt that must not wake.
+- local: Added MC68000 privilege-violation guards for generated `STOP`,
+  `RESET`, `RTE`, `MOVE <ea>,SR`, `MOVE USP`, and immediate-to-SR
+  operations. User-mode violations now enter vector 8 with the faulting
+  instruction PC, covered by generated-exec fixtures.
+- local: Added generated supervisor/user stack switching for full-SR writes,
+  `STOP`, exception entry, and `RTE`, with generated-exec coverage for
+  `USP`/`SSP` preservation, exception entry from user mode, and `RTE` return
+  to user mode.
+- local: Added a local contrast against `segagenesisrecomp`, capturing
+  reusable patterns for diagnostics, legality validation, game-TOML-driven
+  discovery, dispatch audits, and oracle testing.
+- `3ae6bea`: Fixed PC-relative `LEA` decode, rejected truncated decoded
+  instructions, and made subroutine control flow stack-backed: `JSR`/`BSR`
+  push return PCs, post-call continuations are discovered, and `RTS` pops and
+  dispatches to the return PC with generated-exec coverage.
 - local: Closed the synthetic opcode-sweep emission gap: all currently
   decoder-recognized non-`UNKNOWN` opcodes now emit without unsupported stubs.
   This tightened illegal effective-address filtering, added address-register
@@ -326,7 +357,7 @@ Use this loop:
 5. Build and run `ctest`.
 6. Regenerate `build\mslug_recomp.c` from `mslug.neo`.
 7. Confirm the real frontier moved forward.
-8. Update this document.
+8. Update this document and [`68k_correctness_tracker.md`](68k_correctness_tracker.md).
 9. Commit and push.
 
 Immediate next slice:

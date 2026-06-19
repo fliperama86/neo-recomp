@@ -1,13 +1,14 @@
 # NeoGeo 68000 Finish Plan
 
-Last updated: 2026-06-18
+Last updated: 2026-06-19
 
 ## TL;DR
 
 68000 opcode decode/emission coverage is complete for the current decoder model.
 What remains is making the generated 68000 behavior faithful inside the NeoGeo
 system: exact instruction semantics, exception/privilege behavior, interrupts,
-NeoGeo bus/peripheral integration, and real-ROM smoke validation.
+NeoGeo bus/peripheral integration, and real-ROM smoke validation. The concrete
+done/partial/missing checklist lives in [`68k_correctness_tracker.md`](68k_correctness_tracker.md).
 
 ## Phase 1 — CPU Correctness Harness
 
@@ -64,11 +65,12 @@ Tasks:
   - `STOP`
   - `RESET`
   - `RTE`
-  - `MOVE SR,<ea>` / `MOVE <ea>,SR`
+  - `MOVE <ea>,SR` (`MOVE SR,<ea>` is unprivileged on the MC68000)
   - `MOVE USP`
   - immediate SR operations
 - Verify exception stack-frame layout and return behavior.
-- Verify interrupt entry and `RTE` return behavior.
+- Broaden interrupt entry beyond the current basic `STOP` wake path, including
+  instruction-boundary recognition and level-7/IPL details.
 
 Exit criteria:
 
@@ -151,6 +153,7 @@ Exit criteria:
 
 ## Current Status
 
+- Detailed checklist: [`68k_correctness_tracker.md`](68k_correctness_tracker.md).
 - Current decoder-recognized opcode emission coverage: complete.
 - Current tests: `ctest --test-dir build --output-on-failure`.
 - Current caveat: completion here means decode/emission coverage, not yet

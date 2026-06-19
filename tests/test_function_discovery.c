@@ -110,5 +110,21 @@ int main(void) {
         ng_program_rom_free(&rom);
     }
 
+    {
+        NgProgramRom rom = make_rom(0x20u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x4E72u); /* STOP #$2000 */
+        write16(&rom, 0x02u, 0x2000u);
+        write16(&rom, 0x04u, 0x4E75u); /* continuation after interrupt RTE */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(discovery.count == 2u);
+        CHECK(discovery.addrs[0] == 0x00u);
+        CHECK(discovery.addrs[1] == 0x04u);
+
+        ng_program_rom_free(&rom);
+    }
+
     return 0;
 }
