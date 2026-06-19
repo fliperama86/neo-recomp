@@ -142,6 +142,9 @@ if (final["polls"] == 0 or final["watchdog"] == 0 or final["vblank"] == 0 or
     final["frame"] == 0 or final["irqack"] == 0 or final["wram_nonzero"] == 0):
     print("headless smoke did not show enough runtime progress in final summary", file=sys.stderr)
     raise SystemExit(1)
+if final["cart"] == 0 or final["bios"] == 0:
+    print("headless smoke did not dispatch through both cart and BIOS code", file=sys.stderr)
+    raise SystemExit(1)
 if final["dispatches"] >= 500000 and final["vram_nonzero"] == 0:
     print("late headless smoke did not reach VRAM writes", file=sys.stderr)
     raise SystemExit(1)
@@ -156,6 +159,8 @@ if len(summaries) > 1:
         summaries[-1]["watchdog"] <= summaries[0]["watchdog"] or
         summaries[-1]["vblank"] <= summaries[0]["vblank"] or
         summaries[-1]["frame"] <= summaries[0]["frame"] or
+        summaries[-1]["cart"] <= summaries[0]["cart"] or
+        summaries[-1]["bios"] <= summaries[0]["bios"] or
         summaries[-1]["irqack"] <= summaries[0]["irqack"]):
         print("headless smoke counters did not grow across budgets", file=sys.stderr)
         raise SystemExit(1)
@@ -163,10 +168,12 @@ if len(summaries) > 1:
 print(
     "progress oracle: ok "
     f"budgets={','.join(str(b) for b in budgets)} "
-    f"final_pc=${final['pc']:06X} polls={final['polls']} "
-    f"vblank={final['vblank']} frame={final['frame']} irqack={final['irqack']} "
+    f"final_pc=${final['pc']:06X} cart={final['cart']} bios={final['bios']} "
+    f"polls={final['polls']} vblank={final['vblank']} frame={final['frame']} "
+    f"scanline={final['scanline']} irqack={final['irqack']} "
     f"watchdog={final['watchdog']} wram_nonzero={final['wram_nonzero']} "
-    f"vram_nonzero={final['vram_nonzero']} "
+    f"wram_sum=${final['wram_sum']:08X} vram_nonzero={final['vram_nonzero']} "
+    f"vram_sum=${final['vram_sum']:08X} "
     f"final_recent_loop={final['recent_loop']} max_recent_loop={max_recent_loop}"
 )
 PY
