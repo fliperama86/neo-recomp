@@ -1157,7 +1157,7 @@ static int validate_scc(const NgM68kInstr *instr) {
            instr->absolute_addr == 0u &&
            instr->displacement == 0 &&
            ea_is_empty(&instr->src) &&
-           data_alterable_ext_length(&instr->dst, &ext_len) &&
+           exact_data_alterable_ext_length(&instr->dst, &ext_len) &&
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 

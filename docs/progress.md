@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `Scc <ea>` byte-sized data-alterable
+  destinations against the Motorola/NXP Programmer's Reference Manual. The
+  validator now requires exact destination EA payloads for Dn, displacement,
+  index, and absolute forms in addition to condition, length, and no-source
+  metadata. `test_m68k_validate` covered malformed Dn, address-displacement,
+  and absolute-word payloads red first.
 - local: Tightened exact metadata for unsized system/control forms
   (`NOP`, `RESET`, `RTE`, `RTR`, `RTS`, `TRAPV`, `ILLEGAL`/A-line/F-line)
   plus immediate control forms (`STOP`, `TRAP`). The validator now rejects
