@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `DBcc` against the Motorola/NXP
+  Programmer's Reference Manual. The validator now requires exact 4-byte
+  word-sized operand-free counter metadata, condition/register bounds,
+  no stray immediate/form/absolute/EA payload fields, and a branch target that
+  matches the extension-word displacement from the `PC + 2` base.
+  `test_m68k_validate` covered malformed target and stray metadata red first.
 - local: Fact-checked MC68000 `Scc` byte stores against the
   Motorola/NXP Programmer's Reference Manual. The validator now requires the
   exact data-alterable destination extension length, condition field range,

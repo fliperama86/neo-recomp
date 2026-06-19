@@ -692,6 +692,22 @@ static int validate_scc(const NgM68kInstr *instr) {
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 
+static int validate_dbcc(const NgM68kInstr *instr) {
+    uint32_t expected_target =
+        (uint32_t)((int64_t)instr->addr + 2 + (int64_t)instr->displacement);
+
+    return instr->byte_length == 4u &&
+           instr->size == 2u &&
+           instr->condition <= 15u &&
+           instr->reg < 8u &&
+           instr->immediate == 0u &&
+           instr->src_reg == 0u &&
+           instr->form == NG_M68K_FORM_NONE &&
+           instr->absolute_addr == 0u &&
+           no_ea_fields(instr) &&
+           instr->target == expected_target;
+}
+
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
@@ -1075,13 +1091,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_SCC:
         return validate_scc(instr);
     case NG_M68K_DBCC:
-        return instr->byte_length == 4u &&
-               instr->size == 2u &&
-               instr->condition <= 15u &&
-               instr->reg < 8u &&
-               instr->immediate == 0u &&
-               instr->src_reg == 0u &&
-               no_ea_operands(instr);
+        return validate_dbcc(instr);
     case NG_M68K_ASL:
     case NG_M68K_ASR:
     case NG_M68K_LSL:
