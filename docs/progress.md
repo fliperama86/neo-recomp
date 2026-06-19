@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a fact-checked NeoGeo palette RAM bus slice. The runtime
+  now maps banked/mirrored palette RAM at `$400000-$7FFFFF`, handles
+  `REG_PALBANK1/0` bank selection, and duplicates byte writes into both
+  bytes of the addressed palette word.
 - local: Added dispatch-audit gap enforcement. `ng_dispatch_audit_has_gaps()`
   is covered by unit tests, and the CLI now accepts `--fail-on-dispatch-gaps`
   to make smoke runs fail on missing direct targets, computed dispatches,
@@ -490,4 +494,4 @@ Near follow-ups:
 - Replace narrow condition handling with a tested condition-code helper table.
 - Start separating instruction semantics into reusable generated helper functions when repeated emitted C becomes noisy.
 - Add a tiny standalone ROM-like fixture that is closer to a hand-authored mini program than the current unit fixture.
-- Continue runtime bus coverage for palette RAM, backup/system RAM, BIOS/system registers, VRAM-facing ports, inputs, sound latch/Z80 communication, watchdog, and protection/bank-switch variants.
+- Continue runtime bus coverage for backup/system RAM, BIOS/system registers, VRAM-facing ports, inputs, sound latch/Z80 communication, watchdog, and protection/bank-switch variants.
