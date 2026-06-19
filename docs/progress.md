@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened unary data-alterable validation so `CLR`, `NEG`,
+  `NEGX`, `NOT`, `NBCD`, and `TAS` opcode class, size bits, and
+  effective-address bits must match the decoded destination metadata.
+  `test_m68k_validate` covered mismatched opcode register and
+  cross-family metadata red first.
 - local: Tightened `Scc`/`DBcc` validation so opcode condition bits
   and effective-address/register fields must match the decoded byte
   destination or DBcc counter metadata. `test_m68k_validate` covered

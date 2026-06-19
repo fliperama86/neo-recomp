@@ -1751,6 +1751,9 @@ static int validate_shift_rotate(const NgM68kInstr *instr) {
 static int validate_unary_data_alterable(const NgM68kInstr *instr,
                                          int byte_only) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t expected_opcode = 0u;
+    uint16_t size_bits = 0u;
 
     if (!ea_is_empty(&instr->src) ||
         instr->immediate != 0u ||
@@ -1770,6 +1773,41 @@ static int validate_unary_data_alterable(const NgM68kInstr *instr,
     }
 
     if (instr->byte_length != (uint8_t)(2u + ext_len)) {
+        return 0;
+    }
+
+    if (!ea_opcode_field(&instr->dst, &ea_field)) {
+        return 0;
+    }
+
+    if (!byte_only) {
+        size_bits = (instr->size == 1u) ? 0u :
+                    ((instr->size == 2u) ? 0x0040u : 0x0080u);
+    }
+
+    switch (instr->mnemonic) {
+    case NG_M68K_NEGX:
+        expected_opcode = (uint16_t)(0x4000u | size_bits | ea_field);
+        break;
+    case NG_M68K_CLR:
+        expected_opcode = (uint16_t)(0x4200u | size_bits | ea_field);
+        break;
+    case NG_M68K_NEG:
+        expected_opcode = (uint16_t)(0x4400u | size_bits | ea_field);
+        break;
+    case NG_M68K_NOT:
+        expected_opcode = (uint16_t)(0x4600u | size_bits | ea_field);
+        break;
+    case NG_M68K_NBCD:
+        expected_opcode = (uint16_t)(0x4800u | ea_field);
+        break;
+    case NG_M68K_TAS:
+        expected_opcode = (uint16_t)(0x4AC0u | ea_field);
+        break;
+    default:
+        return 0;
+    }
+    if (instr->opcode != expected_opcode) {
         return 0;
     }
 
