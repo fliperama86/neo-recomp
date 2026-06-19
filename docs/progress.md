@@ -142,20 +142,23 @@ Covered by executable generated-C validation:
   - `LINK An,#disp` and `UNLK An`
 - arithmetic/logical:
   - `ADD.W Dn,Dn`
-  - generic `ADD.B/W/L <ea>,Dn` paths covered so far by Dn reads
+  - generic `ADD.B/W/L <ea>,Dn` paths covered so far by Dn reads, including
+    byte overflow-plus-carry flag behavior
   - generic `ADDI.B/W/L #imm,<ea>` paths covered so far by Dn destinations
   - generic `ADD.B/W/L Dn,<ea>` paths covered so far by postincrement memory
     destinations
   - generic `ADDQ.B/W/L #imm,<ea>` paths covered so far by Dn destinations
     and address-register destinations
-  - generic `SUB.B/W/L <ea>,Dn` paths covered so far by Dn reads
+  - generic `SUB.B/W/L <ea>,Dn` paths covered so far by Dn reads, including
+    byte borrow-to-`X/C` flag behavior
   - generic `SUB.B/W/L Dn,<ea>` paths covered so far by postincrement memory
     destinations
   - generic `SUBI.B/W/L #imm,<ea>` paths covered so far by postincrement
     memory destinations
   - generic `SUBQ.B/W/L #imm,<ea>` paths covered so far by Dn and
     postincrement memory destinations
-  - generic `CMP.B/W/L <ea>,Dn` paths covered so far by Dn and abs reads
+  - generic `CMP.B/W/L <ea>,Dn` paths covered so far by Dn and abs reads,
+    including byte overflow with `X` preserved
   - generic `ADDA.W/L <ea>,An`, `SUBA.W/L <ea>,An`, and
     `CMPA.W/L <ea>,An` paths covered so far by immediate sources
   - `CMPM.B/W/L (Ay)+,(Ax)+` covered so far by word postincrement memory
@@ -215,6 +218,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `ADD`/`SUB`/`CMP` condition-code rules.
+  Generated-exec now covers byte `ADD` overflow plus carry into `X/C`, byte
+  `SUB` borrow into `X/C`, and byte `CMP` overflow while preserving `X`.
 - local: Fact-checked packed-BCD `ABCD`/`SBCD` condition-code rules.
   Generated-exec now covers predecrement-memory BCD arithmetic, including
   address predecrement writes, sticky zero on an `ABCD` zero result, decimal
