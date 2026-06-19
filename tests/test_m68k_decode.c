@@ -767,12 +767,48 @@ int main(void) {
         CHECK(instr.mnemonic == NG_M68K_EXG);
         CHECK(instr.byte_length == 2);
         CHECK(instr.size == 4);
+        CHECK(instr.src_reg == 0);
+        CHECK(instr.reg == 1);
         CHECK(instr.src.mode == NG_M68K_EA_DREG);
         CHECK(instr.src.reg == 0);
         CHECK(instr.dst.mode == NG_M68K_EA_DREG);
         CHECK(instr.dst.reg == 1);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "EXG D0,D1") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xC1, 0x49 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_EXG);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.src_reg == 0);
+        CHECK(instr.reg == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_AREG);
+        CHECK(instr.src.reg == 0);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 1);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "EXG A0,A1") == 0);
+    }
+
+    {
+        const unsigned char bytes[] = { 0xC5, 0x8B };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_EXG);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
+        CHECK(instr.src_reg == 2);
+        CHECK(instr.reg == 3);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 2);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 3);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "EXG D2,A3") == 0);
     }
 
     {

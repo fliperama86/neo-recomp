@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `EXG` register exchanges against the
+  Motorola/NXP Programmer's Reference Manual. Decode now records the Rx/Ry
+  register fields for Dn-Dn, An-An, and Dn-An exchanges, and the validator
+  requires exact 2-byte long-sized register-only metadata with legal opmode
+  shapes, matching top-level source/destination register fields, no extension
+  operands, and no stray immediate, condition, form, target, displacement, or
+  EA payload fields. `test_m68k_decode` and `test_m68k_validate` covered the
+  malformed metadata red first.
 - local: Fact-checked MC68000 `LINK`/`UNLK` stack-frame operations against
   the Motorola/NXP Programmer's Reference Manual. `LINK` decode now records
   the word-sized displacement used by the MC68000 encoding, and the validator

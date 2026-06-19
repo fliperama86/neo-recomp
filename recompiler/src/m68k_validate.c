@@ -65,6 +65,17 @@ static int no_ea_fields(const NgM68kInstr *instr) {
     return ea_is_empty(&instr->src) && ea_is_empty(&instr->dst);
 }
 
+static int ea_is_exact_register(const NgM68kEa *ea, NgM68kEaMode mode) {
+    return ea->mode == mode &&
+           ea->reg < 8u &&
+           ea->index_reg == 0u &&
+           ea->index_is_addr == 0u &&
+           ea->index_is_long == 0u &&
+           ea->displacement == 0 &&
+           ea->absolute_addr == 0u &&
+           ea->immediate == 0u;
+}
+
 static int valid_size(uint8_t size) {
     return size == 1u || size == 2u || size == 4u;
 }
@@ -596,6 +607,32 @@ static int validate_link_unlk(const NgM68kInstr *instr) {
            instr->displacement == 0;
 }
 
+static int validate_exg(const NgM68kInstr *instr) {
+    if (instr->byte_length != 2u ||
+        instr->size != 4u ||
+        instr->immediate != 0u ||
+        instr->condition != 0u ||
+        instr->form != NG_M68K_FORM_NONE ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->displacement != 0 ||
+        instr->src_reg != instr->src.reg ||
+        instr->reg != instr->dst.reg) {
+        return 0;
+    }
+
+    if (ea_is_exact_register(&instr->src, NG_M68K_EA_DREG) &&
+        ea_is_exact_register(&instr->dst, NG_M68K_EA_DREG)) {
+        return 1;
+    }
+    if (ea_is_exact_register(&instr->src, NG_M68K_EA_AREG) &&
+        ea_is_exact_register(&instr->dst, NG_M68K_EA_AREG)) {
+        return 1;
+    }
+    return ea_is_exact_register(&instr->src, NG_M68K_EA_DREG) &&
+           ea_is_exact_register(&instr->dst, NG_M68K_EA_AREG);
+}
+
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
@@ -912,13 +949,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_CMPA:
         return validate_address_reg_op(instr);
     case NG_M68K_EXG:
-        return instr->size == 4u &&
-               ((instr->src.mode == NG_M68K_EA_DREG &&
-                 instr->dst.mode == NG_M68K_EA_DREG) ||
-                (instr->src.mode == NG_M68K_EA_AREG &&
-                 instr->dst.mode == NG_M68K_EA_AREG) ||
-                (instr->src.mode == NG_M68K_EA_DREG &&
-                 instr->dst.mode == NG_M68K_EA_AREG));
+        return validate_exg(instr);
     case NG_M68K_MOVE_USP:
         return validate_move_usp(instr);
     case NG_M68K_LINK:
