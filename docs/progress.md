@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `MOVEP` peripheral data transfers against the
+  Motorola/NXP Programmer's Reference Manual. The validator now requires exact
+  4-byte word/long data-register-to-address-displacement or
+  address-displacement-to-data-register metadata, data-register field
+  consistency, displacement consistency, and no stray operands/legacy fields.
+  Decode now records the source data register for Dn-to-memory `MOVEP`.
+  `test_m68k_decode` and `test_m68k_validate` covered malformed metadata red
+  first.
 - local: Fact-checked MC68000 `MOVEM` register-list transfers against the
   Motorola/NXP Programmer's Reference Manual. The validator now requires
   word/long size, a 16-bit register mask, exact `4 + EA-extension` instruction

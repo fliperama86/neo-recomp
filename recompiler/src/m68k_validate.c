@@ -527,6 +527,38 @@ static int validate_movem(const NgM68kInstr *instr) {
     return 0;
 }
 
+static int validate_movep(const NgM68kInstr *instr) {
+    if (instr->byte_length != 4u ||
+        !valid_word_or_long(instr->size) ||
+        instr->immediate != 0u ||
+        instr->condition != 0u ||
+        instr->form != NG_M68K_FORM_NONE ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u) {
+        return 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_DREG &&
+        instr->dst.mode == NG_M68K_EA_ADISP) {
+        return instr->src.reg < 8u &&
+               instr->dst.reg < 8u &&
+               instr->src_reg == instr->src.reg &&
+               instr->reg == instr->src.reg &&
+               instr->displacement == instr->dst.displacement;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_ADISP &&
+        instr->dst.mode == NG_M68K_EA_DREG) {
+        return instr->src.reg < 8u &&
+               instr->dst.reg < 8u &&
+               instr->src_reg == 0u &&
+               instr->reg == instr->dst.reg &&
+               instr->displacement == instr->src.displacement;
+    }
+
+    return 0;
+}
+
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
@@ -861,11 +893,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                instr->reg < 8u &&
                no_ea_operands(instr);
     case NG_M68K_MOVEP:
-        return valid_word_or_long(instr->size) &&
-               ((instr->src.mode == NG_M68K_EA_DREG &&
-                 instr->dst.mode == NG_M68K_EA_ADISP) ||
-                (instr->src.mode == NG_M68K_EA_ADISP &&
-                 instr->dst.mode == NG_M68K_EA_DREG));
+        return validate_movep(instr);
     case NG_M68K_MOVEM:
         return validate_movem(instr);
     case NG_M68K_MOVE_SR:

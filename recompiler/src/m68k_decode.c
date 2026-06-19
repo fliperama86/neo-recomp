@@ -1090,6 +1090,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         if (dreg_to_mem) {
             out->src.mode = NG_M68K_EA_DREG;
             out->src.reg = data_reg;
+            out->src_reg = data_reg;
             out->dst.mode = NG_M68K_EA_ADISP;
             out->dst.reg = addr_reg;
             out->dst.displacement = out->displacement;

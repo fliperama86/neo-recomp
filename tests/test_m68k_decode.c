@@ -1647,6 +1647,8 @@ int main(void) {
         CHECK(instr.mnemonic == NG_M68K_MOVEP);
         CHECK(instr.byte_length == 4);
         CHECK(instr.size == 2);
+        CHECK(instr.reg == 0);
+        CHECK(instr.src_reg == 0);
         CHECK(instr.src.mode == NG_M68K_EA_DREG);
         CHECK(instr.src.reg == 0);
         CHECK(instr.dst.mode == NG_M68K_EA_ADISP);
@@ -1657,12 +1659,31 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x03, 0xC9, 0xFF, 0xFC };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
+        CHECK(instr.mnemonic == NG_M68K_MOVEP);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 4);
+        CHECK(instr.reg == 1);
+        CHECK(instr.src_reg == 1);
+        CHECK(instr.src.mode == NG_M68K_EA_DREG);
+        CHECK(instr.src.reg == 1);
+        CHECK(instr.dst.mode == NG_M68K_EA_ADISP);
+        CHECK(instr.dst.reg == 1);
+        CHECK(instr.dst.displacement == -4);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "MOVEP.L D1,($FFFC,A1)") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x03, 0x49, 0xFF, 0xFC };
         char text[64];
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_MOVEP);
         CHECK(instr.byte_length == 4);
         CHECK(instr.size == 4);
+        CHECK(instr.reg == 1);
         CHECK(instr.src.mode == NG_M68K_EA_ADISP);
         CHECK(instr.src.reg == 1);
         CHECK(instr.src.displacement == -4);
