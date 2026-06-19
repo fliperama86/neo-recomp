@@ -70,6 +70,7 @@ int main(void) {
 
     CHECK(strstr(text, "#include \"ngrecomp/neogeo_runtime.h\"") != NULL);
     CHECK(strstr(text, "#define NG_SR_S 0x2000u") != NULL);
+    CHECK(strstr(text, "#define NG_SR_T 0x8000u") != NULL);
     CHECK(strstr(text, "static void ng_set_sr(uint16_t value)") != NULL);
     CHECK(strstr(text, "g_ng_m68k.usp = g_ng_m68k.a[7];") != NULL);
     CHECK(strstr(text, "g_ng_m68k.ssp = g_ng_m68k.a[7];") != NULL);
@@ -77,6 +78,7 @@ int main(void) {
     CHECK(strstr(text, "static void ng_push_exception_frame(uint32_t return_pc)") != NULL);
     CHECK(strstr(text, "static int ng_require_supervisor(uint32_t fault_pc)") != NULL);
     CHECK(strstr(text, "static int ng_service_interrupt(uint32_t return_pc)") != NULL);
+    CHECK(strstr(text, "static int ng_service_trace(uint32_t return_pc)") != NULL);
     CHECK(strstr(text, "static void ng_func_0007CC(void);") != NULL);
     CHECK(strstr(text, "case 0x000007CCu: ng_func_0007CC(); return;") != NULL);
     CHECK(strstr(text, "static void ng_func_024E38(void)") != NULL);
@@ -109,6 +111,7 @@ int main(void) {
         CHECK(strstr(text, "/* $000000: MOVEQ #5,D0 */") != NULL);
         CHECK(strstr(text, "if (ng_service_interrupt(0x00000000u)) return;") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = 0x00000005u;") != NULL);
+        CHECK(strstr(text, "if (ng_service_trace(0x00000002u)) return;") != NULL);
         CHECK(strstr(text, "/* $000002: ADD.W D0,D0 */") != NULL);
         CHECK(strstr(text, "if (ng_service_interrupt(0x00000002u)) return;") != NULL);
         CHECK(strstr(text, "uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src;") != NULL);

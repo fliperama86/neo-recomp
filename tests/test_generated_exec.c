@@ -18,6 +18,7 @@
 #define CCR_N 0x0008u
 #define CCR_X 0x0010u
 #define SR_S  0x2000u
+#define SR_T  0x8000u
 
 NgM68kState g_ng_m68k;
 
@@ -2521,6 +2522,23 @@ int main(void) {
     CHECK(ng68k_read16(0x000001EAu) == 0x2000u);
     CHECK(ng68k_read32(0x000001ECu) == 0x00000422u);
     g_interrupt_poll_count = 0;
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = (uint16_t)(SR_S | SR_T);
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    ng68k_write32(9u * 4u, 0x00000450u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000440u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.d[2] == 0x00000003u);
+    CHECK(g_ng_m68k.a[7] == 0x000001EAu);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T));
+    CHECK(ng68k_read32(0x000001ECu) == 0x00000442u);
 
     return 0;
 }

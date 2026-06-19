@@ -206,6 +206,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added basic generated trace exception entry. Linear fall-through
+  instructions now service SR T-bit tracing after execution, stack saved SR and
+  next PC through vector 9, and clear the live T bit during exception entry.
+  Branch/control-flow and instruction-generated exception priority cases remain
+  tracked as partial.
 - local: Added an initial post-decode MC68000 legality validator and wired
   checked emission through it. Validator coverage currently rejects
   `UNKNOWN`/`INVALID`, illegal control-EA uses, invalid `MOVE` destinations,
