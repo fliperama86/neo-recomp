@@ -241,10 +241,73 @@ int main(void) {
     CHECK(ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_TST;
+    instr.byte_length = 0u;
+    instr.size = 2u;
+    instr.src.mode = NG_M68K_EA_DREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_TST;
+    instr.byte_length = 2u;
+    instr.size = 2u;
+    instr.src.mode = NG_M68K_EA_DREG;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_TST;
+    instr.byte_length = 2u;
+    instr.size = 2u;
+    instr.immediate = 1u;
+    instr.src.mode = NG_M68K_EA_DREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_TST;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.src.mode = NG_M68K_EA_PC_DISP;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_CMPI;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.dst.mode = NG_M68K_EA_PC_DISP;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPI;
+    instr.byte_length = 4u;
+    instr.size = 1u;
+    instr.immediate = 0x7Fu;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPI;
+    instr.byte_length = 2u;
+    instr.size = 1u;
+    instr.immediate = 0x7Fu;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPI;
+    instr.byte_length = 4u;
+    instr.size = 1u;
+    instr.immediate = 0x100u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_CMPI;
+    instr.byte_length = 4u;
+    instr.size = 1u;
+    instr.immediate = 0x7Fu;
+    instr.src.mode = NG_M68K_EA_DREG;
+    instr.dst.mode = NG_M68K_EA_DREG;
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));

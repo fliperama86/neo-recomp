@@ -148,6 +148,45 @@ static int valid_scc_length(uint8_t byte_length) {
     return byte_length == 2u || byte_length == 4u || byte_length == 6u;
 }
 
+static int valid_tst_length(uint8_t byte_length) {
+    return byte_length == 2u || byte_length == 4u || byte_length == 6u;
+}
+
+static int valid_cmpi_length(uint8_t size, uint8_t byte_length) {
+    if (size == 4u) {
+        return byte_length == 6u || byte_length == 8u || byte_length == 10u;
+    }
+    return byte_length == 4u || byte_length == 6u || byte_length == 8u;
+}
+
+static int valid_immediate_width(uint8_t size, uint32_t immediate) {
+    if (size == 1u) {
+        return immediate <= 0xFFu;
+    }
+    if (size == 2u) {
+        return immediate <= 0xFFFFu;
+    }
+    return size == 4u;
+}
+
+static int validate_tst(const NgM68kInstr *instr) {
+    return valid_size(instr->size) &&
+           valid_tst_length(instr->byte_length) &&
+           instr->immediate == 0u &&
+           instr->src_reg == 0u &&
+           instr->dst.mode == NG_M68K_EA_NONE &&
+           ea_is_data_alterable(&instr->src);
+}
+
+static int validate_cmpi(const NgM68kInstr *instr) {
+    return valid_size(instr->size) &&
+           valid_cmpi_length(instr->size, instr->byte_length) &&
+           valid_immediate_width(instr->size, instr->immediate) &&
+           instr->src_reg == 0u &&
+           instr->src.mode == NG_M68K_EA_NONE &&
+           ea_is_data_alterable(&instr->dst);
+}
+
 static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
     if (instr->byte_length != 4u || !no_ea_operands(instr)) {
         return 0;
@@ -376,9 +415,9 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
         }
         return valid_size(instr->size) && ea_is_data_alterable(&instr->dst);
     case NG_M68K_TST:
-        return valid_size(instr->size) && ea_is_data_alterable(&instr->src);
+        return validate_tst(instr);
     case NG_M68K_CMPI:
-        return valid_size(instr->size) && ea_is_data_alterable(&instr->dst);
+        return validate_cmpi(instr);
     case NG_M68K_CHK:
         return instr->size == 2u &&
                ea_is_data(&instr->src) &&

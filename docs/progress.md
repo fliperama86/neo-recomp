@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `TST <ea>` and `CMPI #data,<ea>` against the
+  Motorola/NXP Programmer's Reference Manual with MC68000 scope. The validator
+  now rejects malformed `TST` and `CMPI` metadata, including stray operands,
+  impossible instruction lengths, oversized byte/word immediates, and
+  later-family/non-data-alterable destination forms. `test_m68k_validate`
+  covered the failures first.
 - local: Fact-checked `Scc <ea>` against the Motorola/NXP Programmer's
   Reference Manual. The validator now rejects malformed `Scc` metadata unless
   it is a byte-sized condition-store with no source/immediate operands and a
