@@ -119,7 +119,8 @@ Covered by executable generated-C validation:
   `N/Z/V/C` combination on both counter-exhaustion fall-through and
   taken-branch paths, plus the older taken-branch `DBF` spot check
 - flags: `N`/`Z` for covered operations; `C`/`X` for tested byte
-  subtract/extend-add paths and register-count-zero shift/rotate cases
+  subtract/extend-add paths, register-count-zero shift/rotate cases, and
+  selected nonzero shift/rotate edge cases
 - data movement:
   - `MOVEQ`
   - `MOVE.B/W/L #imm,Dn`
@@ -233,10 +234,11 @@ Covered by executable generated-C validation:
     predecrement-by-two
   - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
   - data-register `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` decode/emission,
-    covered so far by generated-exec logical shift pairs and zero-count
-    register-count flag cases
+    covered so far by generated-exec logical shift pairs, zero-count
+    register-count flag cases, and nonzero `ASL.B`, `ASR.W`, `LSR.L`,
+    `ROXR.B`, and `ROR.W` flag/result edge cases
   - memory `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` word forms, covered so far by
-    an absolute-memory logical shift
+    absolute-memory logical shift, `ROXL.W`, and `ASL.W` flag/result cases
   - `PEA <ea>` control-address pushes covered so far by displacement and
     PC-relative sources, including extension-word PC base calculation and CCR
     preservation
@@ -247,6 +249,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked nonzero shift/rotate flag semantics against the
+  Motorola/NXP Programmer's Reference Manual. Generated-exec now covers
+  `ASL.B`, `ASR.W`, `LSR.L`, `ROXR.B`, and `ROR.W` data-register cases plus
+  memory `ROXL.W` and `ASL.W`, verifying result bits, `X/C`
+  last-shifted-bit behavior, pure-rotate `X` preservation, zero results,
+  arithmetic-left overflow, and memory word writes.
 - local: Fact-checked `MOVEM` control-mode ordering against the Motorola/NXP
   Programmer's Reference Manual. Generated-exec now covers D/A mask order for
   address-displacement and absolute-word register-to-memory long transfers,
