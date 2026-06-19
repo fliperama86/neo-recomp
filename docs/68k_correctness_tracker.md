@@ -22,7 +22,7 @@ Current verification command:
 ctest --test-dir build --output-on-failure
 ```
 
-Last local verification: **9/9 passing** on 2026-06-19.
+Last local verification: **10/10 passing** on 2026-06-19.
 
 ## Done and Covered
 
@@ -52,6 +52,7 @@ Last local verification: **9/9 passing** on 2026-06-19.
 | Codegen diagnostics for unsupported/decode failures | Done | `tests/test_c_emitter.c`; `NgEmitDiagnostics` and `ng_emit_c_checked()` in `recompiler/src/c_emitter.c`. | Checked C emission now records unsupported decoded instructions and decode errors and fails generation instead of silently relying only on generated runtime dispatch misses. |
 | Initial post-decode legality validator | Done | `tests/test_m68k_validate.c`; `recompiler/src/m68k_validate.c`. | The validator rejects `UNKNOWN`/`INVALID`, illegal control-EA uses, illegal `MOVE` destinations, invalid condition numbers, selected data-alterable requirements, `ADDQ/SUBQ` quick/address-register size mistakes, `TST`/`CMPI` non-alterable destinations, `CHK` source/destination mistakes, multiply/divide destination mistakes, and `EXT`/`SWAP` non-data-register forms. Checked emission now consults it before emitting an instruction. |
 | Game TOML function seed parsing | Done | `tests/test_game_config.c`, `tests/test_function_discovery.c`; `recompiler/src/game_config.c`, `recompiler/src/function_discovery.c`, and `recompiler/src/main.c`. | `--game` now parses `[functions].entry` and `[functions].extra`, discovery can start from a seed list, unmapped seeds are ignored, and CLI discovery folds game-config seeds together with the cartridge entry. Only function seed metadata is parsed so far. |
+| Dispatch/control-flow audit artifact | Done | `tests/test_dispatch_audit.c`; `recompiler/src/dispatch_audit.c`, `recompiler/src/main.c`. | The audit classifies discovered dispatch sites as direct, computed runtime targets, or PC-index jump tables; reports missing direct targets and missing/resolved jump-table entries; and can be emitted from the CLI with `--emit-dispatch-audit <out.txt>`. This is an audit artifact only; smoke runs do not fail on audit gaps yet. |
 | Basic trace exception entry | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; generated `ng_service_trace()` helper. | Generated code snapshots the SR T bit before executing each instruction. Linear fall-through instructions, taken `BRA`/`Bcc`, taken `DBcc`, `JSR`/`BSR`/`JMP`, `RTS`, `STOP`, `RTE`/`RTR`, `TRAP`, taken `TRAPV`, failed `CHK`, and divide-by-zero paths now vector through trace vector 9 after execution when trace was enabled at instruction start. Trace stacks the architectural next/target PC, or for traced instruction exceptions the exception-handler PC after that exception frame is built, plus current saved SR on `SSP`, and clears the live T bit during exception entry. Generated-exec also covers no-trace behavior for not-executed illegal, A-line, F-line, and privilege cases, plus trace-before-pending-interrupt priority. |
 | All 16 condition predicates available to generated code | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; condition predicate helper in `recompiler/src/c_emitter.c`. | Only selected branch/condition behavior is oracle-covered; full flag correctness is partial. |
 
@@ -67,7 +68,7 @@ Last local verification: **9/9 passing** on 2026-06-19.
 | Exception stack semantics | Partial | Basic SR/PC exception frames, supervisor stack selection, and vector dispatch are emitted for covered generated paths, including divide-by-zero. | Exact vector fetch ordering, address/bus error frames, and the full exception-priority matrix. |
 | Interrupt model | Partial | `STOP` and ordinary instruction boundaries can accept runtime-approved interrupts, stack a format-0 frame, update the interrupt mask, vector to a handler, and return via `RTE`. The default runtime has IPL mask, level-7-edge tracking, cartridge VBlank/timer/reset-pending source APIs, memory-mapped `REG_IRQACK` clearing, and a frame/scanline-advanced LSPC timer/VBlank scheduler. | Interrupt priority against other exceptions, generated CPU-cycle integration, PAL `REG_TIMERSTOP` behavior, and real host pacing. |
 | Trace mode | Partial | Generated code uses the T bit from instruction start and services trace exceptions after linear fall-through, taken branches/`DBcc`, subroutine calls, jumps, `RTS`, `STOP`, `RTE`/`RTR`, `TRAP`, taken `TRAPV`, failed `CHK`, and divide-by-zero, before the next instruction-boundary interrupt poll. Exception entry clears the live T bit while preserving saved SR, not-executed illegal/A-line/F-line/privilege cases do not trace, and pending interrupts are taken after trace. | Broader spec/oracle coverage across every remaining exception class and generated path, especially address/bus-error paths once implemented. |
-| Function discovery / CFG | Partial | Direct calls, instruction-start continuations, `JSR`/`BSR` continuations, `STOP` continuations, tail jumps, and a known PC-index jump-table shape are discovered conservatively. | Conditional branch basic-block splitting, indirect jump tables beyond the current pattern, data-driven targets, and robust real-ROM CFG recovery without excessive duplicate generation. |
+| Function discovery / CFG | Partial | Direct calls, instruction-start continuations, `JSR`/`BSR` continuations, `STOP` continuations, tail jumps, one PC-index jump-table shape, game-config function seeds, and a dispatch/control-flow audit artifact are implemented. | Conditional branch basic-block splitting, indirect jump tables beyond the current pattern, data-driven targets, machine-checkable smoke-run failure on audit gaps, and robust real-ROM CFG recovery without excessive duplicate generation. |
 | `g_ng_m68k.pc` | Partial | Dispatch uses function addresses and local labels; some stack frames include explicit return PCs. | Generated code does not consistently maintain architectural `PC` after each instruction or at every exception boundary. |
 | Real-ROM frontier tracking | Partial | `docs/progress.md` records the last Metal Slug frontier and notes it is stale. | Rerun the Metal Slug smoke and replace stale `DC.W` frontier data with the current first failure. |
 | Runtime bus boundary | Partial | Generated code only uses `ng68k_read*`/`ng68k_write*` and runtime hooks. | Correct NeoGeo memory map/device behavior in the runtime, with tests. |
@@ -105,9 +106,9 @@ should **not** replace the real supervisor/user stack switching tracked here.
 4. **Broaden post-decode legality validator**: make invalid source/destination
    effective-address combinations and CPU-family scope explicit for every
    decoded instruction family.
-5. **Dispatch and metadata audits**: expand `games/*.toml` beyond function
-   seeds, classify direct/computed/jump-table/unresolved targets, and fail smoke
-   runs on dispatch gaps.
+5. **Dispatch and metadata audit enforcement**: expand `games/*.toml` beyond
+   function seeds, broaden dispatch-audit target patterns, and fail smoke runs
+   on unresolved/missing control-flow gaps.
 6. **Full exception/trace priority matrix**: broaden coverage across every
    generated exception class, address/bus errors once implemented, and nested
    exception/vector-fetch failure cases.

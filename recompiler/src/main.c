@@ -1,4 +1,5 @@
 #include "c_emitter.h"
+#include "dispatch_audit.h"
 #include "function_discovery.h"
 #include "game_config.h"
 #include "m68k_analyze.h"
@@ -15,7 +16,7 @@
 
 static void print_usage(const char *argv0) {
     fprintf(stderr,
-            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>) [--emit-c <out.c>]\n",
+            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>) [--emit-c <out.c>] [--emit-dispatch-audit <out.txt>]\n",
             argv0);
 }
 
@@ -131,6 +132,39 @@ static int emit_c_file(const char *path,
     return 1;
 }
 
+static int emit_dispatch_audit_file(const char *path,
+                                    const NgProgramRom *rom,
+                                    const NgFunctionDiscovery *discovery) {
+    NgDispatchAudit audit;
+    if (!ng_dispatch_audit_build(rom, discovery, &audit)) {
+        fprintf(stderr, "failed to build dispatch audit\n");
+        return 0;
+    }
+
+    FILE *out = fopen(path, "w");
+    if (!out) {
+        fprintf(stderr, "cannot open %s for writing\n", path);
+        return 0;
+    }
+
+    int ok = ng_dispatch_audit_write(out, &audit);
+    if (fclose(out) != 0) {
+        ok = 0;
+    }
+    if (!ok) {
+        fprintf(stderr, "failed to write dispatch audit %s\n", path);
+        return 0;
+    }
+
+    printf("dispatch audit: %s (sites=%u missing_direct=%u computed=%u jump_tables=%u)\n",
+           path,
+           audit.count,
+           audit.missing_direct_count,
+           audit.computed_count,
+           audit.jump_table_count);
+    return 1;
+}
+
 static void add_discovery_seed(uint32_t *seeds,
                                uint32_t *seed_count,
                                uint32_t seed) {
@@ -146,6 +180,7 @@ int main(int argc, char **argv) {
     const char *p2_path = NULL;
     const char *neo_path = NULL;
     const char *emit_c_path = NULL;
+    const char *emit_dispatch_audit_path = NULL;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--game") == 0 && i + 1 < argc) {
@@ -158,6 +193,8 @@ int main(int argc, char **argv) {
             neo_path = argv[++i];
         } else if (strcmp(argv[i], "--emit-c") == 0 && i + 1 < argc) {
             emit_c_path = argv[++i];
+        } else if (strcmp(argv[i], "--emit-dispatch-audit") == 0 && i + 1 < argc) {
+            emit_dispatch_audit_path = argv[++i];
         } else {
             print_usage(argv[0]);
             return 2;
@@ -220,6 +257,11 @@ int main(int argc, char **argv) {
                 if (ng_function_discover_from_seeds(&rom, seeds, seed_count, &discovery)) {
                     print_function_candidates(&rom, &discovery);
                     if (emit_c_path && !emit_c_file(emit_c_path, &rom, &discovery)) {
+                        ng_program_rom_free(&rom);
+                        return 1;
+                    }
+                    if (emit_dispatch_audit_path &&
+                        !emit_dispatch_audit_file(emit_dispatch_audit_path, &rom, &discovery)) {
                         ng_program_rom_free(&rom);
                         return 1;
                     }

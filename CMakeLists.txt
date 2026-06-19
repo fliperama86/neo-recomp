@@ -16,6 +16,7 @@ target_include_directories(neo_runtime PUBLIC
 
 add_library(neo_recompiler_core
     recompiler/src/c_emitter.c
+    recompiler/src/dispatch_audit.c
     recompiler/src/function_discovery.c
     recompiler/src/game_config.c
     recompiler/src/m68k_analyze.c

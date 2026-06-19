@@ -11,7 +11,7 @@ project orientation; update this file after each meaningful green slice.
 - Branch: `main`
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
-- Current test status: 9/9 passing
+- Current test status: 10/10 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a dispatch/control-flow audit artifact. `test_dispatch_audit`
+  covers direct calls, missing direct targets, computed runtime dispatches,
+  and PC-index jump tables; the CLI can now write it with
+  `--emit-dispatch-audit <out.txt>`, raising the suite to 10 tests.
 - local: Added a minimal game TOML parser and wired `--game` into function
   discovery. `[functions].entry` and `[functions].extra` now seed discovery
   alongside the cartridge entry, and `test_game_config` raises the suite to
@@ -459,7 +463,7 @@ Real-ROM smoke remains a near follow-up once a local `.neo` input is available.
 Near follow-ups:
 
 - Parse `games/*.toml` into machine-checkable discovery/runtime metadata.
-- Add dispatch and interior-label audits so computed-control-flow misses fail smoke runs.
+- Enforce dispatch-audit gaps in smoke runs and add interior-label checks.
 - Migrate more instruction families onto the generic EA helpers instead of adding bespoke forms.
 - Broaden the decode/codegen legality layer so invalid source/destination EA combinations fail loudly.
 - Add byte/word/long helpers for arithmetic flags instead of ad hoc emitted flag code.

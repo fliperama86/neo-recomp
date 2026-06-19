@@ -20,7 +20,7 @@ set of patterns to adapt deliberately.
 | Target | Neo Geo P-ROM / 68000 bring-up. | Sega Genesis 68000 with playable Sonic milestones. | Keep NeoGeo hardware/runtime design separate; do not import Genesis assumptions. |
 | CPU correctness strategy | Synthetic generated-C oracle fixture plus unit tests and opcode emission sweep. Recent slices cover exception stack/trace behavior that the reference coverage audit still lists as stubbed or partial for several instruction traps. | L1 decoder tests, synthetic decoder tests, validator tests, and L3 per-function oracle against `clown68000`. | Our next large harness should be a trusted 68000 oracle/fuzz layer, not only a hand-written mini interpreter. |
 | Function discovery | Conservative static seeds from cartridge entry, direct call targets, continuations, tail jumps, and one PC-index jump-table shape. | Static worklist plus disassembly-generated seeds, labels, jump tables, code-address oracles, protected ranges, blacklists, dispatch-miss feedback, and interior-label auditing. | Add machine-checkable CFG/discovery inputs before expecting real-ROM boot progress. |
-| Unsupported behavior visibility | Checked emission now reports unsupported/decode failures through `NgEmitDiagnostics`; generated code still logs runtime dispatch misses. | Centralized codegen diagnostics count unsupported/TODO paths and can fail generation; dispatch audit classifies dynamic jump sites. | Extend diagnostics into dispatch/jump-table audits and unresolved dynamic control-flow classification. |
+| Unsupported behavior visibility | Checked emission reports unsupported/decode failures through `NgEmitDiagnostics`; generated code logs runtime dispatch misses; a dispatch audit now classifies direct, computed, and PC-index jump-table sites. | Centralized codegen diagnostics count unsupported/TODO paths and can fail generation; dispatch audit classifies dynamic jump sites. | Extend the audit into smoke-run enforcement and broader unresolved dynamic control-flow classification. |
 | Opcode legality | Tracker marks this partial; an initial `m68k_validate.c` now rejects selected illegal post-decode forms. | Has `m68k_validator.c` as a post-decode MC68000 legality gate. Coverage doc still calls legality non-exhaustive. | Broaden our validator into a spec-driven legality layer before broad real-ROM scanning. |
 | Runtime model | Small runtime API boundary only; no real NeoGeo bus yet. | Full runner with Genesis bus, VDP/audio/input, cooperative fibers, VBlank integration, traces, and optional enhancements. | Our runtime needs an equivalent NeoGeo bus/interrupt loop, but only after CPU-visible semantics are stable. |
 | `RTS`/subroutine model | Current generated code uses stack-backed return dispatch: `JSR`/`BSR` push return PC, `RTS` pops PC and dispatches. A generated-exec regression covers a stack-skip idiom (`ADDQ.L #4,A7; RTS`). | Uses C calls for known `JSR` plus explicit return push/pop and special propagation for stack-skip idioms like `addq.l #4,sp; rts`. | Keep our stack-backed model for architectural correctness and retain stack-mutation regressions instead of relying on host call return. |
@@ -108,12 +108,11 @@ These reinforce items already in `68k_correctness_tracker.md`:
 1. Add **LSPC timer / VBlank scheduling** beyond the current runtime-supplied
    polling/basic IPL/source APIs and `REG_IRQACK` clearing: timer registers,
    VBlank/timer scheduling, and interrupt priority.
-2. Extend **codegen diagnostics** into dispatch/jump-table audits and unresolved
-   dynamic control-flow classification before the next serious real-ROM smoke
-   loop.
+2. Extend the new **dispatch/jump-table audit** into unresolved dynamic
+   control-flow enforcement before the next serious real-ROM smoke loop.
 3. Expand **game TOML parsing** beyond function seeds so `--game` drives more
    discovery/runtime metadata.
 4. **Broaden the post-decode legality validator** and route invalid encodings
    to loud diagnostics/trap behavior.
 5. Add a **trusted oracle harness** for CPU semantics and per-function parity.
-6. Add **dispatch/jump-table audits** and treat dispatch misses as graph failures.
+6. Enforce **dispatch/jump-table audits** and treat dispatch misses as graph failures.
