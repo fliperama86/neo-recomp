@@ -207,6 +207,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added basic generated architectural PC maintenance. Dispatcher entry,
+  instruction-boundary interrupt polls, linear fall-through, and `STOP`
+  completion now update `g_ng_m68k.pc`, with generated-exec coverage for
+  interrupt-resumed straight-line code, trace-handler `STOP`, and
+  illegal-handler `STOP`.
 - local: Added the first default runtime bus slice: fixed P-ROM reads,
   the repo's banked P-ROM window, 64KiB work RAM reads/writes, big-endian
   word/long helpers, and 24-bit wrapping for covered regions.

@@ -143,7 +143,9 @@ static void emit_declarations(FILE *out, const NgFunctionDiscovery *discovery) {
 static void emit_dispatch(FILE *out, const NgFunctionDiscovery *discovery) {
     fprintf(out, "\n");
     fprintf(out, "void ng_generated_call(uint32_t addr) {\n");
-    fprintf(out, "    switch (addr & 0x00FFFFFFu) {\n");
+    fprintf(out, "    addr &= 0x00FFFFFFu;\n");
+    fprintf(out, "    g_ng_m68k.pc = addr;\n");
+    fprintf(out, "    switch (addr) {\n");
     for (uint32_t i = 0; i < discovery->count; ++i) {
         char symbol[32];
         uint32_t addr = discovery->addrs[i] & 0xFFFFFFu;
@@ -1964,6 +1966,8 @@ static int emit_instr(FILE *out,
         fprintf(out, "    ng_set_sr(0x%04Xu);\n", instr->immediate & 0xFFFFu);
         fprintf(out, "    ng_m68k_stop_until_interrupt(0x%04Xu);\n",
                 instr->immediate & 0xFFFFu);
+        fprintf(out, "    g_ng_m68k.pc = 0x%08Xu;\n",
+                (instr->addr + instr->byte_length) & 0x00FFFFFFu);
         fprintf(out, "    if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 (instr->addr + instr->byte_length) & 0x00FFFFFFu);
         fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
@@ -2607,6 +2611,8 @@ static void emit_function_body(FILE *out,
         }
         ng_m68k_format(&instrs[i], text, (unsigned)sizeof(text));
         fprintf(out, "    /* $%06X: %s */\n", instrs[i].addr & 0x00FFFFFFu, text);
+        fprintf(out, "    g_ng_m68k.pc = 0x%08Xu;\n",
+                instrs[i].addr & 0x00FFFFFFu);
         fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
                 instrs[i].addr & 0x00FFFFFFu);
         fprintf(out, "    ng_trace_sr = g_ng_m68k.sr;\n");
@@ -2620,6 +2626,8 @@ static void emit_function_body(FILE *out,
         if (!emit_instr(out, &instrs[i], diagnostics)) {
             return;
         }
+        fprintf(out, "    g_ng_m68k.pc = 0x%08Xu;\n",
+                (instrs[i].addr + instrs[i].byte_length) & 0x00FFFFFFu);
         fprintf(out, "    if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 (instrs[i].addr + instrs[i].byte_length) & 0x00FFFFFFu);
     }
