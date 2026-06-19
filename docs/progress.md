@@ -189,7 +189,10 @@ Covered by executable generated-C validation:
   - generic `OR.B/W/L Dn,<ea>`, `AND.B/W/L Dn,<ea>`, and
     `EOR.B/W/L Dn,<ea>` paths covered so far by data-register and
     postincrement memory destinations
-  - `MULU.W <ea>,Dn` and `MULS.W <ea>,Dn` covered so far by immediate sources
+  - `MULU.W <ea>,Dn` and `MULS.W <ea>,Dn` covered so far by immediate sources,
+    including unsigned high-bit products, signed negative products, signed
+    zero products, full 32-bit result storage, and required `N/Z/X/V/C`
+    behavior
   - `DIVU.W <ea>,Dn` and `DIVS.W <ea>,Dn` covered so far by immediate sources,
     divide-by-zero exception-vector emission, signed and unsigned
     quotient-overflow cases that leave the destination operand unchanged,
@@ -242,6 +245,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked word-form `MULU.W`/`MULS.W` semantics against the
+  Motorola/NXP Programmer's Reference Manual. Generated-exec now covers an
+  unsigned product with bit 31 set, a signed negative product, and a signed
+  zero product, verifying the destination's low word is multiplied into a
+  full 32-bit result while `X` is preserved, `C/V` are cleared, and `N/Z`
+  reflect the product.
 - local: Fact-checked successful `DIVU.W`/`DIVS.W` word-form semantics against
   the Motorola/NXP Programmer's Reference Manual. Generated-exec now covers
   unsigned zero quotients, unsigned quotients with bit 15 set, signed negative
