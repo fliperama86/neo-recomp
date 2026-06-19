@@ -574,6 +574,8 @@ int main(void) {
         CHECK(instr.src.immediate == 0x10u);
         CHECK(instr.dst.mode == NG_M68K_EA_AREG);
         CHECK(instr.dst.reg == 2);
+        CHECK(instr.reg == 2);
+        CHECK(instr.form == NG_M68K_FORM_NONE);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "ADDA.W #$10,A2") == 0);
     }

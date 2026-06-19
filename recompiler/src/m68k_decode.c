@@ -319,7 +319,6 @@ static int decode_alu_address_reg(const NgProgramRom *rom,
 
     out->dst.mode = NG_M68K_EA_AREG;
     out->dst.reg = dst_reg;
-    out->form = NG_M68K_FORM_DREG_TO_DREG;
     out->reg = dst_reg;
     return 1;
 }

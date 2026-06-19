@@ -252,6 +252,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `MOVEA`, `ADDA`, `SUBA`, and `CMPA`
+  against the Motorola/NXP Programmer's Reference Manual word/long
+  address-register-operation forms and all-addressing-mode source tables. The
+  validator now requires exact source EA payloads, word/long source
+  extension lengths, PC-relative extension-word bases, immediate widths,
+  address-register destination metadata, and no stray legacy fields; `ADDA`/
+  `SUBA`/`CMPA` decode no longer claims a data-register-to-data-register
+  legacy form. `test_m68k_decode` and `test_m68k_validate` covered malformed
+  address-register operation metadata red first.
 - local: Fact-checked MC68000 `MOVE SR,<ea>`, `MOVE <ea>,SR`, and
   `MOVE <ea>,CCR` against the Motorola/NXP Programmer's Reference Manual
   data/data-alterable EA tables. The validator now requires exact source or

@@ -1222,10 +1222,6 @@ static int valid_immediate_width(uint8_t size, uint32_t immediate) {
     return size == 4u;
 }
 
-static int valid_single_ea_length(uint8_t byte_length) {
-    return byte_length == 2u || byte_length == 4u || byte_length == 6u;
-}
-
 static int valid_word_data_source_length(const NgM68kEa *ea,
                                          uint8_t byte_length) {
     switch (ea->mode) {
@@ -1248,13 +1244,37 @@ static int valid_word_data_source_length(const NgM68kEa *ea,
     }
 }
 
+static int validate_address_reg_op_legacy_fields(const NgM68kInstr *instr) {
+    if (instr->reg != instr->dst.reg ||
+        instr->immediate != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->condition != 0u ||
+        !ea_simple_register_payload(&instr->dst)) {
+        return 0;
+    }
+
+    if (instr->mnemonic == NG_M68K_MOVEA &&
+        instr->src.mode == NG_M68K_EA_PC_INDEX) {
+        return instr->form == NG_M68K_FORM_PC_INDEX_TO_AREG &&
+               instr->src_reg == instr->src.index_reg &&
+               instr->displacement == instr->src.displacement &&
+               instr->target == instr->src.absolute_addr;
+    }
+
+    return instr->form == NG_M68K_FORM_NONE &&
+           instr->src_reg == 0u &&
+           instr->displacement == 0 &&
+           instr->target == 0u;
+}
+
 static int validate_address_reg_op(const NgM68kInstr *instr) {
+    uint8_t src_ext = 0u;
+
     return valid_word_or_long(instr->size) &&
-           valid_single_ea_length(instr->byte_length) &&
-           instr->immediate == 0u &&
-           instr->src.mode != NG_M68K_EA_NONE &&
+           move_source_ext_length(instr, &src_ext) &&
            instr->dst.mode == NG_M68K_EA_AREG &&
-           instr->dst.reg < 8u;
+           validate_address_reg_op_legacy_fields(instr) &&
+           instr->byte_length == (uint8_t)(2u + src_ext);
 }
 
 static int validate_tst(const NgM68kInstr *instr) {
