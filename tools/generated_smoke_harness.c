@@ -283,9 +283,9 @@ static void ng_generated_smoke_print_summary(void) {
     fprintf(stderr,
             "smoke summary: dispatches=%llu cart=%llu bios=%llu "
             "last=$%06X pc=$%06X sr=$%04X sp=$%08X polls=%u watchdog=%u "
-            "scanline=%u sound=$%02X port=$%02X "
-            "wram_nonzero=%u wram_sum=$%08X vram_nonzero=%u vram_sum=$%08X "
-            "recent_loop=%u\n",
+            "vblank=%u timer_irq=%u irqack=%u irq_pending=$%04X scanline=%u "
+            "sound=$%02X port=$%02X wram_nonzero=%u wram_sum=$%08X "
+            "vram_nonzero=%u vram_sum=$%08X recent_loop=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             (unsigned long long)ng_generated_smoke_cart_dispatch_count(),
             (unsigned long long)ng_generated_smoke_bios_dispatch_count(),
@@ -295,6 +295,10 @@ static void ng_generated_smoke_print_summary(void) {
             g_ng_m68k.a[7],
             ng_neogeo_interrupt_polls(),
             ng_neogeo_watchdog_kicks(),
+            ng_neogeo_vblank_interrupts(),
+            ng_neogeo_timer_interrupts(),
+            ng_neogeo_irq_ack_writes(),
+            ng_neogeo_irq_pending(),
             ng_neogeo_current_scanline(),
             ng_neogeo_sound_command(),
             ng_neogeo_port_output(),

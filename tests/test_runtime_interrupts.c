@@ -36,6 +36,10 @@ int main(void) {
     ng_neogeo_reset_runtime();
     ng_m68k_clear_interrupt_level();
     CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(ng_neogeo_vblank_interrupts() == 0u);
+    CHECK(ng_neogeo_timer_interrupts() == 0u);
+    CHECK(ng_neogeo_irq_ack_writes() == 0u);
+    CHECK(ng_neogeo_irq_pending() == 0u);
     CHECK(ng_neogeo_work_ram_nonzero_bytes() == 0u);
     CHECK(ng_neogeo_work_ram_checksum() == 0u);
     CHECK(ng_neogeo_vram_nonzero_words() == 0u);
@@ -116,12 +120,18 @@ int main(void) {
     CHECK(!ng_m68k_take_interrupt(7, &level, &vector));
     CHECK(!ng_m68k_take_interrupt(7, &level, &vector));
     CHECK(ng_neogeo_interrupt_polls() == 3u);
+    CHECK(ng_neogeo_vblank_interrupts() == 1u);
+    CHECK(ng_neogeo_irq_pending() == NG_NEO_IRQACK_VBLANK);
     CHECK(ng_m68k_take_interrupt(0, &level, &vector));
     CHECK(level == 1);
     CHECK(vector == 25);
     ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_VBLANK);
+    CHECK(ng_neogeo_irq_ack_writes() == 1u);
+    CHECK(ng_neogeo_irq_pending() == 0u);
     ng_neogeo_set_auto_vblank_interval(0);
     ng_neogeo_reset_runtime();
+    CHECK(ng_neogeo_vblank_interrupts() == 0u);
+    CHECK(ng_neogeo_irq_ack_writes() == 0u);
 
     ng_neogeo_set_program_rom(program_rom, (uint32_t)sizeof(program_rom));
     CHECK(ng68k_read8(0x000000u) == 0x12u);
@@ -245,6 +255,7 @@ int main(void) {
     CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
 
     ng_neogeo_request_vblank_interrupt();
+    CHECK(ng_neogeo_vblank_interrupts() == 1u);
     CHECK(ng_m68k_take_interrupt(0, &level, &vector));
     CHECK(level == 1);
     CHECK(vector == 25);

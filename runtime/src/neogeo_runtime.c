@@ -33,6 +33,9 @@ static uint8_t g_ng_m68k_interrupt_level;
 static uint8_t g_ng_m68k_interrupt_vector;
 static uint8_t g_ng_m68k_level7_edge;
 static uint16_t g_ng_neogeo_irq_pending;
+static uint32_t g_ng_neogeo_vblank_interrupts;
+static uint32_t g_ng_neogeo_timer_interrupts;
+static uint32_t g_ng_neogeo_irq_ack_writes;
 static uint16_t g_ng_neogeo_lspc_mode;
 static uint16_t g_ng_neogeo_timer_stop;
 static uint32_t g_ng_neogeo_timer_reload_value;
@@ -380,6 +383,9 @@ void ng_neogeo_set_system_rom(const uint8_t *data, uint32_t size) {
 
 void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_irq_pending = 0;
+    g_ng_neogeo_vblank_interrupts = 0;
+    g_ng_neogeo_timer_interrupts = 0;
+    g_ng_neogeo_irq_ack_writes = 0;
     g_ng_neogeo_lspc_mode = 0;
     g_ng_neogeo_timer_stop = 0;
     g_ng_neogeo_timer_reload_value = 0;
@@ -422,11 +428,13 @@ static void ng_neogeo_refresh_interrupt_level(void) {
 }
 
 void ng_neogeo_request_vblank_interrupt(void) {
+    ++g_ng_neogeo_vblank_interrupts;
     g_ng_neogeo_irq_pending |= NG_NEO_IRQACK_VBLANK;
     ng_neogeo_refresh_interrupt_level();
 }
 
 void ng_neogeo_request_timer_interrupt(void) {
+    ++g_ng_neogeo_timer_interrupts;
     g_ng_neogeo_irq_pending |= NG_NEO_IRQACK_TIMER;
     ng_neogeo_refresh_interrupt_level();
 }
@@ -437,6 +445,9 @@ void ng_neogeo_request_reset_interrupt(void) {
 }
 
 void ng_neogeo_ack_interrupts(uint16_t ack_mask) {
+    if (ack_mask & 0x0007u) {
+        ++g_ng_neogeo_irq_ack_writes;
+    }
     g_ng_neogeo_irq_pending = (uint16_t)(g_ng_neogeo_irq_pending &
                                          (uint16_t)~(ack_mask & 0x0007u));
     ng_neogeo_refresh_interrupt_level();
@@ -546,6 +557,22 @@ uint32_t ng_neogeo_timer_counter(void) {
 
 uint16_t ng_neogeo_current_scanline(void) {
     return g_ng_neogeo_current_scanline;
+}
+
+uint32_t ng_neogeo_vblank_interrupts(void) {
+    return g_ng_neogeo_vblank_interrupts;
+}
+
+uint32_t ng_neogeo_timer_interrupts(void) {
+    return g_ng_neogeo_timer_interrupts;
+}
+
+uint32_t ng_neogeo_irq_ack_writes(void) {
+    return g_ng_neogeo_irq_ack_writes;
+}
+
+uint16_t ng_neogeo_irq_pending(void) {
+    return g_ng_neogeo_irq_pending;
 }
 
 uint32_t ng_neogeo_work_ram_nonzero_bytes(void) {

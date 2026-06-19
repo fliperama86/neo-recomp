@@ -97,6 +97,8 @@ summary_re = re.compile(
     r"last=\$(?P<last>[0-9A-Fa-f]+) pc=\$(?P<pc>[0-9A-Fa-f]+) "
     r"sr=\$(?P<sr>[0-9A-Fa-f]+) sp=\$(?P<sp>[0-9A-Fa-f]+) "
     r"polls=(?P<polls>\d+) watchdog=(?P<watchdog>\d+) "
+    r"vblank=(?P<vblank>\d+) timer_irq=(?P<timer_irq>\d+) "
+    r"irqack=(?P<irqack>\d+) irq_pending=\$(?P<irq_pending>[0-9A-Fa-f]+) "
     r"scanline=(?P<scanline>\d+) sound=\$(?P<sound>[0-9A-Fa-f]+) "
     r"port=\$(?P<port>[0-9A-Fa-f]+) wram_nonzero=(?P<wram_nonzero>\d+) "
     r"wram_sum=\$(?P<wram_sum>[0-9A-Fa-f]+) vram_nonzero=(?P<vram_nonzero>\d+) "
@@ -124,7 +126,7 @@ for budget in budgets:
         print(f"missing smoke summary at budget {budget}", file=sys.stderr)
         raise SystemExit(1)
     summary = {
-        k: int(v, 16) if k in {"last", "pc", "sr", "sp", "sound", "port", "wram_sum", "vram_sum"} else int(v)
+        k: int(v, 16) if k in {"last", "pc", "sr", "sp", "sound", "port", "irq_pending", "wram_sum", "vram_sum"} else int(v)
         for k, v in summary_match.groupdict().items()
     }
     if summary["dispatches"] != budget:
@@ -136,7 +138,7 @@ for budget in budgets:
     summaries.append(summary)
 
 final = summaries[-1]
-if final["polls"] == 0 or final["watchdog"] == 0 or final["wram_nonzero"] == 0:
+if final["polls"] == 0 or final["watchdog"] == 0 or final["vblank"] == 0 or final["irqack"] == 0 or final["wram_nonzero"] == 0:
     print("headless smoke did not show enough runtime progress in final summary", file=sys.stderr)
     raise SystemExit(1)
 if final["recent_loop"] != 0:
@@ -146,7 +148,10 @@ if final["recent_loop"] != 0:
 max_recent_loop = max(summary["recent_loop"] for summary in summaries)
 
 if len(summaries) > 1:
-    if summaries[-1]["polls"] <= summaries[0]["polls"] or summaries[-1]["watchdog"] <= summaries[0]["watchdog"]:
+    if (summaries[-1]["polls"] <= summaries[0]["polls"] or
+        summaries[-1]["watchdog"] <= summaries[0]["watchdog"] or
+        summaries[-1]["vblank"] <= summaries[0]["vblank"] or
+        summaries[-1]["irqack"] <= summaries[0]["irqack"]):
         print("headless smoke counters did not grow across budgets", file=sys.stderr)
         raise SystemExit(1)
 
@@ -154,6 +159,7 @@ print(
     "progress oracle: ok "
     f"budgets={','.join(str(b) for b in budgets)} "
     f"final_pc=${final['pc']:06X} polls={final['polls']} "
+    f"vblank={final['vblank']} irqack={final['irqack']} "
     f"watchdog={final['watchdog']} wram_nonzero={final['wram_nonzero']} "
     f"final_recent_loop={final['recent_loop']} max_recent_loop={max_recent_loop}"
 )

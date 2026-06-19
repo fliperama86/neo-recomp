@@ -213,17 +213,17 @@ timeout:
 ```text
 starting cart entry $0007CC ssp=$0010F300
 returned pc=$C1862E sr=$2100 sp=$0010F2AE
-smoke summary: dispatches=100000 cart=3997 bios=96003 last=$C185A0 pc=$C1862E sr=$2100 sp=$0010F2AE polls=509882 watchdog=1991 scanline=0 sound=$00 port=$1B wram_nonzero=136 wram_sum=$00002775 vram_nonzero=0 vram_sum=$00000000 recent_loop=0
+smoke summary: dispatches=100000 cart=3997 bios=96003 last=$C185A0 pc=$C1862E sr=$2100 sp=$0010F2AE polls=509882 watchdog=1991 vblank=1991 timer_irq=0 irqack=1992 irq_pending=$0000 scanline=0 sound=$00 port=$1B wram_nonzero=136 wram_sum=$00002775 vram_nonzero=0 vram_sum=$00000000 recent_loop=0
 smoke budget reached at $C1862E after 100000 dispatches
-progress oracle: ok budgets=10000,50000,100000 final_pc=$C1862E polls=509882 watchdog=1991 wram_nonzero=136 final_recent_loop=0 max_recent_loop=50
+progress oracle: ok budgets=10000,50000,100000 final_pc=$C1862E polls=509882 vblank=1991 irqack=1992 watchdog=1991 wram_nonzero=136 final_recent_loop=0 max_recent_loop=50
 ```
 
 That is the first controlled "keeps running headless" checkpoint: no dispatch
 or bus miss before the budget. It is not yet a boot/attract correctness proof:
 the expanded BIOS probe still reports `BIOS candidates: 8192 (truncated)`, and
 the harness only has a first-pass state oracle (multi-budget dispatch counts,
-RAM/VRAM checksums, watchdog/poll growth, and a short recent-dispatch loop
-detector), not a frame or boot/attract-mode success oracle. The 50k checkpoint
+RAM/VRAM checksums, watchdog/poll/VBlank/IRQACK growth, pending-IRQ state, and
+a short recent-dispatch loop detector), not a frame or boot/attract-mode success oracle. The 50k checkpoint
 can stop in a short BIOS polling loop, but the 100k final checkpoint leaves that
 loop (`final_recent_loop=0`).
 
