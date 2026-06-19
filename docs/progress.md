@@ -112,8 +112,9 @@ Covered by executable generated-C validation:
   table; `RTE`/`RTR` pop stack frames back into SR/CCR and
   PC. Generated-exec now oracle-checks failed `CHK.W` vector-6 entry for
   negative values (`N` set in the saved SR) and above-bound values (`N`
-  cleared in the saved SR). Generated-exec now specifically covers
-  unprivileged `RTR` restoring only
+  cleared in the saved SR), and oracle-checks `DIVU.W #0,Dn` vector-5 entry
+  preserving the destination register while saving the pre-trap SR and next PC.
+  Generated-exec now specifically covers unprivileged `RTR` restoring only
   the CCR bits from the active user stack, preserving the supervisor/system
   byte, popping the return PC, and dispatching through that target. Full-SR
   writes, `STOP`, exception entry, and `RTE` use the
@@ -219,11 +220,13 @@ Covered by executable generated-C validation:
     zero products, full 32-bit result storage, and required `N/Z/X/V/C`
     behavior
   - `DIVU.W <ea>,Dn` and `DIVS.W <ea>,Dn` covered so far by immediate sources,
-    divide-by-zero exception-vector emission, signed and unsigned
+    oracle-backed `DIVU.W #0,Dn` divide-by-zero vector-5 entry with destination
+    preservation and pre-trap SR/next-PC frame saving, signed and unsigned
     quotient-overflow cases that leave the destination operand unchanged,
     successful quotient/remainder packing for unsigned zero/bit-15 quotients
     and signed negative/zero quotients, and required `N/Z/X/V/C` behavior on
-    those covered divide paths
+    those covered non-zero-divisor divide paths; divide-by-zero flags remain
+    architecturally undefined, so tests assert exception-frame parity instead
   - `EXG` register exchanges covered for data-register, address-register, and
     data-register/address-register pairs, with CCR preserved
   - `ANDI.B #imm,(d16,An)`
@@ -271,6 +274,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generated-exec oracle coverage for `DIVU.W #0,D7` so
+  divide-by-zero now proves vector-5 exception entry against the interpreter
+  oracle, including destination preservation and pre-trap SR/next-PC frame
+  saving before the handler `STOP` runs. Divide-by-zero condition-code bits
+  remain architecturally undefined, so the invariant is exception-state parity.
 - local: Tightened `MOVEA` PC-index decode/format coverage so word and long forms both expose source/destination EA metadata and format as `MOVEA.W`/`MOVEA.L` according to decoded size.
 - local: Added generated-exec coverage for `MOVEA.W (d8,PC,Dn.W),An` so PC-index word sources are read with the extension-word PC base, sign-extended into the address register, and leave CCR unchanged. Removed the narrow PC-index `MOVEA.L` special path so `MOVEA` uses the shared EA reader and word sign-extension logic.
 - local: Added generated-exec coverage for `CMPI.B #imm,Dn` signed-overflow flag behavior, proving `$80 - $01` sets `V`, clears `N/Z/C`, and preserves `X`. Removed the byte data-register special emission/oracle paths so `CMPI` uses the shared full compare flag logic.
@@ -1187,10 +1195,11 @@ Use this loop:
 
 Immediate next slice:
 
-- Connect the covered frame/scanline LSPC timer model to generated CPU cycle
-  accounting or host pacing.
-- Add priority tests for timer/VBlank interactions with CPU-generated
-  exceptions once the next exception-priority slice is selected.
+- Continue CPU-side exception/arithmetic correctness with another
+  oracle-backed generated-exec slice, preferably the signed divide-by-zero
+  mirror or the next exception-priority edge.
+- Keep NeoGeo timer/VBlank integration queued until the current CPU semantics
+  backlog is narrower.
 
 Real-ROM smoke remains a near follow-up once a local `.neo` input is available.
 
