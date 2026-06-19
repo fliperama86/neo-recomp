@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Broadened the post-decode legality validator with failing tests
+  first. It now catches invalid `ADDQ/SUBQ` quick/address-register forms,
+  non-alterable `TST`/`CMPI` targets, invalid `CHK` operands, multiply/divide
+  destination mistakes, and non-data-register `EXT`/`SWAP` forms.
 - local: Connected the LSPC timer model to NTSC frame/scanline advancement:
   runtime tests now cover 384-pixel scanlines, 264-scanline frame wrap,
   VBlank requests on frame start/wrap, and timer interrupts firing from

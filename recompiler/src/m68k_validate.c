@@ -34,6 +34,25 @@ static int ea_is_data_alterable(const NgM68kEa *ea) {
     return ea->mode == NG_M68K_EA_DREG || ea_is_memory_alterable(ea);
 }
 
+static int ea_is_data(const NgM68kEa *ea) {
+    switch (ea->mode) {
+    case NG_M68K_EA_DREG:
+    case NG_M68K_EA_AIND:
+    case NG_M68K_EA_APOST:
+    case NG_M68K_EA_APRE:
+    case NG_M68K_EA_ADISP:
+    case NG_M68K_EA_AINDEX:
+    case NG_M68K_EA_ABS_W:
+    case NG_M68K_EA_ABS_L:
+    case NG_M68K_EA_PC_DISP:
+    case NG_M68K_EA_PC_INDEX:
+    case NG_M68K_EA_IMM:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static int valid_size(uint8_t size) {
     return size == 1u || size == 2u || size == 4u;
 }
@@ -61,6 +80,12 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_MOVEA:
         return (instr->size == 2u || instr->size == 4u) &&
                instr->dst.mode == NG_M68K_EA_AREG;
+    case NG_M68K_MOVE_SR:
+    case NG_M68K_MOVE_CCR:
+        if (instr->dst.mode != NG_M68K_EA_NONE) {
+            return instr->size == 2u && ea_is_data_alterable(&instr->dst);
+        }
+        return instr->size == 2u && ea_is_data(&instr->src);
     case NG_M68K_CLR:
     case NG_M68K_NEG:
     case NG_M68K_NEGX:
@@ -69,6 +94,35 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_TAS:
         return instr->dst.mode != NG_M68K_EA_NONE &&
                ea_is_data_alterable(&instr->dst);
+    case NG_M68K_ADDQ:
+    case NG_M68K_SUBQ:
+        if (instr->immediate < 1u || instr->immediate > 8u) {
+            return 0;
+        }
+        if (instr->dst.mode == NG_M68K_EA_AREG) {
+            return instr->size == 2u || instr->size == 4u;
+        }
+        return valid_size(instr->size) && ea_is_data_alterable(&instr->dst);
+    case NG_M68K_TST:
+        return valid_size(instr->size) && ea_is_data_alterable(&instr->src);
+    case NG_M68K_CMPI:
+        return valid_size(instr->size) && ea_is_data_alterable(&instr->dst);
+    case NG_M68K_CHK:
+        return instr->size == 2u &&
+               ea_is_data(&instr->src) &&
+               instr->dst.mode == NG_M68K_EA_DREG;
+    case NG_M68K_MULU:
+    case NG_M68K_MULS:
+    case NG_M68K_DIVU:
+    case NG_M68K_DIVS:
+        return instr->size == 2u &&
+               ea_is_data(&instr->src) &&
+               instr->dst.mode == NG_M68K_EA_DREG;
+    case NG_M68K_EXT:
+        return (instr->size == 2u || instr->size == 4u) &&
+               instr->dst.mode == NG_M68K_EA_DREG;
+    case NG_M68K_SWAP:
+        return instr->dst.mode == NG_M68K_EA_DREG;
     case NG_M68K_BCC:
     case NG_M68K_SCC:
     case NG_M68K_DBCC:
