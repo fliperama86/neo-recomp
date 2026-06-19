@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `MOVEP` validation so both data-register and
+  address-displacement operands must use canonical no-stray EA payloads
+  in both directions. `test_m68k_validate` covered stray source/destination
+  register and address-displacement payloads red first.
 - local: Tightened `LEA` validation so decoded PC-relative
   target/displacement metadata and absolute-source targets must match
   the source EA, while non-targeting control sources reject stray target

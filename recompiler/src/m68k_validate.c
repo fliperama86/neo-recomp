@@ -1304,8 +1304,8 @@ static int validate_movep(const NgM68kInstr *instr) {
                        ((uint16_t)instr->src.reg << 9) |
                        ((instr->size == 4u) ? 0x0040u : 0u) |
                        instr->dst.reg);
-        return instr->src.reg < 8u &&
-               instr->dst.reg < 8u &&
+        return ea_is_exact_register(&instr->src, NG_M68K_EA_DREG) &&
+               ea_address_displacement_payload(&instr->dst) &&
                instr->src_reg == instr->src.reg &&
                instr->reg == instr->src.reg &&
                instr->displacement == instr->dst.displacement &&
@@ -1319,8 +1319,8 @@ static int validate_movep(const NgM68kInstr *instr) {
                        ((uint16_t)instr->dst.reg << 9) |
                        ((instr->size == 4u) ? 0x0040u : 0u) |
                        instr->src.reg);
-        return instr->src.reg < 8u &&
-               instr->dst.reg < 8u &&
+        return ea_address_displacement_payload(&instr->src) &&
+               ea_is_exact_register(&instr->dst, NG_M68K_EA_DREG) &&
                instr->src_reg == 0u &&
                instr->reg == instr->dst.reg &&
                instr->displacement == instr->src.displacement &&
