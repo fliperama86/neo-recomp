@@ -19,14 +19,19 @@ static uint32_t sign_extend_abs_w(uint16_t value) {
     return (uint32_t)(int32_t)(int16_t)value;
 }
 
-static uint32_t branch_target(uint32_t base, uint16_t opcode, uint8_t *out_len) {
+static void populate_branch_target(const NgProgramRom *rom,
+                                   uint32_t addr,
+                                   uint16_t opcode,
+                                   NgM68kInstr *out) {
     uint8_t disp8 = (uint8_t)(opcode & 0xFFu);
     if (disp8 == 0) {
-        *out_len = 4;
-        return base + 2u + (int32_t)sign16(0);
+        out->byte_length = 4;
+        out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
+    } else {
+        out->byte_length = 2;
+        out->displacement = sign8(disp8);
     }
-    *out_len = 2;
-    return base + 2u + (int32_t)sign8(disp8);
+    out->target = (uint32_t)((int64_t)addr + 2 + (int64_t)out->displacement);
 }
 
 static uint32_t decode_ea(const NgProgramRom *rom,
@@ -969,27 +974,18 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
     }
     if ((op & 0xFF00u) == 0x6000u) {
         out->mnemonic = NG_M68K_BRA;
-        out->target = branch_target(addr, op, &out->byte_length);
-        if ((op & 0xFFu) == 0) {
-            out->target = addr + 2u + (int32_t)sign16(ng_program_rom_read16(rom, addr + 2u));
-        }
+        populate_branch_target(rom, addr, op, out);
         return finish_decode(rom, addr, out);
     }
     if ((op & 0xFF00u) == 0x6100u) {
         out->mnemonic = NG_M68K_BSR;
-        out->target = branch_target(addr, op, &out->byte_length);
-        if ((op & 0xFFu) == 0) {
-            out->target = addr + 2u + (int32_t)sign16(ng_program_rom_read16(rom, addr + 2u));
-        }
+        populate_branch_target(rom, addr, op, out);
         return finish_decode(rom, addr, out);
     }
     if ((op & 0xF000u) == 0x6000u) {
         out->mnemonic = NG_M68K_BCC;
         out->condition = (uint8_t)((op >> 8) & 0xFu);
-        out->target = branch_target(addr, op, &out->byte_length);
-        if ((op & 0xFFu) == 0) {
-            out->target = addr + 2u + (int32_t)sign16(ng_program_rom_read16(rom, addr + 2u));
-        }
+        populate_branch_target(rom, addr, op, out);
         return finish_decode(rom, addr, out);
     }
     if ((op & 0xF100u) == 0x7000u) {

@@ -265,54 +265,118 @@ int main(void) {
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x6B08u;
     instr.mnemonic = NG_M68K_BCC;
     instr.byte_length = 2u;
     instr.condition = 16u;
+    instr.displacement = 8;
+    instr.target = 0x10Au;
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x60FEu;
     instr.mnemonic = NG_M68K_BRA;
     instr.byte_length = 2u;
+    instr.displacement = -2;
+    instr.target = 0x100u;
     CHECK(ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x60FEu;
+    instr.mnemonic = NG_M68K_BRA;
+    instr.byte_length = 2u;
+    instr.displacement = -2;
+    instr.target = 0x102u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x60FFu;
+    instr.mnemonic = NG_M68K_BRA;
+    instr.byte_length = 2u;
+    instr.displacement = -1;
+    instr.target = 0x101u;
+    CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x6000u;
     instr.mnemonic = NG_M68K_BRA;
     instr.byte_length = 6u;
+    instr.target = 0x102u;
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x852u;
+    instr.opcode = 0x6100u;
     instr.mnemonic = NG_M68K_BSR;
     instr.byte_length = 4u;
+    instr.displacement = 14;
+    instr.target = 0x862u;
     CHECK(ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x852u;
+    instr.opcode = 0x6100u;
     instr.mnemonic = NG_M68K_BSR;
-    instr.byte_length = 2u;
+    instr.byte_length = 4u;
+    instr.displacement = 14;
+    instr.target = 0x862u;
     instr.src.mode = NG_M68K_EA_DREG;
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x6B08u;
     instr.mnemonic = NG_M68K_BCC;
     instr.byte_length = 2u;
-    instr.condition = 2u;
+    instr.condition = 11u;
+    instr.displacement = 8;
+    instr.target = 0x10Au;
     CHECK(ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x6F00u;
     instr.mnemonic = NG_M68K_BCC;
     instr.byte_length = 4u;
     instr.condition = 15u;
+    instr.displacement = -4;
+    instr.target = 0xFEu;
     CHECK(ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x6108u;
     instr.mnemonic = NG_M68K_BCC;
     instr.byte_length = 2u;
     instr.condition = 1u;
+    instr.displacement = 8;
+    instr.target = 0x10Au;
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x6B00u;
     instr.mnemonic = NG_M68K_BCC;
-    instr.byte_length = 6u;
-    instr.condition = 6u;
+    instr.byte_length = 2u;
+    instr.condition = 11u;
+    instr.displacement = 0;
+    instr.target = 0x102u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.opcode = 0x6B08u;
+    instr.mnemonic = NG_M68K_BCC;
+    instr.byte_length = 2u;
+    instr.condition = 11u;
+    instr.form = NG_M68K_FORM_PC_RELATIVE;
+    instr.displacement = 8;
+    instr.target = 0x10Au;
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));

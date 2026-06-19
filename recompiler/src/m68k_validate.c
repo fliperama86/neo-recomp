@@ -884,18 +884,47 @@ static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
 }
 
 static int validate_branch(const NgM68kInstr *instr) {
-    if ((instr->byte_length != 2u && instr->byte_length != 4u) ||
-        instr->size != 0u ||
+    uint8_t disp8 = (uint8_t)(instr->opcode & 0xFFu);
+    uint32_t expected_target =
+        (uint32_t)((int64_t)instr->addr + 2 + (int64_t)instr->displacement);
+
+    if (instr->size != 0u ||
         instr->immediate != 0u ||
         instr->reg != 0u ||
         instr->src_reg != 0u ||
-        !no_ea_operands(instr)) {
+        instr->form != NG_M68K_FORM_NONE ||
+        instr->absolute_addr != 0u ||
+        !no_ea_fields(instr) ||
+        instr->target != expected_target) {
         return 0;
     }
-    if (instr->mnemonic == NG_M68K_BCC) {
-        return instr->condition >= 2u && instr->condition <= 15u;
+
+    if (instr->byte_length == 2u) {
+        if (disp8 == 0u ||
+            instr->displacement != (int16_t)(int8_t)disp8) {
+            return 0;
+        }
+    } else if (instr->byte_length == 4u) {
+        if (disp8 != 0u) {
+            return 0;
+        }
+    } else {
+        return 0;
     }
-    return instr->condition == 0u;
+
+    if (instr->mnemonic == NG_M68K_BCC) {
+        return (instr->opcode & 0xF000u) == 0x6000u &&
+               instr->condition == (uint8_t)((instr->opcode >> 8) & 0xFu) &&
+               instr->condition >= 2u &&
+               instr->condition <= 15u;
+    }
+
+    if (instr->mnemonic == NG_M68K_BRA) {
+        return (instr->opcode & 0xFF00u) == 0x6000u &&
+               instr->condition == 0u;
+    }
+    return (instr->opcode & 0xFF00u) == 0x6100u &&
+           instr->condition == 0u;
 }
 
 static int validate_shift_rotate(const NgM68kInstr *instr) {

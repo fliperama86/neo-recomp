@@ -1894,6 +1894,7 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0x000852u, &instr));
         CHECK(instr.mnemonic == NG_M68K_BSR);
         CHECK(instr.byte_length == 4);
+        CHECK(instr.displacement == 14);
         CHECK(instr.target == 0x000862u);
     }
 
@@ -1903,7 +1904,17 @@ int main(void) {
         CHECK(instr.mnemonic == NG_M68K_BCC);
         CHECK(instr.byte_length == 2);
         CHECK(instr.condition == 11u);
+        CHECK(instr.displacement == 8);
         CHECK(instr.target == 0x00010Au);
+    }
+
+    {
+        const unsigned char bytes[] = { 0x60, 0xFF };
+        CHECK(decode_one(bytes, sizeof(bytes), 0x000100u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_BRA);
+        CHECK(instr.byte_length == 2);
+        CHECK(instr.displacement == -1);
+        CHECK(instr.target == 0x000101u);
     }
 
     {

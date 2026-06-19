@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `BRA`/`BSR`/`Bcc` branch
+  displacements against the Motorola/NXP Programmer's Reference Manual. Decode
+  now records byte/word branch displacements, and the validator requires exact
+  byte-or-word branch metadata: opcode/mnemonic/condition consistency, `$FF` as
+  a valid MC68000 byte displacement of `-1` rather than a 68020 long extension,
+  no stray operands/legacy fields, and a target matching
+  `PC + 2 + displacement`. `test_m68k_decode`, `test_m68k_validate`, and the
+  opcode sweep covered malformed branch metadata red first.
 - local: Fact-checked MC68000 `DBcc` against the Motorola/NXP
   Programmer's Reference Manual. The validator now requires exact 4-byte
   word-sized operand-free counter metadata, condition/register bounds,
