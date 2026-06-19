@@ -212,7 +212,9 @@ Covered by executable generated-C validation:
   - generic `NEGX.B/W/L <ea>` paths covered so far by absolute byte memory
     destinations
   - `NBCD <ea>` covered so far by absolute byte memory destinations and
-    data-register sticky-`Z`/borrow-to-`X/C` edge cases
+    data-register sticky-`Z`/borrow-to-`X/C` edge cases, plus predecrement
+    `A7` byte-stack destinations with decimal borrow and byte stack-pointer
+    predecrement-by-two
   - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
   - data-register `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` decode/emission,
     covered so far by generated-exec logical shift pairs and zero-count
@@ -227,6 +229,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `NBCD` byte-only BCD negate and predecrement addressing.
+  Generated-exec now covers `NBCD -(A7)`, proving byte-sized stack-pointer
+  predecrement by two, decimal borrow into `X/C`, sticky-`Z` clearing on a
+  nonzero result, and memory writeback.
 - local: Fact-checked `CMPM` postincrement addressing. Generated-exec now
   covers `CMPM.B (A7)+,(A0)+`, including the stack-pointer byte
   postincrement-by-two rule and `X` preservation while `N/V/C` are set.
