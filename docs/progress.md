@@ -276,6 +276,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added standalone generated-exec/oracle coverage for `NOP` as an
+  architectural no-op. The fixture now executes `NOP` between status/register
+  setup and `MOVE SR,<abs>`/`STOP`, proving registers, CCR/SR, memory, and
+  fall-through PC behavior stay aligned; the red step failed until the
+  interpreter oracle modeled opcode `$4E71`.
 - local: Tightened `JMP`/`JSR` validation so the implicit destination side must have an empty EA payload. `test_m68k_validate` covered stray destination payloads on `JMP (A0)` and `JSR (d16,PC)` red first.
 - local: Tightened `TST` validation so its implicit destination side must have an empty EA payload. `test_m68k_validate` covered a stray destination payload on `TST.W D1` red first.
 - local: Tightened `MOVEM` validation so the implicit register-list side must have an empty EA payload in both register-to-memory and memory-to-register directions. `test_m68k_validate` covered stray source payload on `MOVEM.L <list>,-(A7)` and stray destination payload on `MOVEM.W (d16,PC),<list>` red first.
