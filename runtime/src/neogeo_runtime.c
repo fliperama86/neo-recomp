@@ -82,7 +82,7 @@ static int ng_neogeo_is_status_b_addr(uint32_t addr) {
 }
 
 static int ng_neogeo_is_port_output_addr(uint32_t addr) {
-    return (addr & 0x00FE0071u) == NG_NEO_REG_POUTPUT;
+    return (addr & 0x00FE0001u) == NG_NEO_REG_POUTPUT;
 }
 
 static int ng_neogeo_is_system_latch_addr(uint32_t addr) {

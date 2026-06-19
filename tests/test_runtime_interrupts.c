@@ -71,6 +71,9 @@ int main(void) {
     CHECK(ng68k_read8(NG_NEO_REG_POUTPUT) == 0x12u);
     ng68k_write8(0x00380003u, 0x1Bu);
     CHECK(ng_neogeo_port_output() == 0x1Bu);
+    ng68k_write8(0x00380021u, 0x2Cu);
+    CHECK(ng_neogeo_port_output() == 0x2Cu);
+    CHECK(ng68k_read8(0x00390021u) == 0x2Cu);
     ng_neogeo_reset_runtime();
     CHECK(ng_neogeo_port_output() == 0x00u);
 

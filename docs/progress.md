@@ -194,11 +194,14 @@ Continuing that local-only seed expansion through `$C11142`, `$C18694`, and
 `$C11FFA` exposed the first sound-port access. The runtime now treats `$320000`
 as a headless sound command/reply latch, preserving the previous default
 `0xFF` read value and recording 68000->Z80 commands without emulating the Z80 or
-YM2610. With those successive BIOS seeds, the current local frontier is:
+YM2610. The next BIOS step exposed a wider port-output mirror at `$380021`, so
+the port-output latch now accepts odd addresses under the documented
+`$380000/$390000` mirror. With further local-only BIOS seeds through `$C18690`,
+the current local frontier is:
 
 ```text
-dispatch miss at $C11F98
-returned pc=$C11F98 sr=$2004 sp=$0010F2F8
+dispatch miss at $C17EC6
+returned pc=$C17EC6 sr=$2004 sp=$0010F2F8
 ```
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
