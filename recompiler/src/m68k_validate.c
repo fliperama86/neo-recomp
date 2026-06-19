@@ -675,6 +675,23 @@ static int validate_ext_swap(const NgM68kInstr *instr) {
     return instr->size == 2u;
 }
 
+static int validate_scc(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
+    return instr->size == 1u &&
+           instr->condition <= 15u &&
+           instr->immediate == 0u &&
+           instr->reg == 0u &&
+           instr->src_reg == 0u &&
+           instr->form == NG_M68K_FORM_NONE &&
+           instr->target == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0 &&
+           ea_is_empty(&instr->src) &&
+           data_alterable_ext_length(&instr->dst, &ext_len) &&
+           instr->byte_length == (uint8_t)(2u + ext_len);
+}
+
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,
                                       int allow_areg_source) {
     uint8_t ext_len = 0u;
@@ -736,10 +753,6 @@ static int validate_add_sub_or_and(const NgM68kInstr *instr) {
         return validate_ea_to_dreg_binary(instr, allow_areg_source);
     }
     return validate_dreg_to_memory_binary(instr);
-}
-
-static int valid_scc_length(uint8_t byte_length) {
-    return byte_length == 2u || byte_length == 4u || byte_length == 6u;
 }
 
 static int valid_tst_length(uint8_t byte_length) {
@@ -1060,14 +1073,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_SWAP:
         return validate_ext_swap(instr);
     case NG_M68K_SCC:
-        return valid_scc_length(instr->byte_length) &&
-               instr->condition <= 15u &&
-               instr->size == 1u &&
-               instr->immediate == 0u &&
-               instr->reg == 0u &&
-               instr->src_reg == 0u &&
-               instr->src.mode == NG_M68K_EA_NONE &&
-               ea_is_data_alterable(&instr->dst);
+        return validate_scc(instr);
     case NG_M68K_DBCC:
         return instr->byte_length == 4u &&
                instr->size == 2u &&

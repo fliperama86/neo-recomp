@@ -1912,6 +1912,7 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_SCC);
         CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 1);
         CHECK(instr.condition == 11u);
         CHECK(instr.dst.mode == NG_M68K_EA_APOST);
         CHECK(instr.dst.reg == 0);

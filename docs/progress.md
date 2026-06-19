@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `Scc` byte stores against the
+  Motorola/NXP Programmer's Reference Manual. The validator now requires the
+  exact data-alterable destination extension length, condition field range,
+  byte size, no source operand, and no stray immediate, form, target, absolute,
+  or top-level displacement metadata. `test_m68k_decode` and
+  `test_m68k_validate` covered malformed metadata red first.
 - local: Fact-checked MC68000 `MOVEQ`, `EXT`, and `SWAP` register-only
   forms against the Motorola/NXP Programmer's Reference Manual. `MOVEQ`
   decode now records its immediate-to-data-register destination metadata and
