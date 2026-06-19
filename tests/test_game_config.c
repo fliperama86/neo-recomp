@@ -55,7 +55,13 @@ int main(void) {
     fprintf(out,
             "[functions]\n"
             "entry = [0x000120]\n"
-            "extra = [0x000130]\n");
+            "extra = [0x000130]\n"
+            "\n"
+            "[[jump_table]]\n"
+            "start = 0x000190\n"
+            "end = 0x000194\n"
+            "stride = 2\n"
+            "format = \"pcrel16\"\n");
     CHECK(fclose(out) == 0);
 
     char child_b[256];
@@ -78,6 +84,12 @@ int main(void) {
             "  \"sub/more.toml\",\n"
             "]\n"
             "\n"
+            "[[jump_table]]\n"
+            "start = 0x000180\n"
+            "end = 0x000188\n"
+            "stride = 4\n"
+            "format = \"abs32\"\n"
+            "\n"
             "[functions]\n"
             "entry = [0x000040]\n"
             "extra = [0x000100]\n");
@@ -92,6 +104,15 @@ int main(void) {
     CHECK(config.extra[1] == 0x000130u);
     CHECK(config.extra[2] == 0x000140u);
     CHECK(config.discovery_file_count == 2u);
+    CHECK(config.jump_table_count == 2u);
+    CHECK(config.jump_tables[0].start == 0x000180u);
+    CHECK(config.jump_tables[0].end == 0x000188u);
+    CHECK(config.jump_tables[0].stride == 4u);
+    CHECK(config.jump_tables[0].format == NG_GAME_CONFIG_JUMP_TABLE_ABS32);
+    CHECK(config.jump_tables[1].start == 0x000190u);
+    CHECK(config.jump_tables[1].end == 0x000194u);
+    CHECK(config.jump_tables[1].stride == 2u);
+    CHECK(config.jump_tables[1].format == NG_GAME_CONFIG_JUMP_TABLE_PCREL16);
     CHECK(!config.truncated);
 
     unlink(parent);
@@ -104,6 +125,7 @@ int main(void) {
     CHECK(config.entry_count == 0u);
     CHECK(config.extra_count == 0u);
     CHECK(config.discovery_file_count == 0u);
+    CHECK(config.jump_table_count == 0u);
     CHECK(!config.truncated);
 
     return 0;

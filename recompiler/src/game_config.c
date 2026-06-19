@@ -9,6 +9,7 @@ typedef enum NgGameConfigSection {
     NG_GAME_CONFIG_SECTION_NONE,
     NG_GAME_CONFIG_SECTION_GAME,
     NG_GAME_CONFIG_SECTION_FUNCTIONS,
+    NG_GAME_CONFIG_SECTION_JUMP_TABLE,
 } NgGameConfigSection;
 
 typedef enum NgGameConfigArray {
@@ -46,6 +47,25 @@ static int key_starts_array(const char *line, const char *key) {
         ++line;
     }
     return *line == '=';
+}
+
+static const char *key_value_start(const char *line, const char *key) {
+    size_t len = strlen(key);
+    if (strncmp(line, key, len) != 0) {
+        return NULL;
+    }
+    line += len;
+    while (*line && isspace((unsigned char)*line)) {
+        ++line;
+    }
+    if (*line != '=') {
+        return NULL;
+    }
+    ++line;
+    while (*line && isspace((unsigned char)*line)) {
+        ++line;
+    }
+    return line;
 }
 
 static void dirname_of(const char *path, char *out, size_t out_size) {
@@ -115,6 +135,23 @@ static void append_function_addr(NgGameConfig *config,
         return;
     }
     items[(*count)++] = value;
+}
+
+static NgGameConfigJumpTable *append_jump_table(NgGameConfig *config) {
+    if (!config) {
+        return NULL;
+    }
+    if (config->jump_table_count >= NG_GAME_CONFIG_MAX_JUMP_TABLES) {
+        config->truncated = 1;
+        return NULL;
+    }
+
+    NgGameConfigJumpTable *table =
+        &config->jump_tables[config->jump_table_count++];
+    memset(table, 0, sizeof(*table));
+    table->stride = 4u;
+    table->format = NG_GAME_CONFIG_JUMP_TABLE_ABS32;
+    return table;
 }
 
 static void append_discovery_file(NgGameConfig *config,
@@ -204,8 +241,79 @@ static void append_config_values(NgGameConfig *dst, const NgGameConfig *src) {
     for (uint32_t i = 0; i < src->extra_count; ++i) {
         append_function_addr(dst, NG_GAME_CONFIG_ARRAY_EXTRA, src->extra[i]);
     }
+    for (uint32_t i = 0; i < src->jump_table_count; ++i) {
+        NgGameConfigJumpTable *table = append_jump_table(dst);
+        if (table) {
+            *table = src->jump_tables[i];
+        }
+    }
     if (src->truncated) {
         dst->truncated = 1;
+    }
+}
+
+static void parse_jump_table_format(const char *value,
+                                    NgGameConfigJumpTable *table) {
+    if (!value || !table) {
+        return;
+    }
+    while (*value && isspace((unsigned char)*value)) {
+        ++value;
+    }
+    if (*value == '"') {
+        ++value;
+    }
+
+    char token[32];
+    size_t len = 0;
+    while (value[len] &&
+           value[len] != '"' &&
+           value[len] != ',' &&
+           !isspace((unsigned char)value[len]) &&
+           len + 1u < sizeof(token)) {
+        token[len] = value[len];
+        ++len;
+    }
+    token[len] = '\0';
+
+    if (strcmp(token, "pcrel16") == 0 ||
+        strcmp(token, "pcrel_w") == 0) {
+        table->format = NG_GAME_CONFIG_JUMP_TABLE_PCREL16;
+    } else if (strcmp(token, "bra16") == 0 ||
+               strcmp(token, "bra_w") == 0) {
+        table->format = NG_GAME_CONFIG_JUMP_TABLE_BRA16;
+    } else if (strcmp(token, "bra8") == 0 ||
+               strcmp(token, "bra_s") == 0) {
+        table->format = NG_GAME_CONFIG_JUMP_TABLE_BRA8;
+    } else {
+        table->format = NG_GAME_CONFIG_JUMP_TABLE_ABS32;
+    }
+}
+
+static void parse_jump_table_scalar(char *line,
+                                    NgGameConfigJumpTable *table) {
+    if (!line || !table) {
+        return;
+    }
+
+    const char *value = key_value_start(line, "start");
+    if (value) {
+        table->start = (uint32_t)strtoul(value, NULL, 0);
+        return;
+    }
+    value = key_value_start(line, "end");
+    if (value) {
+        table->end = (uint32_t)strtoul(value, NULL, 0);
+        return;
+    }
+    value = key_value_start(line, "stride");
+    if (value) {
+        table->stride = (uint32_t)strtoul(value, NULL, 0);
+        return;
+    }
+    value = key_value_start(line, "format");
+    if (value) {
+        parse_jump_table_format(value, table);
     }
 }
 
@@ -223,6 +331,7 @@ static int ng_game_config_load_into(const char *path,
 
     NgGameConfigSection section = NG_GAME_CONFIG_SECTION_NONE;
     NgGameConfigArray array = NG_GAME_CONFIG_ARRAY_NONE;
+    NgGameConfigJumpTable *current_jump_table = NULL;
     NgGameConfigPathList discovery_files;
     memset(&discovery_files, 0, sizeof(discovery_files));
     char base_dir[NG_GAME_CONFIG_MAX_PATH];
@@ -241,19 +350,28 @@ static int ng_game_config_load_into(const char *path,
         }
 
         if (*trimmed == '[') {
-            if (strncmp(trimmed, "[functions]", 11u) == 0) {
+            if (strncmp(trimmed,
+                        "[[jump_table]]",
+                        sizeof("[[jump_table]]") - 1u) == 0) {
+                section = NG_GAME_CONFIG_SECTION_JUMP_TABLE;
+                current_jump_table = append_jump_table(config);
+            } else if (strncmp(trimmed, "[functions]", 11u) == 0) {
                 section = NG_GAME_CONFIG_SECTION_FUNCTIONS;
+                current_jump_table = NULL;
             } else if (strncmp(trimmed, "[game]", 6u) == 0) {
                 section = NG_GAME_CONFIG_SECTION_GAME;
+                current_jump_table = NULL;
             } else {
                 section = NG_GAME_CONFIG_SECTION_NONE;
+                current_jump_table = NULL;
             }
             array = NG_GAME_CONFIG_ARRAY_NONE;
             continue;
         }
 
         if (section != NG_GAME_CONFIG_SECTION_FUNCTIONS &&
-            section != NG_GAME_CONFIG_SECTION_GAME) {
+            section != NG_GAME_CONFIG_SECTION_GAME &&
+            section != NG_GAME_CONFIG_SECTION_JUMP_TABLE) {
             continue;
         }
 
@@ -267,6 +385,9 @@ static int ng_game_config_load_into(const char *path,
             if (key_starts_array(trimmed, "discovery_files")) {
                 array = NG_GAME_CONFIG_ARRAY_DISCOVERY_FILES;
             }
+        } else if (section == NG_GAME_CONFIG_SECTION_JUMP_TABLE) {
+            parse_jump_table_scalar(trimmed, current_jump_table);
+            continue;
         }
 
         if (array != NG_GAME_CONFIG_ARRAY_NONE) {

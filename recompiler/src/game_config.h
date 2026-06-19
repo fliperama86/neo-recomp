@@ -4,7 +4,22 @@
 
 #define NG_GAME_CONFIG_MAX_FUNCTIONS 128u
 #define NG_GAME_CONFIG_MAX_DISCOVERY_FILES 32u
+#define NG_GAME_CONFIG_MAX_JUMP_TABLES 64u
 #define NG_GAME_CONFIG_MAX_PATH 256u
+
+typedef enum NgGameConfigJumpTableFormat {
+    NG_GAME_CONFIG_JUMP_TABLE_ABS32,
+    NG_GAME_CONFIG_JUMP_TABLE_PCREL16,
+    NG_GAME_CONFIG_JUMP_TABLE_BRA16,
+    NG_GAME_CONFIG_JUMP_TABLE_BRA8,
+} NgGameConfigJumpTableFormat;
+
+typedef struct NgGameConfigJumpTable {
+    uint32_t start;
+    uint32_t end;
+    uint32_t stride;
+    NgGameConfigJumpTableFormat format;
+} NgGameConfigJumpTable;
 
 typedef struct NgGameConfig {
     uint32_t entry[NG_GAME_CONFIG_MAX_FUNCTIONS];
@@ -13,6 +28,8 @@ typedef struct NgGameConfig {
     uint32_t extra_count;
     char discovery_files[NG_GAME_CONFIG_MAX_DISCOVERY_FILES][NG_GAME_CONFIG_MAX_PATH];
     uint32_t discovery_file_count;
+    NgGameConfigJumpTable jump_tables[NG_GAME_CONFIG_MAX_JUMP_TABLES];
+    uint32_t jump_table_count;
     int truncated;
 } NgGameConfig;
 

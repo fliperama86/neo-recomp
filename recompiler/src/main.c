@@ -221,10 +221,11 @@ int main(int argc, char **argv) {
     }
 
     printf("game config: %s\n", game_path);
-    printf("game config functions: entry=%u extra=%u discovery_files=%u%s\n",
+    printf("game config functions: entry=%u extra=%u discovery_files=%u jump_tables=%u%s\n",
            game_config.entry_count,
            game_config.extra_count,
            game_config.discovery_file_count,
+           game_config.jump_table_count,
            game_config.truncated ? " (truncated)" : "");
     printf("program image: %u bytes\n", rom.size);
     if (rom.size >= 8) {
@@ -247,15 +248,12 @@ int main(int argc, char **argv) {
                 uint32_t seeds[CLI_MAX_DISCOVERY_SEEDS];
                 uint32_t seed_count = 0;
                 add_discovery_seed(seeds, &seed_count, cart_entry);
-                for (uint32_t i = 0; i < game_config.entry_count; ++i) {
-                    add_discovery_seed(seeds, &seed_count, game_config.entry[i]);
-                }
-                for (uint32_t i = 0; i < game_config.extra_count; ++i) {
-                    add_discovery_seed(seeds, &seed_count, game_config.extra[i]);
-                }
-
                 NgFunctionDiscovery discovery;
-                if (ng_function_discover_from_seeds(&rom, seeds, seed_count, &discovery)) {
+                if (ng_function_discover_from_game_config(&rom,
+                                                          seeds,
+                                                          seed_count,
+                                                          &game_config,
+                                                          &discovery)) {
                     print_function_candidates(&rom, &discovery);
                     if (emit_c_path && !emit_c_file(emit_c_path, &rom, &discovery)) {
                         ng_program_rom_free(&rom);

@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added manual `[[jump_table]]` discovery metadata inspired by the
+  reference pipeline. Game TOML now parses abs32, pcrel16, and BRA-table
+  formats, discovery folds those targets into the function worklist, and the
+  CLI reports jump-table counts.
 - local: Adapted another `segagenesisrecomp` project-scaffolding pattern:
   `[game].discovery_files` now lets a game config merge additional TOML seed
   files relative to the parent config, and the CLI reports the discovery-file
@@ -474,7 +478,7 @@ Real-ROM smoke remains a near follow-up once a local `.neo` input is available.
 
 Near follow-ups:
 
-- Parse `games/*.toml` beyond function/discovery-file seeds into machine-checkable discovery/runtime metadata.
+- Parse `games/*.toml` beyond function/discovery-file/jump-table metadata into machine-checkable discovery/runtime metadata.
 - Enforce dispatch-audit gaps in smoke runs and add interior-label checks.
 - Migrate more instruction families onto the generic EA helpers instead of adding bespoke forms.
 - Broaden the decode/codegen legality layer so invalid source/destination EA combinations fail loudly.

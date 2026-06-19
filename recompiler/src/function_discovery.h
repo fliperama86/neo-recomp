@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game_config.h"
 #include "p_rom.h"
 
 #define NG_FUNCTION_DISCOVERY_MAX_CANDIDATES 128u
@@ -25,3 +26,8 @@ int ng_function_discover_from_seeds(const NgProgramRom *rom,
                                     const uint32_t *seeds,
                                     uint32_t seed_count,
                                     NgFunctionDiscovery *out);
+int ng_function_discover_from_game_config(const NgProgramRom *rom,
+                                          const uint32_t *seeds,
+                                          uint32_t seed_count,
+                                          const NgGameConfig *config,
+                                          NgFunctionDiscovery *out);

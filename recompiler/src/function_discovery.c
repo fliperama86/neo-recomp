@@ -56,6 +56,54 @@ static void add_jump_table_targets(const NgProgramRom *rom,
     }
 }
 
+static void add_config_jump_table_targets(const NgProgramRom *rom,
+                                          const NgGameConfigJumpTable *table,
+                                          NgFunctionDiscovery *out) {
+    if (!rom || !table || !out ||
+        table->stride == 0u ||
+        table->end <= table->start) {
+        return;
+    }
+
+    for (uint32_t addr = table->start; addr < table->end;) {
+        uint32_t target = 0;
+        int have_target = 0;
+
+        switch (table->format) {
+        case NG_GAME_CONFIG_JUMP_TABLE_ABS32:
+            if (ng_program_rom_addr_is_mapped(rom, addr) &&
+                ng_program_rom_addr_is_mapped(rom, addr + 3u)) {
+                target = ng_program_rom_read32(rom, addr);
+                have_target = 1;
+            }
+            break;
+        case NG_GAME_CONFIG_JUMP_TABLE_PCREL16:
+            if (ng_program_rom_addr_is_mapped(rom, addr) &&
+                ng_program_rom_addr_is_mapped(rom, addr + 1u)) {
+                int16_t disp = (int16_t)ng_program_rom_read16(rom, addr);
+                target = (uint32_t)((int32_t)(table->start & 0x00FFFFFFu) +
+                                    (int32_t)disp);
+                have_target = 1;
+            }
+            break;
+        case NG_GAME_CONFIG_JUMP_TABLE_BRA16:
+        case NG_GAME_CONFIG_JUMP_TABLE_BRA8:
+            target = addr;
+            have_target = 1;
+            break;
+        }
+
+        if (have_target) {
+            ng_function_discovery_add(out, rom, target);
+        }
+
+        if (UINT32_MAX - addr < table->stride) {
+            break;
+        }
+        addr += table->stride;
+    }
+}
+
 static int is_direct_function_target(const NgM68kInstr *instr) {
     if (instr->mnemonic == NG_M68K_BSR) {
         return 1;
@@ -126,18 +174,35 @@ int ng_function_discover_from_seeds(const NgProgramRom *rom,
                                     const uint32_t *seeds,
                                     uint32_t seed_count,
                                     NgFunctionDiscovery *out) {
+    return ng_function_discover_from_game_config(rom, seeds, seed_count, NULL, out);
+}
+
+int ng_function_discover_from_game_config(const NgProgramRom *rom,
+                                          const uint32_t *seeds,
+                                          uint32_t seed_count,
+                                          const NgGameConfig *config,
+                                          NgFunctionDiscovery *out) {
     if (!rom || !out) {
         return 0;
     }
 
     ng_function_discovery_init(out);
 
-    if (!seeds || seed_count == 0u) {
-        return 0;
+    if (seeds) {
+        for (uint32_t i = 0; i < seed_count; ++i) {
+            ng_function_discovery_add(out, rom, seeds[i]);
+        }
     }
-
-    for (uint32_t i = 0; i < seed_count; ++i) {
-        ng_function_discovery_add(out, rom, seeds[i]);
+    if (config) {
+        for (uint32_t i = 0; i < config->entry_count; ++i) {
+            ng_function_discovery_add(out, rom, config->entry[i]);
+        }
+        for (uint32_t i = 0; i < config->extra_count; ++i) {
+            ng_function_discovery_add(out, rom, config->extra[i]);
+        }
+        for (uint32_t i = 0; i < config->jump_table_count; ++i) {
+            add_config_jump_table_targets(rom, &config->jump_tables[i], out);
+        }
     }
     if (out->count == 0u) {
         return 0;

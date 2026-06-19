@@ -1,4 +1,5 @@
 #include "function_discovery.h"
+#include "game_config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -163,6 +164,45 @@ int main(void) {
         CHECK(discovery.addrs[2] == 0x80u);
         CHECK(discovery.addrs[3] == 0x16u);
         CHECK(!ng_function_discovery_contains(&discovery, 0x200u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x100u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x10u, 0x4E75u);       /* base seed */
+        write32(&rom, 0x20u, 0x00000040u);   /* manual abs32 table target */
+        write32(&rom, 0x24u, 0x00000050u);   /* manual abs32 table target */
+        write16(&rom, 0x40u, 0x4E75u);
+        write16(&rom, 0x50u, 0x4E75u);
+        write16(&rom, 0x60u, 0x0020u);       /* manual pcrel16 target $80 */
+        write16(&rom, 0x80u, 0x4E75u);
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.jump_table_count = 2u;
+        config.jump_tables[0].start = 0x20u;
+        config.jump_tables[0].end = 0x28u;
+        config.jump_tables[0].stride = 4u;
+        config.jump_tables[0].format = NG_GAME_CONFIG_JUMP_TABLE_ABS32;
+        config.jump_tables[1].start = 0x60u;
+        config.jump_tables[1].end = 0x62u;
+        config.jump_tables[1].stride = 2u;
+        config.jump_tables[1].format = NG_GAME_CONFIG_JUMP_TABLE_PCREL16;
+
+        const uint32_t seeds[] = {0x00000010u};
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    seeds,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(discovery.count == 4u);
+        CHECK(discovery.addrs[0] == 0x10u);
+        CHECK(discovery.addrs[1] == 0x40u);
+        CHECK(discovery.addrs[2] == 0x50u);
+        CHECK(discovery.addrs[3] == 0x80u);
 
         ng_program_rom_free(&rom);
     }
