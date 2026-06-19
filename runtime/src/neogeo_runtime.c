@@ -7,6 +7,8 @@ NgM68kState g_ng_m68k;
 
 static const uint8_t *g_ng_neogeo_program_rom;
 static uint32_t g_ng_neogeo_program_rom_size;
+static const uint8_t *g_ng_neogeo_system_rom;
+static uint32_t g_ng_neogeo_system_rom_size;
 static uint8_t g_ng_neogeo_work_ram[0x10000u];
 static uint8_t g_ng_neogeo_palette_ram[NG_NEO_PALETTE_BANK_BYTES *
                                        NG_NEO_PALETTE_BANKS];
@@ -42,6 +44,10 @@ static int ng_neogeo_is_backup_ram_addr(uint32_t addr) {
     return addr >= 0x00D00000u && addr <= 0x00DFFFFFu;
 }
 
+static int ng_neogeo_is_system_rom_addr(uint32_t addr) {
+    return addr >= 0x00C00000u && addr <= 0x00CFFFFFu;
+}
+
 uint8_t ng68k_read8(uint32_t addr) {
     addr &= 0x00FFFFFFu;
     if (addr <= 0x000FFFFFu) {
@@ -61,6 +67,11 @@ uint8_t ng68k_read8(uint32_t addr) {
     }
     if (ng_neogeo_is_backup_ram_addr(addr)) {
         return g_ng_neogeo_backup_ram[addr & (NG_NEO_BACKUP_RAM_BYTES - 1u)];
+    }
+    if (ng_neogeo_is_system_rom_addr(addr)) {
+        uint32_t rom_offset = (addr - 0x00C00000u) % NG_NEO_SYSTEM_ROM_BYTES;
+        return rom_offset < g_ng_neogeo_system_rom_size && g_ng_neogeo_system_rom ?
+            g_ng_neogeo_system_rom[rom_offset] : 0xFFu;
     }
     fprintf(stderr, "ng68k_read8 miss at $%06X\n", addr & 0xFFFFFFu);
     return 0xFF;
@@ -94,6 +105,9 @@ void ng68k_write8(uint32_t addr, uint8_t value) {
         if (g_ng_neogeo_backup_ram_unlocked) {
             g_ng_neogeo_backup_ram[addr & (NG_NEO_BACKUP_RAM_BYTES - 1u)] = value;
         }
+        return;
+    }
+    if (ng_neogeo_is_system_rom_addr(addr)) {
         return;
     }
 
@@ -212,6 +226,11 @@ void ng_m68k_clear_interrupt_level(void) {
 void ng_neogeo_set_program_rom(const uint8_t *data, uint32_t size) {
     g_ng_neogeo_program_rom = data;
     g_ng_neogeo_program_rom_size = size;
+}
+
+void ng_neogeo_set_system_rom(const uint8_t *data, uint32_t size) {
+    g_ng_neogeo_system_rom = data;
+    g_ng_neogeo_system_rom_size = size;
 }
 
 void ng_neogeo_reset_runtime(void) {

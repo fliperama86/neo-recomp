@@ -22,6 +22,7 @@ extern NgM68kState g_ng_m68k;
 #define NG_NEO_PALETTE_BANK_BYTES 0x2000u
 #define NG_NEO_PALETTE_BANKS 2u
 #define NG_NEO_BACKUP_RAM_BYTES 0x10000u
+#define NG_NEO_SYSTEM_ROM_BYTES 0x20000u
 
 #define NG_NEO_LSPCMODE_TIMER_ENABLE          0x0010u
 #define NG_NEO_LSPCMODE_TIMER_RELOAD_ON_WRITE 0x0020u
@@ -52,6 +53,7 @@ void ng_neogeo_request_reset_interrupt(void);
 void ng_neogeo_ack_interrupts(uint16_t ack_mask);
 
 void ng_neogeo_set_program_rom(const uint8_t *data, uint32_t size);
+void ng_neogeo_set_system_rom(const uint8_t *data, uint32_t size);
 void ng_neogeo_reset_runtime(void);
 void ng_neogeo_begin_vblank(void);
 void ng_neogeo_advance_timer(uint32_t pixel_ticks);

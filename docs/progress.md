@@ -207,6 +207,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a fact-checked cartridge-system BIOS/system ROM bus slice.
+  `ng_neogeo_set_system_rom()` now backs `$C00000-$CFFFFF` reads, including
+  the documented mirror area, while writes remain ignored/read-only.
 - local: Added a fact-checked MVS backup RAM bus slice. The runtime now
   maps `$D00000-$DFFFFF` through a 64KiB backing store and honors
   `REG_SRAMLOCK/UNLOCK` write protection for backup RAM writes.
@@ -497,4 +500,4 @@ Near follow-ups:
 - Replace narrow condition handling with a tested condition-code helper table.
 - Start separating instruction semantics into reusable generated helper functions when repeated emitted C becomes noisy.
 - Add a tiny standalone ROM-like fixture that is closer to a hand-authored mini program than the current unit fixture.
-- Continue runtime bus coverage for BIOS/system registers/ROM, VRAM-facing ports, inputs, sound latch/Z80 communication, watchdog, protection/bank-switch variants, and persistent save backing.
+- Continue runtime bus coverage for VRAM-facing ports, inputs, sound latch/Z80 communication, watchdog, protection/bank-switch variants, BIOS/system registers beyond current latch bits, and persistent save backing.

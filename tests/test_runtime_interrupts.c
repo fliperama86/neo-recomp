@@ -18,6 +18,10 @@ int main(void) {
         0x12u, 0x34u, 0x56u, 0x78u,
         0x9Au, 0xBCu, 0xDEu, 0xF0u,
     };
+    const uint8_t system_rom[] = {
+        0xA1u, 0xB2u, 0xC3u, 0xD4u,
+        0xE5u, 0xF6u, 0x07u, 0x18u,
+    };
 
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
     ng_neogeo_reset_runtime();
@@ -33,6 +37,15 @@ int main(void) {
     CHECK(ng68k_read8(0x000008u) == 0xFFu);
     ng68k_write8(0x000000u, 0xAAu);
     CHECK(ng68k_read8(0x000000u) == 0x12u);
+
+    ng_neogeo_set_system_rom(system_rom, (uint32_t)sizeof(system_rom));
+    CHECK(ng68k_read8(0x00C00000u) == 0xA1u);
+    CHECK(ng68k_read16(0x00C00000u) == 0xA1B2u);
+    CHECK(ng68k_read32(0x00C00000u) == 0xA1B2C3D4u);
+    CHECK(ng68k_read32(0x00C20000u) == 0xA1B2C3D4u);
+    CHECK(ng68k_read8(0x00C00008u) == 0xFFu);
+    ng68k_write8(0x00C00000u, 0x55u);
+    CHECK(ng68k_read8(0x00C00000u) == 0xA1u);
 
     ng68k_write8(0x00100000u, 0xA5u);
     CHECK(ng68k_read8(0x00100000u) == 0xA5u);
