@@ -130,9 +130,10 @@ Covered by executable generated-C validation:
   - generic `LEA <ea>,An` control-address loads covered so far by PC-relative
     and displacement sources
   - `MOVEM.W/L` register-list transfers covered so far by long Dn masks to/from
-    address-indirect memory and predecrement register-to-memory masks, including
-    MC68000 predecrement mask reversal and initial-`A7` storage when `A7` is
-    also in the saved register list
+    address-indirect memory, word memory-to-register sign extension into both
+    data and address registers, and predecrement register-to-memory masks,
+    including MC68000 predecrement mask reversal and initial-`A7` storage when
+    `A7` is also in the saved register list
   - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests and
     generated-exec long Dn→alternate-byte-memory→Dn round-trip with flags preserved
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
@@ -213,6 +214,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `MOVEM.W` memory-to-register transfers against the
+  Motorola/NXP programmer's reference. Generated-exec now covers word transfers
+  sign-extending into both a data register and an address register, while
+  leaving condition codes unchanged.
 - local: Added generated-exec `MOVEP.L` coverage after cross-checking the
   Motorola/NXP programmer's reference and the local Genesis reference. The
   synthetic fixture now performs `D0 -> (d16,A0) alternate bytes -> D1`,
