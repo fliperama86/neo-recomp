@@ -270,12 +270,14 @@ static int validate_move_usp(const NgM68kInstr *instr) {
     if (instr->src.mode == NG_M68K_EA_AREG &&
         instr->src.reg == instr->reg &&
         ea_simple_register_payload(&instr->src)) {
-        return ea_is_empty(&instr->dst);
+        return instr->opcode == (uint16_t)(0x4E60u | instr->reg) &&
+               ea_is_empty(&instr->dst);
     }
     if (instr->dst.mode == NG_M68K_EA_AREG &&
         instr->dst.reg == instr->reg &&
         ea_simple_register_payload(&instr->dst)) {
-        return ea_is_empty(&instr->src);
+        return instr->opcode == (uint16_t)(0x4E68u | instr->reg) &&
+               ea_is_empty(&instr->src);
     }
     return 0;
 }

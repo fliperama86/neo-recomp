@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened privileged `MOVE USP` validation so `MOVE An,USP`
+  now requires opcode `$4E6n`, `MOVE USP,An` requires opcode
+  `$4E68+n`, and the opcode register/direction must match the decoded
+  A-register operand. `test_m68k_validate` covered mismatched
+  opcode/register and opcode/direction metadata red first.
 - local: Tightened `STOP` and `TRAP` validation so `STOP` now
   requires opcode `$4E72`, and `TRAP #n` now requires a `$4E4n`
   opcode whose low nibble matches the decoded vector immediate.

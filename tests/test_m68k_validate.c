@@ -3460,6 +3460,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E63u;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.reg = 3u;
@@ -3469,6 +3470,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E63u;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.reg = 3u;
@@ -3479,6 +3481,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E63u;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.reg = 3u;
@@ -3489,6 +3492,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E6Cu;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.reg = 4u;
@@ -3498,6 +3502,37 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E62u;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.reg = 3u;
+    instr.src.mode = NG_M68K_EA_AREG;
+    instr.src.reg = 3u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E6Bu;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.reg = 3u;
+    instr.src.mode = NG_M68K_EA_AREG;
+    instr.src.reg = 3u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E64u;
+    instr.byte_length = 2u;
+    instr.size = 4u;
+    instr.reg = 4u;
+    instr.dst.mode = NG_M68K_EA_AREG;
+    instr.dst.reg = 4u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E6Cu;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.reg = 4u;
@@ -3508,6 +3543,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E6Cu;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.reg = 4u;
@@ -3518,6 +3554,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E6Cu;
     instr.byte_length = 2u;
     instr.size = 2u;
     instr.reg = 4u;
@@ -3527,6 +3564,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_USP;
+    instr.opcode = 0x4E6Cu;
     instr.byte_length = 2u;
     instr.size = 4u;
     instr.reg = 4u;
