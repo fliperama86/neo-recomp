@@ -360,6 +360,154 @@ static int ng_generated_smoke_read_file(const char *path,
     return 1;
 }
 
+static int ng_generated_smoke_snapshot_path(char *out,
+                                            size_t out_size,
+                                            const char *dir,
+                                            const char *name) {
+    if (!out || out_size == 0u || !dir || !*dir || !name || !*name) {
+        return 0;
+    }
+    size_t dir_len = strlen(dir);
+    const char *sep =
+        (dir[dir_len - 1u] == '/' || dir[dir_len - 1u] == '\\') ? "" : "/";
+    int written = snprintf(out, out_size, "%s%s%s", dir, sep, name);
+    return written >= 0 && (size_t)written < out_size;
+}
+
+static int ng_generated_smoke_write_snapshot_bytes(const char *dir,
+                                                   const char *name,
+                                                   const void *data,
+                                                   size_t size) {
+    char path[4096];
+    if (!data || !ng_generated_smoke_snapshot_path(path, sizeof(path), dir, name)) {
+        return 0;
+    }
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        fprintf(stderr, "failed to open snapshot file: %s\n", path);
+        return 0;
+    }
+    if (size != 0u && fwrite(data, 1, size, f) != size) {
+        fprintf(stderr, "failed to write snapshot file: %s\n", path);
+        fclose(f);
+        return 0;
+    }
+    if (fclose(f) != 0) {
+        fprintf(stderr, "failed to close snapshot file: %s\n", path);
+        return 0;
+    }
+    fprintf(stderr, "snapshot wrote %s (%llu bytes)\n",
+            path,
+            (unsigned long long)size);
+    return 1;
+}
+
+static int ng_generated_smoke_write_snapshot_summary(const char *dir) {
+    char path[4096];
+    if (!ng_generated_smoke_snapshot_path(path, sizeof(path), dir, "summary.txt")) {
+        return 0;
+    }
+    FILE *f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "failed to open snapshot file: %s\n", path);
+        return 0;
+    }
+
+    fprintf(f, "dispatches=%llu\n",
+            (unsigned long long)ng_generated_smoke_dispatch_count());
+    fprintf(f, "cart=%llu\n",
+            (unsigned long long)ng_generated_smoke_cart_dispatch_count());
+    fprintf(f, "bios=%llu\n",
+            (unsigned long long)ng_generated_smoke_bios_dispatch_count());
+    fprintf(f, "unique=%u\n", ng_generated_smoke_unique_dispatch_count());
+    fprintf(f, "hot_overflow=%u\n", ng_generated_smoke_dispatch_hot_overflow());
+    fprintf(f, "last=$%06X\n", ng_generated_smoke_last_dispatch_addr() & 0x00FFFFFFu);
+    fprintf(f, "pc=$%06X\n", g_ng_m68k.pc & 0x00FFFFFFu);
+    fprintf(f, "sr=$%04X\n", g_ng_m68k.sr);
+    fprintf(f, "sp=$%08X\n", g_ng_m68k.a[7]);
+    fprintf(f, "polls=%u\n", ng_neogeo_interrupt_polls());
+    fprintf(f, "watchdog=%u\n", ng_neogeo_watchdog_kicks());
+    fprintf(f, "vblank=%u\n", ng_neogeo_vblank_interrupts());
+    fprintf(f, "frame=%u\n", ng_neogeo_frame_count());
+    fprintf(f, "timer_irq=%u\n", ng_neogeo_timer_interrupts());
+    fprintf(f, "irqack=%u\n", ng_neogeo_irq_ack_writes());
+    fprintf(f, "irq_pending=$%04X\n", ng_neogeo_irq_pending());
+    fprintf(f, "scanline=%u\n", ng_neogeo_current_scanline());
+    fprintf(f, "sound=$%02X\n", ng_neogeo_sound_command());
+    fprintf(f, "port=$%02X\n", ng_neogeo_port_output());
+    fprintf(f, "wram_nonzero=%u\n", ng_neogeo_work_ram_nonzero_bytes());
+    fprintf(f, "wram_sum=$%08X\n", ng_neogeo_work_ram_checksum());
+    fprintf(f, "vram_nonzero=%u\n", ng_neogeo_vram_nonzero_words());
+    fprintf(f, "vram_sum=$%08X\n", ng_neogeo_vram_checksum());
+    fprintf(f, "recent_loop=%u\n", ng_generated_smoke_recent_loop_period());
+    for (uint32_t i = 0; i < NG_GENERATED_SMOKE_HOT_TOP; ++i) {
+        uint32_t addr = 0;
+        uint64_t count = 0;
+        ng_generated_smoke_hot_rank(i, &addr, &count);
+        if (count == 0u) {
+            break;
+        }
+        fprintf(f, "hot%u=$%06X:%llu\n",
+                i,
+                addr & 0x00FFFFFFu,
+                (unsigned long long)count);
+    }
+
+    if (fclose(f) != 0) {
+        fprintf(stderr, "failed to close snapshot file: %s\n", path);
+        return 0;
+    }
+    fprintf(stderr, "snapshot wrote %s\n", path);
+    return 1;
+}
+
+static int ng_generated_smoke_write_snapshot(const char *dir) {
+    if (!dir || !*dir) {
+        return 1;
+    }
+
+    uint8_t *work_ram = (uint8_t *)malloc(NG_NEO_WORK_RAM_BYTES);
+    uint8_t *palette_ram = (uint8_t *)malloc(NG_NEO_PALETTE_RAM_BYTES);
+    uint16_t *vram = (uint16_t *)malloc((size_t)NG_NEO_VRAM_WORDS *
+                                        sizeof(*vram));
+    uint8_t *vram_be = (uint8_t *)malloc(NG_NEO_VRAM_BYTES);
+    if (!work_ram || !palette_ram || !vram || !vram_be) {
+        fprintf(stderr, "failed to allocate snapshot buffers\n");
+        free(work_ram);
+        free(palette_ram);
+        free(vram);
+        free(vram_be);
+        return 0;
+    }
+
+    int ok = 1;
+    if (!ng_neogeo_copy_work_ram(work_ram, NG_NEO_WORK_RAM_BYTES) ||
+        !ng_neogeo_copy_palette_ram(palette_ram, NG_NEO_PALETTE_RAM_BYTES) ||
+        !ng_neogeo_copy_vram(vram, NG_NEO_VRAM_WORDS)) {
+        ok = 0;
+    }
+    for (uint32_t i = 0; i < NG_NEO_VRAM_WORDS; ++i) {
+        vram_be[i * 2u] = (uint8_t)(vram[i] >> 8);
+        vram_be[i * 2u + 1u] = (uint8_t)vram[i];
+    }
+
+    if (ok) {
+        ok = ng_generated_smoke_write_snapshot_bytes(
+                 dir, "work_ram.bin", work_ram, NG_NEO_WORK_RAM_BYTES) &&
+             ng_generated_smoke_write_snapshot_bytes(
+                 dir, "palette_ram.bin", palette_ram, NG_NEO_PALETTE_RAM_BYTES) &&
+             ng_generated_smoke_write_snapshot_bytes(
+                 dir, "vram_be.bin", vram_be, NG_NEO_VRAM_BYTES) &&
+             ng_generated_smoke_write_snapshot_summary(dir);
+    }
+
+    free(work_ram);
+    free(palette_ram);
+    free(vram);
+    free(vram_be);
+    return ok;
+}
+
 #ifndef NG_GENERATED_SMOKE_NO_MAIN
 static int ng_generated_smoke_parse_u64(const char *text, uint64_t *out) {
     uint64_t value = 0;
@@ -440,8 +588,9 @@ static void ng_generated_smoke_print_summary(void) {
     }
 }
 
-int ng_generated_smoke_run_with_bios(const char *neo_path,
-                                     const char *bios_path) {
+int ng_generated_smoke_run_with_bios_snapshot(const char *neo_path,
+                                              const char *bios_path,
+                                              const char *snapshot_dir) {
     if (!neo_path || !*neo_path) {
         fprintf(stderr, "missing .neo path\n");
         return 2;
@@ -511,6 +660,7 @@ int ng_generated_smoke_run_with_bios(const char *neo_path,
             g_ng_m68k.sr,
             g_ng_m68k.a[7]);
     ng_generated_smoke_print_summary();
+    int ok = ng_generated_smoke_write_snapshot(snapshot_dir);
 
     ng_neogeo_set_external_dispatch(NULL);
     ng_neogeo_set_auto_scanline_interval(0);
@@ -519,7 +669,12 @@ int ng_generated_smoke_run_with_bios(const char *neo_path,
     ng_neogeo_set_program_rom(NULL, 0);
     free(bios_data);
     ng_program_rom_free(&rom);
-    return 0;
+    return ok ? 0 : 1;
+}
+
+int ng_generated_smoke_run_with_bios(const char *neo_path,
+                                     const char *bios_path) {
+    return ng_generated_smoke_run_with_bios_snapshot(neo_path, bios_path, NULL);
 }
 
 int ng_generated_smoke_run(const char *neo_path) {
@@ -528,12 +683,16 @@ int ng_generated_smoke_run(const char *neo_path) {
 
 #ifndef NG_GENERATED_SMOKE_NO_MAIN
 static void usage(const char *argv0) {
-    fprintf(stderr, "usage: %s [--bios <bios.rom>] [--max-dispatches <n>] <game.neo>\n", argv0);
+    fprintf(stderr,
+            "usage: %s [--bios <bios.rom>] [--max-dispatches <n>] "
+            "[--snapshot-dir <dir>] <game.neo>\n",
+            argv0);
 }
 
 int main(int argc, char **argv) {
     const char *bios_path = NULL;
     const char *neo_path = NULL;
+    const char *snapshot_dir = NULL;
     uint64_t max_dispatches = 0;
 
     for (int i = 1; i < argc; ++i) {
@@ -543,6 +702,12 @@ int main(int argc, char **argv) {
                 return 2;
             }
             bios_path = argv[i];
+        } else if (strcmp(argv[i], "--snapshot-dir") == 0) {
+            if (++i >= argc) {
+                usage(argv[0]);
+                return 2;
+            }
+            snapshot_dir = argv[i];
         } else if (strcmp(argv[i], "--max-dispatches") == 0) {
             if (++i >= argc ||
                 !ng_generated_smoke_parse_u64(argv[i], &max_dispatches)) {
@@ -566,6 +731,8 @@ int main(int argc, char **argv) {
         return 2;
     }
     ng_generated_smoke_set_dispatch_budget(max_dispatches);
-    return ng_generated_smoke_run_with_bios(neo_path, bios_path);
+    return ng_generated_smoke_run_with_bios_snapshot(neo_path,
+                                                    bios_path,
+                                                    snapshot_dir);
 }
 #endif

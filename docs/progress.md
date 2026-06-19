@@ -230,6 +230,17 @@ oracle. The 50k checkpoint can stop in a short BIOS polling loop, but the 500k
 final checkpoint leaves that loop (`final_recent_loop=0`) and now requires
 nonzero VRAM writes.
 
+The smoke can also save final-budget CPU-visible state for offline inspection:
+
+```sh
+NG_MSLUG_SNAPSHOT_DIR=build/mslug_snapshot scripts/run_mslug_headless.sh
+```
+
+That produces `work_ram.bin` (64 KiB), `palette_ram.bin` (16 KiB),
+`vram_be.bin` (64K big-endian VRAM words), and `summary.txt`. The current
+500k snapshot summary matches the smoke output above and gives us concrete
+artifacts to feed a later minimal visualizer/debug viewer.
+
 A manual single-budget deep probe also reaches its guard without a dispatch or
 bus miss:
 
@@ -1193,6 +1204,10 @@ and `V` are only trusted where generated-exec tests cover them.
 - local: Added unique-dispatch coverage and hot-dispatch ranking telemetry to
   the headless smoke. This makes long CPU-only probes easier to interpret when
   they do not hit a dispatch/bus miss or a short exact loop.
+- local: Added runtime snapshot copy APIs for work RAM, palette RAM, and VRAM,
+  plus optional `NG_MSLUG_SNAPSHOT_DIR` support in the Metal Slug smoke. The
+  final-budget snapshot writes raw CPU-visible RAM/palette/VRAM artifacts and a
+  text summary without adding renderer/input/sound complexity yet.
 - local: Connected the LSPC timer model to NTSC frame/scanline advancement:
   runtime tests now cover 384-pixel scanlines, 264-scanline frame wrap,
   VBlank requests on frame start/wrap, and timer interrupts firing from

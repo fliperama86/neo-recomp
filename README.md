@@ -154,6 +154,11 @@ a non-looping final tail plus late VRAM writes. By default it checks
 `NG_MSLUG_PROGRESS_BUDGETS="..."` or run one budget with
 `NG_MSLUG_DISPATCH_BUDGET=...`.
 
+To save inspectable CPU-visible state from the final budget, set
+`NG_MSLUG_SNAPSHOT_DIR=build/mslug_snapshot`. The script writes
+`work_ram.bin` (64 KiB), `palette_ram.bin` (16 KiB), `vram_be.bin` (64K
+big-endian VRAM words), and `summary.txt`.
+
 ## Decoder Slice
 
 The first decoder milestone is intentionally tiny: decode enough of the Metal

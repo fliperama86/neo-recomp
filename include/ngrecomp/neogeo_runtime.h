@@ -36,8 +36,12 @@ typedef int (*NgExternalDispatchHandler)(uint32_t addr);
 
 #define NG_NEO_PALETTE_BANK_BYTES 0x2000u
 #define NG_NEO_PALETTE_BANKS 2u
+#define NG_NEO_PALETTE_RAM_BYTES (NG_NEO_PALETTE_BANK_BYTES * NG_NEO_PALETTE_BANKS)
 #define NG_NEO_BACKUP_RAM_BYTES 0x10000u
 #define NG_NEO_SYSTEM_ROM_BYTES 0x20000u
+#define NG_NEO_WORK_RAM_BYTES 0x10000u
+#define NG_NEO_VRAM_WORDS 0x10000u
+#define NG_NEO_VRAM_BYTES (NG_NEO_VRAM_WORDS * 2u)
 
 #define NG_NEO_LSPCMODE_TIMER_ENABLE          0x0010u
 #define NG_NEO_LSPCMODE_TIMER_RELOAD_ON_WRITE 0x0020u
@@ -89,3 +93,6 @@ uint32_t ng_neogeo_work_ram_nonzero_bytes(void);
 uint32_t ng_neogeo_work_ram_checksum(void);
 uint32_t ng_neogeo_vram_nonzero_words(void);
 uint32_t ng_neogeo_vram_checksum(void);
+int ng_neogeo_copy_work_ram(uint8_t *out, uint32_t out_size);
+int ng_neogeo_copy_palette_ram(uint8_t *out, uint32_t out_size);
+int ng_neogeo_copy_vram(uint16_t *out_words, uint32_t out_word_count);

@@ -186,6 +186,19 @@ int main(void) {
     CHECK(ng68k_read8(0x01100000u) == 0xA5u);
     CHECK(ng_neogeo_work_ram_nonzero_bytes() == 7u);
     CHECK(ng_neogeo_work_ram_checksum() == 0x0592u);
+    CHECK(!ng_neogeo_copy_work_ram(NULL, NG_NEO_WORK_RAM_BYTES));
+    uint8_t *work_dump = (uint8_t *)calloc(NG_NEO_WORK_RAM_BYTES, 1u);
+    CHECK(work_dump != NULL);
+    CHECK(!ng_neogeo_copy_work_ram(work_dump, NG_NEO_WORK_RAM_BYTES - 1u));
+    CHECK(ng_neogeo_copy_work_ram(work_dump, NG_NEO_WORK_RAM_BYTES));
+    CHECK(work_dump[0x0000u] == 0xA5u);
+    CHECK(work_dump[0x0002u] == 0xBEu);
+    CHECK(work_dump[0x0003u] == 0xEFu);
+    CHECK(work_dump[0xFFFCu] == 0xCAu);
+    CHECK(work_dump[0xFFFDu] == 0xFEu);
+    CHECK(work_dump[0xFFFEu] == 0xBAu);
+    CHECK(work_dump[0xFFFFu] == 0xBEu);
+    free(work_dump);
 
     ng68k_write16(0x00400000u, 0x1234u);
     CHECK(ng68k_read16(0x00400000u) == 0x1234u);
@@ -200,6 +213,18 @@ int main(void) {
     CHECK(ng68k_read16(0x00400000u) == 0x1234u);
     ng68k_write8(NG_NEO_REG_PALBANK1, 0x00u);
     CHECK(ng68k_read16(0x00400000u) == 0xBEEFu);
+    CHECK(!ng_neogeo_copy_palette_ram(NULL, NG_NEO_PALETTE_RAM_BYTES));
+    uint8_t *palette_dump = (uint8_t *)calloc(NG_NEO_PALETTE_RAM_BYTES, 1u);
+    CHECK(palette_dump != NULL);
+    CHECK(!ng_neogeo_copy_palette_ram(palette_dump, NG_NEO_PALETTE_RAM_BYTES - 1u));
+    CHECK(ng_neogeo_copy_palette_ram(palette_dump, NG_NEO_PALETTE_RAM_BYTES));
+    CHECK(palette_dump[0x0000u] == 0x12u);
+    CHECK(palette_dump[0x0001u] == 0x34u);
+    CHECK(palette_dump[0x0002u] == 0x5Au);
+    CHECK(palette_dump[0x0003u] == 0x5Au);
+    CHECK(palette_dump[NG_NEO_PALETTE_BANK_BYTES] == 0xBEu);
+    CHECK(palette_dump[NG_NEO_PALETTE_BANK_BYTES + 1u] == 0xEFu);
+    free(palette_dump);
     ng_neogeo_reset_runtime();
     CHECK(ng68k_read16(0x00400000u) == 0x0000u);
 
@@ -237,6 +262,13 @@ int main(void) {
     CHECK(ng_neogeo_vram_mod() == 0xFFFFu);
     ng68k_write8(NG_NEO_REG_VRAMADDR, 0x12u);
     CHECK(ng_neogeo_vram_addr() == 0x1212u);
+    CHECK(!ng_neogeo_copy_vram(NULL, NG_NEO_VRAM_WORDS));
+    uint16_t *vram_dump = (uint16_t *)calloc(NG_NEO_VRAM_WORDS, sizeof(*vram_dump));
+    CHECK(vram_dump != NULL);
+    CHECK(!ng_neogeo_copy_vram(vram_dump, NG_NEO_VRAM_WORDS - 1u));
+    CHECK(ng_neogeo_copy_vram(vram_dump, NG_NEO_VRAM_WORDS));
+    CHECK(vram_dump[0x0100u] == 0xBEEFu);
+    free(vram_dump);
 
     uint8_t *large_program_rom = (uint8_t *)calloc(0x100004u, 1u);
     CHECK(large_program_rom != NULL);

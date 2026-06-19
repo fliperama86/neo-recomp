@@ -6,6 +6,7 @@ BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 NEO_PATH="${1:-$HOME/Documents/Games/Mister/NEOGEO/mslug.neo}"
 BIOS_PATH="${2:-$HOME/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1}"
 DISPATCH_BUDGETS="${NG_MSLUG_PROGRESS_BUDGETS:-${NG_MSLUG_DISPATCH_BUDGET:-10000 50000 100000 500000}}"
+SNAPSHOT_DIR="${NG_MSLUG_SNAPSHOT_DIR:-}"
 
 CFLAGS=(-std=c99 -Wall -Wextra -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
@@ -13,6 +14,9 @@ if [[ ! -f "$NEO_PATH" ]]; then
   echo "mslug .neo not found: $NEO_PATH" >&2
   echo "usage: $0 [path/to/mslug.neo] [path/to/sp-s2.sp1]" >&2
   exit 2
+fi
+if [[ -n "$SNAPSHOT_DIR" ]]; then
+  mkdir -p "$SNAPSHOT_DIR"
 fi
 
 cmake -S "$ROOT" -B "$BUILD_DIR" >/dev/null
@@ -39,7 +43,11 @@ if [[ ! -f "$BIOS_PATH" ]]; then
     "$ROOT/runtime/src/neogeo_runtime.c" \
     "$ROOT/recompiler/src/p_rom.c" \
     -o "$BUILD_DIR/mslug_smoke_harness"
-  exec "$BUILD_DIR/mslug_smoke_harness" "$NEO_PATH"
+  SNAPSHOT_ARGS=()
+  if [[ -n "$SNAPSHOT_DIR" ]]; then
+    SNAPSHOT_ARGS=(--snapshot-dir "$SNAPSHOT_DIR")
+  fi
+  exec "$BUILD_DIR/mslug_smoke_harness" "${SNAPSHOT_ARGS[@]}" "$NEO_PATH"
 fi
 
 # Local BIOS frontier set used by the current headless smoke. Users must provide
@@ -76,12 +84,12 @@ cc \
   "$BUILD_DIR/p_rom.o" \
   -o "$BUILD_DIR/mslug_bios_smoke_harness"
 
-python3 - "$DISPATCH_BUDGETS" "$BUILD_DIR/mslug_bios_smoke_harness" "$BIOS_PATH" "$NEO_PATH" <<'PY'
+python3 - "$DISPATCH_BUDGETS" "$BUILD_DIR/mslug_bios_smoke_harness" "$BIOS_PATH" "$NEO_PATH" "$SNAPSHOT_DIR" <<'PY'
 import re
 import subprocess
 import sys
 
-budget_text, harness, bios_path, neo_path = sys.argv[1:]
+budget_text, harness, bios_path, neo_path, snapshot_dir = sys.argv[1:]
 try:
     budgets = [int(part) for part in budget_text.split() if part]
 except ValueError:
@@ -109,8 +117,12 @@ summary_re = re.compile(
 summaries = []
 for budget in budgets:
     print(f"=== headless smoke budget {budget} ===")
+    cmd = [harness, "--max-dispatches", str(budget), "--bios", bios_path]
+    if snapshot_dir and budget == budgets[-1]:
+        cmd.extend(["--snapshot-dir", snapshot_dir])
+    cmd.append(neo_path)
     proc = subprocess.run(
-        [harness, "--max-dispatches", str(budget), "--bios", bios_path, neo_path],
+        cmd,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

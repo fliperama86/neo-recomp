@@ -9,13 +9,12 @@ static const uint8_t *g_ng_neogeo_program_rom;
 static uint32_t g_ng_neogeo_program_rom_size;
 static const uint8_t *g_ng_neogeo_system_rom;
 static uint32_t g_ng_neogeo_system_rom_size;
-static uint8_t g_ng_neogeo_work_ram[0x10000u];
-static uint8_t g_ng_neogeo_palette_ram[NG_NEO_PALETTE_BANK_BYTES *
-                                       NG_NEO_PALETTE_BANKS];
+static uint8_t g_ng_neogeo_work_ram[NG_NEO_WORK_RAM_BYTES];
+static uint8_t g_ng_neogeo_palette_ram[NG_NEO_PALETTE_RAM_BYTES];
 static uint8_t g_ng_neogeo_palette_bank;
 static uint8_t g_ng_neogeo_backup_ram[NG_NEO_BACKUP_RAM_BYTES];
 static uint8_t g_ng_neogeo_backup_ram_unlocked;
-static uint16_t g_ng_neogeo_vram[0x10000u];
+static uint16_t g_ng_neogeo_vram[NG_NEO_VRAM_WORDS];
 static uint16_t g_ng_neogeo_vram_addr;
 static uint16_t g_ng_neogeo_vram_mod;
 static uint8_t g_ng_neogeo_shadow_enabled;
@@ -623,6 +622,32 @@ uint32_t ng_neogeo_vram_checksum(void) {
         sum += g_ng_neogeo_vram[i];
     }
     return sum;
+}
+
+int ng_neogeo_copy_work_ram(uint8_t *out, uint32_t out_size) {
+    if (!out || out_size < (uint32_t)sizeof(g_ng_neogeo_work_ram)) {
+        return 0;
+    }
+    memcpy(out, g_ng_neogeo_work_ram, sizeof(g_ng_neogeo_work_ram));
+    return 1;
+}
+
+int ng_neogeo_copy_palette_ram(uint8_t *out, uint32_t out_size) {
+    if (!out || out_size < (uint32_t)sizeof(g_ng_neogeo_palette_ram)) {
+        return 0;
+    }
+    memcpy(out, g_ng_neogeo_palette_ram, sizeof(g_ng_neogeo_palette_ram));
+    return 1;
+}
+
+int ng_neogeo_copy_vram(uint16_t *out_words, uint32_t out_word_count) {
+    uint32_t word_count = (uint32_t)(sizeof(g_ng_neogeo_vram) /
+                                    sizeof(g_ng_neogeo_vram[0]));
+    if (!out_words || out_word_count < word_count) {
+        return 0;
+    }
+    memcpy(out_words, g_ng_neogeo_vram, sizeof(g_ng_neogeo_vram));
+    return 1;
 }
 
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {
