@@ -223,7 +223,9 @@ Covered by executable generated-C validation:
     register-count flag cases
   - memory `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` word forms, covered so far by
     an absolute-memory logical shift
-  - `PEA <ea>` control-address pushes covered so far by displacement sources
+  - `PEA <ea>` control-address pushes covered so far by displacement and
+    PC-relative sources, including extension-word PC base calculation and CCR
+    preservation
   - `ORI/ANDI/EORI #imm,CCR/SR` immediate status-register operations
 
 Important caveat: this is not a complete 68000 condition-code model. `C`/`X`
@@ -231,6 +233,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `PEA` effective-address push semantics. Generated-exec
+  now covers `PEA (d16,PC)`, proving the pushed long uses the extension-word
+  PC-relative base and leaves condition codes unchanged.
 - local: Fact-checked `EXG` register exchange forms. Generated-exec now covers
   address-register pairs and data-register/address-register pairs in addition
   to the existing data-register-pair coverage, confirming 32-bit swaps with
