@@ -131,9 +131,11 @@ Covered by executable generated-C validation:
     and displacement sources
   - `MOVEM.W/L` register-list transfers covered so far by long Dn masks to/from
     address-indirect memory, word memory-to-register sign extension into both
-    data and address registers, and predecrement register-to-memory masks,
-    including MC68000 predecrement mask reversal and initial-`A7` storage when
-    `A7` is also in the saved register list
+    data and address registers, postincrement memory-to-register self-load
+    behavior where the addressing register receives the final EA, and
+    predecrement register-to-memory masks, including MC68000 predecrement mask
+    reversal and initial-`A7` storage when `A7` is also in the saved register
+    list
   - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests and
     generated-exec long Dn→alternate-byte-memory→Dn round-trip with flags preserved
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
@@ -219,6 +221,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `MOVEM` postincrement memory-to-register self-load
+  behavior. Generated-exec now covers `MOVEM.L (A4)+,D0/A4`, proving the memory
+  value for `A4` is ignored and `A4` receives the final postincremented EA,
+  with condition codes unchanged.
 - local: Added generated-exec `NBCD` data-register edge coverage. The
   fixture now checks the sticky-`Z` zero case with `X` clear and the tens
   complement case with `X` set, including decimal borrow into `X/C`.
