@@ -22,7 +22,7 @@ Current verification command:
 ctest --test-dir build --output-on-failure
 ```
 
-Last local verification: **12/12 passing** on 2026-06-19.
+Last local verification: **13/13 passing** on 2026-06-19.
 
 ## Done and Covered
 
@@ -136,7 +136,7 @@ Last local verification: **12/12 passing** on 2026-06-19.
 | Full oracle/fuzz harness | Missing | Add a trusted 68000 reference runner or generated randomized fixtures for every implemented instruction family, size, EA mode, and edge case. |
 | Cycle timing / prefetch | Missing | No cycle timing or prefetch behavior is modeled. Only add this once functional correctness and real-ROM needs demand it. |
 | NeoGeo hardware integration | Missing | Implement/test full watchdog reset behavior, configurable/full input semantics, Z80/YM2610 sound execution and IRQ semantics, BIOS/system registers beyond current latch bits, rendered VRAM/display behavior, protection/bank-switch variants, persistent save backing, VBlank/level integration with host pacing, and remaining unmapped/bus-error behavior. |
-| Real game boot checkpoint | Missing | Metal Slug generated code now enters cartridge code through `tools/generated_smoke_harness.c`; without BIOS it stops at dispatch miss `$C00444`, and with a user-provided generated BIOS slice plus DIP/watchdog handling, default input/status reads, a port-output latch, scanline-driven smoke VBlank, and trampoline-safe dispatch, earlier seed lists reached the cart VBlank handler. The expanded local seed smoke now reaches a deterministic 500000-dispatch budget without a dispatch/bus miss and emits RAM/dispatch/scanline/VBlank/frame/IRQACK plus nonzero-VRAM summary counters optional final-budget RAM/palette/VRAM snapshot files, and diagnostic PPM generation from those snapshots, but the generated BIOS slice is still truncated and there is no boot/attract-mode success oracle. |
+| Real game boot checkpoint | Missing | Metal Slug generated code now enters cartridge code through `tools/generated_smoke_harness.c`; without BIOS it stops at dispatch miss `$C00444`, and with a user-provided generated BIOS slice plus DIP/watchdog handling, default input/status reads, a port-output latch, scanline-driven smoke VBlank, and trampoline-safe dispatch, earlier seed lists reached the cart VBlank handler. The expanded local seed smoke now reaches a deterministic 500000-dispatch budget without a dispatch/bus miss and emits RAM/dispatch/scanline/VBlank/frame/IRQACK plus nonzero-VRAM summary counters, optional final-budget RAM/palette/VRAM snapshot files, diagnostic PPM generation from those snapshots, and an optional SDL2 snapshot viewer when SDL2 is available locally, but the generated BIOS slice is still truncated and there is no boot/attract-mode success oracle. |
 
 ## Cross-Repo Reference Notes
 

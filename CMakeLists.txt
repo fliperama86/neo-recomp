@@ -49,16 +49,37 @@ target_include_directories(generate-bios-recomp PRIVATE
 )
 target_link_libraries(generate-bios-recomp PRIVATE neo_recompiler_core)
 
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(SDL2 QUIET IMPORTED_TARGET sdl2)
+endif()
+if(SDL2_FOUND)
+    add_executable(neo-snapshot-viewer
+        tools/sdl_snapshot_viewer.c
+    )
+    target_link_libraries(neo-snapshot-viewer PRIVATE
+        PkgConfig::SDL2
+    )
+else()
+    message(STATUS "SDL2 not found via pkg-config; skipping optional neo-snapshot-viewer target")
+endif()
+
 if(MSVC)
     target_compile_options(neo_runtime PRIVATE /W4)
     target_compile_options(neo_recompiler_core PRIVATE /W4)
     target_compile_options(neo-recomp PRIVATE /W4)
     target_compile_options(generate-bios-recomp PRIVATE /W4)
+    if(TARGET neo-snapshot-viewer)
+        target_compile_options(neo-snapshot-viewer PRIVATE /W4)
+    endif()
 else()
     target_compile_options(neo_runtime PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(neo_recompiler_core PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(neo-recomp PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(generate-bios-recomp PRIVATE -Wall -Wextra -Wpedantic)
+    if(TARGET neo-snapshot-viewer)
+        target_compile_options(neo-snapshot-viewer PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 endif()
 
 add_subdirectory(tests)

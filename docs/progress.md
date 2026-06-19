@@ -11,7 +11,7 @@ project orientation; update this file after each meaningful green slice.
 - Branch: `main`
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
-- Current test status: 12/12 passing
+- Current test status: 13/13 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
@@ -254,10 +254,12 @@ Both the 500k and 5M snapshots still have `palette_nonzero=0`, so the next
 display-facing runtime question is why the current path reaches VRAM writes
 before any palette writes.
 
-This snapshot/debug-render path is also the cleanest seam for a real SDL host:
-an SDL app can stay optional (no mandatory CI dependency), reuse the same
-runtime state/snapshot surfaces first, and later replace the diagnostic PPM
-view with an interactive host loop once the video/input boundaries are clearer.
+This snapshot/debug-render path is also the cleanest seam for a real SDL host.
+When SDL2 is available through `pkg-config`, CMake builds the optional
+`neo-snapshot-viewer` target, which interactively displays the same snapshot
+files with raw VRAM, nonzero-VRAM, work-RAM, and palette modes. It remains an
+offline diagnostic scaffold, not a live emulator loop, so there is still no
+mandatory SDL dependency or added CI surface.
 
 A manual single-budget deep probe also reaches its guard without a dispatch or
 bus miss:
@@ -1229,6 +1231,10 @@ and `V` are only trusted where generated-exec tests cover them.
 - local: Added `tools/render_snapshot_debug.py`, a no-dependency offline
   snapshot visualizer that converts the raw work RAM / palette RAM / VRAM dumps
   into PPM debug images. This is diagnostic only and not a full video renderer.
+- local: Added an optional SDL2 `neo-snapshot-viewer` target, built only when
+  SDL2 is available through `pkg-config`, for interactively inspecting the same
+  final-budget snapshot artifacts without turning SDL into a required runtime or
+  CI dependency.
 - local: Connected the LSPC timer model to NTSC frame/scanline advancement:
   runtime tests now cover 384-pixel scanlines, 264-scanline frame wrap,
   VBlank requests on frame start/wrap, and timer interrupts firing from
