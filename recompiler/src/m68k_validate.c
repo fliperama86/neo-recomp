@@ -447,6 +447,58 @@ static int data_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
     return memory_alterable_ext_length(ea, out_ext);
 }
 
+static int exact_memory_alterable_ext_length(const NgM68kEa *ea,
+                                             uint8_t *out_ext) {
+    switch (ea->mode) {
+    case NG_M68K_EA_AIND:
+    case NG_M68K_EA_APOST:
+    case NG_M68K_EA_APRE:
+        if (!ea_simple_register_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    case NG_M68K_EA_ADISP:
+        if (!ea_address_displacement_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_AINDEX:
+        if (!ea_address_index_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_W:
+        if (!ea_abs_word_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_L:
+        if (!ea_abs_long_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 4u;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int exact_data_alterable_ext_length(const NgM68kEa *ea,
+                                           uint8_t *out_ext) {
+    if (ea->mode == NG_M68K_EA_DREG) {
+        if (!ea_simple_register_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    }
+    return exact_memory_alterable_ext_length(ea, out_ext);
+}
+
 static int move_source_ext_length(const NgM68kInstr *instr, uint8_t *out_ext) {
     const NgM68kEa *ea = &instr->src;
     uint32_t ext_addr = instr->addr + 2u;
@@ -1201,13 +1253,6 @@ static int validate_add_sub_or_and(const NgM68kInstr *instr) {
     return validate_dreg_to_memory_binary(instr);
 }
 
-static int valid_cmpi_length(uint8_t size, uint8_t byte_length) {
-    if (size == 4u) {
-        return byte_length == 6u || byte_length == 8u || byte_length == 10u;
-    }
-    return byte_length == 4u || byte_length == 6u || byte_length == 8u;
-}
-
 static int valid_immediate_width(uint8_t size, uint32_t immediate) {
     if (size == 1u) {
         return immediate <= 0xFFu;
@@ -1298,22 +1343,62 @@ static int validate_tst(const NgM68kInstr *instr) {
            instr->byte_length == (uint8_t)(2u + src_ext);
 }
 
+static int validate_immediate_dest_legacy_fields(const NgM68kInstr *instr) {
+    if (instr->src_reg != 0u ||
+        instr->condition != 0u ||
+        instr->target != 0u ||
+        instr->src.mode != NG_M68K_EA_NONE) {
+        return 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        return instr->form == NG_M68K_FORM_IMM_TO_DREG &&
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_ABS_W ||
+        instr->dst.mode == NG_M68K_EA_ABS_L) {
+        return instr->form == NG_M68K_FORM_ABS &&
+               instr->reg == 0u &&
+               instr->absolute_addr == instr->dst.absolute_addr &&
+               instr->displacement == 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_ADISP) {
+        return instr->form == NG_M68K_FORM_AREG_DISP &&
+               instr->reg == instr->dst.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == instr->dst.displacement;
+    }
+
+    return instr->form == NG_M68K_FORM_NONE &&
+           instr->reg == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0;
+}
+
 static int validate_cmpi(const NgM68kInstr *instr) {
+    uint8_t dst_ext = 0u;
+    uint8_t imm_ext = instr->size == 4u ? 4u : 2u;
+
     return valid_size(instr->size) &&
-           valid_cmpi_length(instr->size, instr->byte_length) &&
+           exact_data_alterable_ext_length(&instr->dst, &dst_ext) &&
            valid_immediate_width(instr->size, instr->immediate) &&
-           instr->src_reg == 0u &&
-           instr->src.mode == NG_M68K_EA_NONE &&
-           ea_is_data_alterable(&instr->dst);
+           validate_immediate_dest_legacy_fields(instr) &&
+           instr->byte_length == (uint8_t)(2u + imm_ext + dst_ext);
 }
 
 static int validate_immediate_to_ea(const NgM68kInstr *instr) {
+    uint8_t dst_ext = 0u;
+    uint8_t imm_ext = instr->size == 4u ? 4u : 2u;
+
     return valid_size(instr->size) &&
-           valid_cmpi_length(instr->size, instr->byte_length) &&
+           exact_data_alterable_ext_length(&instr->dst, &dst_ext) &&
            valid_immediate_width(instr->size, instr->immediate) &&
-           instr->src_reg == 0u &&
-           instr->src.mode == NG_M68K_EA_NONE &&
-           ea_is_data_alterable(&instr->dst);
+           validate_immediate_dest_legacy_fields(instr) &&
+           instr->byte_length == (uint8_t)(2u + imm_ext + dst_ext);
 }
 
 static int validate_word_data_to_dreg(const NgM68kInstr *instr) {

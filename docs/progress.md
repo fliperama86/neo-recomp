@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `ADDI`/`SUBI`/`ORI`/`ANDI`/`EORI`
+  and `CMPI` immediate-to-data-alterable forms against the Motorola/NXP
+  Programmer's Reference Manual immediate and destination EA tables. The
+  validator now requires exact destination EA payloads, immediate widths,
+  immediate-plus-EA instruction lengths, Dn/absolute/displacement legacy
+  metadata consistency, and no stray source, condition, or target fields.
+  `test_m68k_validate` covered malformed Dn payload, address-displacement
+  legacy metadata, and absolute-word payload metadata red first.
 - local: Fact-checked MC68000 `TST <ea>` against the
   Motorola/NXP Programmer's Reference Manual data-alterable destination table
   and later-family PC/immediate exclusions. The validator now requires exact
