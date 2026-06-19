@@ -110,7 +110,8 @@ Covered by executable generated-C validation:
   `TRAPV`, `ILLEGAL`, A-line, F-line, failed `CHK`, and divide-by-zero now
   push 68000-style SR/PC exception frames and dispatch through the vector
   table; `RTE`/`RTR` pop stack frames back into SR/CCR and
-  PC. Generated-exec now oracle-checks failed `CHK.W` vector-6 entry for
+  PC. Generated-exec now oracle-checks taken `TRAPV` vector-7 entry with the
+  saved SR and next PC preserved, failed `CHK.W` vector-6 entry for
   negative values (`N` set in the saved SR) and above-bound values (`N`
   cleared in the saved SR), and oracle-checks `DIVU.W #0,Dn` vector-5 entry
   preserving the destination register while saving the pre-trap SR and next PC.
@@ -274,6 +275,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generated-exec oracle coverage for taken `TRAPV`, proving vector
+  7 exception entry saves the pre-trap SR and next PC before dispatching to the
+  handler. The red step failed in the interpreter oracle until the `0x4E76`
+  path was modeled.
 - local: Added generated-exec oracle coverage for `DIVU.W #0,D7` so
   divide-by-zero now proves vector-5 exception entry against the interpreter
   oracle, including destination preservation and pre-trap SR/next-PC frame
