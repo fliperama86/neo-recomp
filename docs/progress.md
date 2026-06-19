@@ -187,7 +187,8 @@ Covered by executable generated-C validation:
   - `DIVU.W <ea>,Dn` and `DIVS.W <ea>,Dn` covered so far by immediate sources,
     divide-by-zero exception-vector emission, and a signed quotient-overflow
     case that leaves the destination operand unchanged
-  - `EXG` register exchanges covered so far by data-register pairs
+  - `EXG` register exchanges covered for data-register, address-register, and
+    data-register/address-register pairs, with CCR preserved
   - `ANDI.B #imm,(d16,An)`
   - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
     displacement, and postincrement destinations
@@ -230,6 +231,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `EXG` register exchange forms. Generated-exec now covers
+  address-register pairs and data-register/address-register pairs in addition
+  to the existing data-register-pair coverage, confirming 32-bit swaps with
+  condition codes unchanged.
 - local: Fact-checked `TAS` test-before-set semantics. Generated-exec now
   covers `TAS D0`, proving flags are computed from the original byte, bit 7 is
   set in the data-register byte afterward, `V/C` are cleared, and `X` is

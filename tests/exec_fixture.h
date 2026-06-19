@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#define NG_EXEC_FIXTURE_SIZE 0xA40u
-#define NG_EXEC_FIXTURE_ADDR_COUNT 84u
+#define NG_EXEC_FIXTURE_SIZE 0xA80u
+#define NG_EXEC_FIXTURE_ADDR_COUNT 85u
 
 #if defined(__GNUC__) || defined(__clang__)
 #define NG_EXEC_FIXTURE_MAYBE_UNUSED __attribute__((unused))
@@ -722,6 +722,23 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
     ng_exec_fixture_write32(data, 0xA2Au, 0x0000022Au);
     ng_exec_fixture_write16(data, 0xA2Eu, 0x4E72u); /* STOP #$2700 */
     ng_exec_fixture_write16(data, 0xA30u, 0x2700u);
+
+    ng_exec_fixture_write16(data, 0xA40u, 0x207Cu); /* MOVEA.L #$11112222,A0 */
+    ng_exec_fixture_write32(data, 0xA42u, 0x11112222u);
+    ng_exec_fixture_write16(data, 0xA46u, 0x227Cu); /* MOVEA.L #$33334444,A1 */
+    ng_exec_fixture_write32(data, 0xA48u, 0x33334444u);
+    ng_exec_fixture_write16(data, 0xA4Cu, 0x243Cu); /* MOVE.L #$55556666,D2 */
+    ng_exec_fixture_write32(data, 0xA4Eu, 0x55556666u);
+    ng_exec_fixture_write16(data, 0xA52u, 0x267Cu); /* MOVEA.L #$77778888,A3 */
+    ng_exec_fixture_write32(data, 0xA54u, 0x77778888u);
+    ng_exec_fixture_write16(data, 0xA58u, 0x44FCu); /* MOVE #$001F,CCR */
+    ng_exec_fixture_write16(data, 0xA5Au, 0x001Fu);
+    ng_exec_fixture_write16(data, 0xA5Cu, 0xC149u); /* EXG A0,A1 */
+    ng_exec_fixture_write16(data, 0xA5Eu, 0xC58Bu); /* EXG D2,A3 */
+    ng_exec_fixture_write16(data, 0xA60u, 0x40F9u); /* MOVE SR,$0000022C */
+    ng_exec_fixture_write32(data, 0xA62u, 0x0000022Cu);
+    ng_exec_fixture_write16(data, 0xA66u, 0x4E72u); /* STOP #$2700 */
+    ng_exec_fixture_write16(data, 0xA68u, 0x2700u);
 }
 
 static NG_EXEC_FIXTURE_MAYBE_UNUSED uint32_t ng_exec_fixture_addr(uint32_t index) {
@@ -810,6 +827,7 @@ static NG_EXEC_FIXTURE_MAYBE_UNUSED uint32_t ng_exec_fixture_addr(uint32_t index
         0x000009D0u,
         0x00000A00u,
         0x00000A20u,
+        0x00000A40u,
     };
     return index < NG_EXEC_FIXTURE_ADDR_COUNT ? addrs[index] : 0;
 }
