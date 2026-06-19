@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `TST <ea>` against the
+  Motorola/NXP Programmer's Reference Manual data-alterable destination table
+  and later-family PC/immediate exclusions. The validator now requires exact
+  tested-operand EA payloads, instruction length, Dn/absolute/displacement
+  legacy metadata consistency, and no stray destination, condition, target, or
+  immediate fields. `test_m68k_validate` covered malformed Dn payload and
+  displacement legacy metadata red first.
 - local: Fact-checked MC68000 `CHK.W`, `MULU.W`/`MULS.W`, and
   `DIVU.W`/`DIVS.W` word data-source-to-data-register forms against the
   Motorola/NXP Programmer's Reference Manual source EA tables. The validator

@@ -1201,10 +1201,6 @@ static int validate_add_sub_or_and(const NgM68kInstr *instr) {
     return validate_dreg_to_memory_binary(instr);
 }
 
-static int valid_tst_length(uint8_t byte_length) {
-    return byte_length == 2u || byte_length == 4u || byte_length == 6u;
-}
-
 static int valid_cmpi_length(uint8_t size, uint8_t byte_length) {
     if (size == 4u) {
         return byte_length == 6u || byte_length == 8u || byte_length == 10u;
@@ -1255,13 +1251,51 @@ static int validate_address_reg_op(const NgM68kInstr *instr) {
            instr->byte_length == (uint8_t)(2u + src_ext);
 }
 
+static int validate_tst_legacy_fields(const NgM68kInstr *instr) {
+    if (instr->target != 0u ||
+        instr->condition != 0u ||
+        instr->src_reg != 0u ||
+        instr->immediate != 0u ||
+        instr->dst.mode != NG_M68K_EA_NONE) {
+        return 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_DREG) {
+        return instr->form == NG_M68K_FORM_DREG &&
+               instr->reg == instr->src.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_ABS_W ||
+        instr->src.mode == NG_M68K_EA_ABS_L) {
+        return instr->form == NG_M68K_FORM_ABS &&
+               instr->reg == 0u &&
+               instr->absolute_addr == instr->src.absolute_addr &&
+               instr->displacement == 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_ADISP) {
+        return instr->form == NG_M68K_FORM_AREG_DISP &&
+               instr->reg == instr->src.reg &&
+               instr->absolute_addr == 0u &&
+               instr->displacement == instr->src.displacement;
+    }
+
+    return instr->form == NG_M68K_FORM_NONE &&
+           instr->reg == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0;
+}
+
 static int validate_tst(const NgM68kInstr *instr) {
+    uint8_t src_ext = 0u;
+
     return valid_size(instr->size) &&
-           valid_tst_length(instr->byte_length) &&
-           instr->immediate == 0u &&
-           instr->src_reg == 0u &&
-           instr->dst.mode == NG_M68K_EA_NONE &&
-           ea_is_data_alterable(&instr->src);
+           exact_data_source_ext_length(instr, &src_ext) &&
+           ea_is_data_alterable(&instr->src) &&
+           validate_tst_legacy_fields(instr) &&
+           instr->byte_length == (uint8_t)(2u + src_ext);
 }
 
 static int validate_cmpi(const NgM68kInstr *instr) {
