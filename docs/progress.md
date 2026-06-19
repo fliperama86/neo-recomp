@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `MOVE` source and destination effective-address
+  classes against the Motorola/NXP Programmer's Reference Manual. The
+  post-decode validator now requires exact `MOVE` byte/word/long source and
+  destination EA payloads, extension lengths, PC-relative source bases,
+  immediate widths, index displacement ranges, and legacy form/register fields.
+  `test_m68k_validate` covered malformed `MOVE` metadata red first.
 - local: Fact-checked MC68000 `BRA`/`BSR`/`Bcc` branch
   displacements against the Motorola/NXP Programmer's Reference Manual. Decode
   now records byte/word branch displacements, and the validator requires exact
