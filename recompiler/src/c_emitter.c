@@ -1992,7 +1992,9 @@ static int emit_instr(FILE *out,
         fprintf(out, "    if (g_ng_m68k.sr & NG_CCR_V) {\n");
         fprintf(out, "      ng_push_exception_frame(0x%08Xu);\n",
                 (instr->addr + instr->byte_length) & 0x00FFFFFFu);
-        fprintf(out, "      ng_generated_call(ng68k_read32(0x0000001Cu));\n");
+        fprintf(out, "      uint32_t ng_pc = ng68k_read32(0x0000001Cu);\n");
+        fprintf(out, "      if (ng_service_trace(ng_pc, ng_trace_sr)) return;\n");
+        fprintf(out, "      ng_generated_call(ng_pc);\n");
         fprintf(out, "      return;\n");
         fprintf(out, "    }\n");
         return 1;

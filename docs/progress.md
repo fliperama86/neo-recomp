@@ -206,6 +206,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added trace-priority handling for taken `TRAPV`: when V is set,
+  generated code now stacks the TRAPV frame first, then services trace to the
+  TRAPV handler PC when tracing was enabled at instruction start.
 - local: Added trace-priority handling for `TRAP`: generated code now stacks the
   trap exception frame first, then services trace to the trap-handler PC when
   tracing was enabled at instruction start.
