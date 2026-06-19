@@ -13,8 +13,12 @@ bank_window_size = 0x100000
 
 [functions]
 entry = []
-extra = []
+# VBlank vector handler from the cart vector table. BIOS-backed smoke needs this
+# so generated BIOS interrupt dispatch can enter generated cart code.
+extra = [0x0008F6]
 
 [dispatch]
 # Callback target is loaded from RAM through A6 and dispatched via JSR (A0).
-runtime = [0x0006C8]
+# The additional sites are reached after seeding the VBlank handler and are
+# intentionally left as runtime-computed dispatch boundaries for now.
+runtime = [0x0006C8, 0x001F3C, 0x05BF8A]

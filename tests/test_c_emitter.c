@@ -71,6 +71,9 @@ int main(void) {
     CHECK(strstr(text, "#include \"ngrecomp/generated_abi.h\"") != NULL);
     CHECK(strstr(text, "#define NG_SR_S 0x2000u") != NULL);
     CHECK(strstr(text, "#define NG_SR_T 0x8000u") != NULL);
+    CHECK(strstr(text, "#define NG_GENERATED_CALL ng_generated_call") != NULL);
+    CHECK(strstr(text, "#define NG_GENERATED_DISPATCH NG_GENERATED_CALL") != NULL);
+    CHECK(strstr(text, "void NG_GENERATED_CALL(uint32_t addr)") != NULL);
     CHECK(strstr(text, "static void ng_set_sr(uint16_t value)") != NULL);
     CHECK(strstr(text, "g_ng_m68k.usp = g_ng_m68k.a[7];") != NULL);
     CHECK(strstr(text, "g_ng_m68k.ssp = g_ng_m68k.a[7];") != NULL);
@@ -120,12 +123,12 @@ int main(void) {
         CHECK(strstr(text, "if (ng_full > 0x0000FFFFu) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);
         CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x0000000Au);") != NULL);
         CHECK(strstr(text, "if (ng_service_trace(0x00000020u, ng_trace_sr)) return;") != NULL);
-        CHECK(strstr(text, "ng_generated_call(0x00000020u);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(0x00000020u);") != NULL);
         CHECK(strstr(text, "/* $00000A: JMP $000030 */") != NULL);
-        CHECK(strstr(text, "ng_generated_call(0x00000030u);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(0x00000030u);") != NULL);
         CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]);") != NULL);
         CHECK(strstr(text, "if (ng_service_trace(ng_pc, ng_trace_sr)) return;") != NULL);
-        CHECK(strstr(text, "ng_generated_call(ng_pc);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(ng_pc);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[7] += 4u;") != NULL);
         CHECK(strstr(text, "return;") != NULL);
 
@@ -577,7 +580,7 @@ int main(void) {
 
         CHECK(strstr(text, "/* $000000: BSR $000006 */") != NULL);
         CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x00000004u);") != NULL);
-        CHECK(strstr(text, "ng_generated_call(0x00000006u);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(0x00000006u);") != NULL);
         CHECK(strstr(text, "/* $000004: RTS */") != NULL);
 
         ng_program_rom_free(&rom);
@@ -603,9 +606,9 @@ int main(void) {
         CHECK(strstr(text, "/* $000000: JSR (A0) */") != NULL);
         CHECK(strstr(text, "uint32_t ng_target = (uint32_t)(g_ng_m68k.a[0]);") != NULL);
         CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x00000002u);") != NULL);
-        CHECK(strstr(text, "ng_generated_call(ng_target);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(ng_target);") != NULL);
         CHECK(strstr(text, "/* $000002: JMP ($4,A0) */") != NULL);
-        CHECK(strstr(text, "ng_generated_call((uint32_t)(g_ng_m68k.a[0] + (int32_t)4));") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH((uint32_t)(g_ng_m68k.a[0] + (int32_t)4));") != NULL);
 
         ng_program_rom_free(&rom);
     }
@@ -745,7 +748,7 @@ int main(void) {
         CHECK(strstr(text, "ng_push_exception_frame(0x00000004u);") != NULL);
         CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(0x0000008Cu);") != NULL);
         CHECK(strstr(text, "if (ng_service_trace(ng_pc, ng_trace_sr)) return;") != NULL);
-        CHECK(strstr(text, "ng_generated_call(ng_pc);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(ng_pc);") != NULL);
 
         ng_program_rom_free(&rom);
     }
@@ -792,7 +795,7 @@ int main(void) {
         CHECK(strstr(text, "ng_push_exception_frame(0x00000002u);") != NULL);
         CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(0x0000001Cu);") != NULL);
         CHECK(strstr(text, "if (ng_service_trace(ng_pc, ng_trace_sr)) return;") != NULL);
-        CHECK(strstr(text, "ng_generated_call(ng_pc);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(ng_pc);") != NULL);
         CHECK(strstr(text, "/* $000002: RTS */") != NULL);
         CHECK(strstr(text, "ng_log_dispatch_miss(0x00000000u);") == NULL);
 
@@ -844,7 +847,7 @@ int main(void) {
         CHECK(diagnostics.unsupported_count == 0u);
         CHECK(diagnostics.decode_error_count == 0u);
         CHECK(strstr(text, "/* $000000: BRA $000006 */") != NULL);
-        CHECK(strstr(text, "ng_generated_call(0x00000006u);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(0x00000006u);") != NULL);
         CHECK(strstr(text, "/* $000002: DC.W $15C0 */") == NULL);
         CHECK(strstr(text, "ng_log_dispatch_miss(0x00000000u);") == NULL);
         CHECK(strstr(text, "ng_log_dispatch_miss(0x00000002u);") == NULL);
@@ -871,7 +874,7 @@ int main(void) {
         CHECK(diagnostics.unsupported_count == 0u);
         CHECK(diagnostics.decode_error_count == 0u);
         CHECK(strstr(text, "/* $000000: JSR $000000 */") != NULL);
-        CHECK(strstr(text, "ng_generated_call(0x00000000u);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(0x00000000u);") != NULL);
         CHECK(strstr(text, "ng_log_dispatch_miss(0x00000006u);") == NULL);
 
         ng_program_rom_free(&rom);
@@ -902,7 +905,7 @@ int main(void) {
         CHECK(strstr(text, "goto ng_label_000008;") != NULL);
         CHECK(strstr(text, "/* $000002: JSR $000000 */") != NULL);
         CHECK(strstr(text, "ng_label_000008:") != NULL);
-        CHECK(strstr(text, "ng_generated_call(0x00000008u);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(0x00000008u);") != NULL);
 
         ng_program_rom_free(&rom);
     }
@@ -998,7 +1001,7 @@ int main(void) {
         CHECK(strstr(text, "ng_push_exception_frame(0x00000004u);") != NULL);
         CHECK(strstr(text, "uint32_t ng_vector_pc = ng68k_read32(0x00000014u);") != NULL);
         CHECK(strstr(text, "if (ng_service_trace(ng_vector_pc, ng_trace_sr)) return;") != NULL);
-        CHECK(strstr(text, "ng_generated_call(ng_vector_pc);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(ng_vector_pc);") != NULL);
 
         ng_program_rom_free(&rom);
     }
@@ -1024,7 +1027,7 @@ int main(void) {
         CHECK(strstr(text, "uint16_t ng_sr = ng68k_read16(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 2u;") != NULL);
         CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]); g_ng_m68k.a[7] += 4u;") != NULL);
         CHECK(strstr(text, "ng_set_sr(ng_sr);") != NULL);
-        CHECK(strstr(text, "ng_generated_call(ng_pc);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(ng_pc);") != NULL);
 
         ng_program_rom_free(&rom);
     }
@@ -1082,7 +1085,7 @@ int main(void) {
         CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | ng68k_read8(0x0010FDAEu);") != NULL);
         CHECK(strstr(text, "uint32_t ng_ea_000012 = ng68k_read32((uint32_t)(0x00000018u + (int32_t)(int16_t)(g_ng_m68k.d[0] & 0xFFFFu)));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[0] = (uint32_t)(ng_ea_000012);") != NULL);
-        CHECK(strstr(text, "ng_generated_call(g_ng_m68k.a[0]);") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_DISPATCH(g_ng_m68k.a[0]);") != NULL);
 
         ng_program_rom_free(&rom);
     }

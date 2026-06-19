@@ -6,17 +6,43 @@
 #include <stdlib.h>
 #include <string.h>
 
-void ng_generated_call(uint32_t addr);
-
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
 void ng_bios_generated_call(uint32_t addr);
 
-static int ng_generated_smoke_bios_dispatch(uint32_t addr) {
+static int g_ng_generated_smoke_bios_dispatch_depth;
+
+static void ng_generated_smoke_call_bios(uint32_t addr) {
+    ++g_ng_generated_smoke_bios_dispatch_depth;
+    ng_bios_generated_call(addr);
+    --g_ng_generated_smoke_bios_dispatch_depth;
+}
+#endif
+
+#ifdef NG_GENERATED_SMOKE_COMBINED_DISPATCH
+void ng_cart_generated_call(uint32_t addr);
+
+void ng_generated_call(uint32_t addr) {
     addr &= 0x00FFFFFFu;
     if (addr >= 0x00C00000u && addr <= 0x00CFFFFFu) {
         uint32_t bios_addr =
             0x00C00000u + ((addr - 0x00C00000u) % NG_NEO_SYSTEM_ROM_BYTES);
-        ng_bios_generated_call(bios_addr);
+        ng_generated_smoke_call_bios(bios_addr);
+        return;
+    }
+    ng_cart_generated_call(addr);
+}
+#else
+void ng_generated_call(uint32_t addr);
+#endif
+
+#ifdef NG_GENERATED_SMOKE_HAS_BIOS
+static int ng_generated_smoke_bios_dispatch(uint32_t addr) {
+    addr &= 0x00FFFFFFu;
+    if (addr >= 0x00C00000u && addr <= 0x00CFFFFFu) {
+        if (g_ng_generated_smoke_bios_dispatch_depth) {
+            return 0;
+        }
+        ng_generated_smoke_call_bios(addr);
         return 1;
     }
     return 0;
@@ -110,6 +136,7 @@ int ng_generated_smoke_run_with_bios(const char *neo_path,
     }
 
     ng_neogeo_reset_runtime();
+    ng_neogeo_set_auto_vblank_interval(bios_path ? 256u : 0u);
     ng_neogeo_set_program_rom(rom.data, rom.size);
     ng_neogeo_set_system_rom(bios_data, bios_size);
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
@@ -141,6 +168,7 @@ int ng_generated_smoke_run_with_bios(const char *neo_path,
             g_ng_m68k.a[7]);
 
     ng_neogeo_set_external_dispatch(NULL);
+    ng_neogeo_set_auto_vblank_interval(0);
     ng_neogeo_set_system_rom(NULL, 0);
     ng_neogeo_set_program_rom(NULL, 0);
     free(bios_data);

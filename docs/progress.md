@@ -59,28 +59,35 @@ Latest local Metal Slug smoke used:
 ./build/neo-recomp --game games/mslug.toml \
   --neo ~/Documents/Games/Mister/NEOGEO/mslug.neo \
   --emit-c build/mslug_recomp.c \
-  --emit-dispatch-audit build/mslug_dispatch_audit.txt
-cc -std=c99 -Wall -Wextra -Iinclude -c build/mslug_recomp.c -o build/mslug_recomp.o
+  --emit-dispatch-audit build/mslug_dispatch_audit.txt \
+  --fail-on-dispatch-gaps
+cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
+  -c build/mslug_recomp.c -o build/mslug_recomp.o
 ```
 
 The generated C now compiles to an object, and the current Metal Slug smoke
 passes `--fail-on-dispatch-gaps`. The current dispatch audit is:
 
 ```text
-function candidates: 397
-dispatch audit: sites=33 direct=31 missing_direct=0 external_direct=2 computed=0 runtime_computed=1 jump_tables=1 table_resolved=4 table_missing=0
-$0006C8 COMPUTED JSR target=<runtime> allowed=yes
+function candidates: 668
+dispatch audit: sites=48 direct=44 missing_direct=0 external_direct=5 computed=0 runtime_computed=3 jump_tables=1 table_resolved=4 table_missing=0
+$000900 DIRECT JMP target=$C00438 discovered=no external=yes
 $000862 DIRECT JMP target=$C00444 discovered=no external=yes
 $000984 DIRECT JSR target=$C004C2 discovered=no external=yes
+$0006C8 COMPUTED JSR target=<runtime> allowed=yes
+$001F3C COMPUTED JSR target=<runtime> allowed=yes
+$05BF8A COMPUTED JMP target=<runtime> allowed=yes
 ```
 
-The discovery candidate cap is now 1024; Metal Slug currently discovers 397
-candidate entry/instruction-boundary addresses without truncation. The previous
+The discovery candidate cap is now 1024; Metal Slug currently discovers 668
+candidate entry/instruction-boundary addresses without truncation after seeding
+the cart VBlank vector handler (`$0008F6`). The previous
 missing direct P-ROM targets (`$05DC1C`, `$05DC34`, `$024FB8`) are now
 discovered. Direct BIOS/system-ROM targets are classified as external runtime
 fallbacks instead of missing P-ROM discovery. The RAM-loaded callback at
-`$0006C8` (`MOVEA.L (A6),A0; JSR (A0)`) is explicitly classified in
-`games/mslug.toml` as a runtime-computed dispatch site, so it remains visible in
+`$0006C8` (`MOVEA.L (A6),A0; JSR (A0)`) and the additional VBlank-reached
+computed sites (`$001F3C`, `$05BF8A`) are explicitly classified in
+`games/mslug.toml` as runtime-computed dispatch sites, so they remain visible in
 the audit without failing the static P-ROM dispatch-gap check.
 
 The generated executable checkpoint uses the reusable smoke harness:
@@ -117,12 +124,16 @@ word-swapping it into 68000 byte order:
   build/bios_recomp.c
 
 cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
+  -DNG_GENERATED_CALL=ng_cart_generated_call \
+  -DNG_GENERATED_DISPATCH=ng_generated_call \
   -c build/mslug_recomp.c -o build/mslug_recomp.o
 cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
-  -Dng_generated_call=ng_bios_generated_call \
+  -DNG_GENERATED_CALL=ng_bios_generated_call \
+  -DNG_GENERATED_DISPATCH=ng_generated_call \
   -c build/bios_recomp.c -o build/bios_recomp.o
 cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
   -DNG_GENERATED_SMOKE_HAS_BIOS \
+  -DNG_GENERATED_SMOKE_COMBINED_DISPATCH \
   -c tools/generated_smoke_harness.c \
   -o build/generated_smoke_harness_bios.o
 cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
@@ -145,14 +156,21 @@ ng68k_write8 miss at $300001 value=$FF
 ```
 
 The runtime now handles `$300001` as the active-low DIP switch read and watchdog
-kick write. After that slice, the same BIOS-backed smoke no longer reports a
-bus miss within a short timeout. Sampling shows it spinning in the BIOS wait
-loop at `$C1870C`/`$C18714`, which sets `$10FE8C` and waits for an interrupt
-handler to clear it. The local BIOS discovery still reports
-`BIOS candidates: 1024 (truncated)`, so this remains a checkpoint slice rather
-than a complete BIOS recompilation. It proves generated cartridge code can
-dispatch into generated BIOS code and reach the first interrupt/VBlank runtime
-scheduling problem, not a CPU recompiler dispatch gap.
+kick write. The smoke harness also supports a combined cart/BIOS dispatcher,
+uses an auto-VBlank interrupt interval for BIOS-backed smoke, and the runtime now
+covers default active-low P1/P2/status-B input reads plus the port-output latch.
+With the default BIOS seed list above, the current BIOS-backed checkpoint is:
+
+```text
+starting cart entry $0007CC ssp=$0010F300
+dispatch miss at $C00438
+returned pc=$C00438 sr=$2104 sp=$0010F2F6
+```
+
+That means generated BIOS code can wait for VBlank, enter the generated cart
+VBlank handler, and return with the next missing BIOS entry at `$C00438`. The
+local BIOS discovery still reports `BIOS candidates: 1024 (truncated)`, so this
+remains a checkpoint slice rather than a complete BIOS recompilation.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.

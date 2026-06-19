@@ -9,7 +9,11 @@ typedef int (*NgExternalDispatchHandler)(uint32_t addr);
 #define NG_NEO_IRQACK_TIMER  0x0002u
 #define NG_NEO_IRQACK_VBLANK 0x0004u
 
+#define NG_NEO_REG_P1CNT     0x00300000u
 #define NG_NEO_REG_DIPSW     0x00300001u
+#define NG_NEO_REG_P2CNT     0x00340000u
+#define NG_NEO_REG_STATUS_B  0x00380000u
+#define NG_NEO_REG_POUTPUT   0x00380001u
 #define NG_NEO_REG_LSPCMODE  0x003C0006u
 #define NG_NEO_REG_TIMERHIGH 0x003C0008u
 #define NG_NEO_REG_TIMERLOW  0x003C000Au
@@ -45,11 +49,14 @@ void ng_neogeo_ack_interrupts(uint16_t ack_mask);
 void ng_neogeo_set_program_rom(const uint8_t *data, uint32_t size);
 void ng_neogeo_set_system_rom(const uint8_t *data, uint32_t size);
 void ng_neogeo_reset_runtime(void);
+void ng_neogeo_set_auto_vblank_interval(uint32_t interrupt_polls);
 void ng_neogeo_begin_vblank(void);
 void ng_neogeo_advance_timer(uint32_t pixel_ticks);
 void ng_neogeo_advance_scanline(void);
 void ng_neogeo_advance_frame(void);
 uint32_t ng_neogeo_watchdog_kicks(void);
+uint32_t ng_neogeo_interrupt_polls(void);
+uint8_t ng_neogeo_port_output(void);
 uint16_t ng_neogeo_lspc_mode(void);
 uint16_t ng_neogeo_timer_stop(void);
 uint32_t ng_neogeo_timer_reload(void);

@@ -15,6 +15,10 @@ static uint8_t g_ng_neogeo_palette_ram[NG_NEO_PALETTE_BANK_BYTES *
 static uint8_t g_ng_neogeo_palette_bank;
 static uint8_t g_ng_neogeo_backup_ram[NG_NEO_BACKUP_RAM_BYTES];
 static uint8_t g_ng_neogeo_backup_ram_unlocked;
+static uint8_t g_ng_neogeo_p1cnt = 0xFFu;
+static uint8_t g_ng_neogeo_p2cnt = 0xFFu;
+static uint8_t g_ng_neogeo_status_b = 0xFFu;
+static uint8_t g_ng_neogeo_port_output;
 static uint8_t g_ng_neogeo_dipswitch = 0xFFu;
 static uint32_t g_ng_neogeo_watchdog_kicks;
 static uint8_t g_ng_m68k_interrupt_level;
@@ -27,6 +31,8 @@ static uint32_t g_ng_neogeo_timer_reload_value;
 static uint32_t g_ng_neogeo_timer_counter_value;
 static uint8_t g_ng_neogeo_timer_counter_loaded;
 static uint16_t g_ng_neogeo_current_scanline;
+static uint32_t g_ng_neogeo_interrupt_polls;
+static uint32_t g_ng_neogeo_auto_vblank_interval;
 static NgExternalDispatchHandler g_ng_external_dispatch_handler;
 
 static void ng_neogeo_reload_timer_counter(void) {
@@ -49,6 +55,22 @@ static int ng_neogeo_is_backup_ram_addr(uint32_t addr) {
 
 static int ng_neogeo_is_dipswitch_addr(uint32_t addr) {
     return (addr & 0x00FE0081u) == NG_NEO_REG_DIPSW;
+}
+
+static int ng_neogeo_is_p1cnt_addr(uint32_t addr) {
+    return (addr & 0x00FE0001u) == NG_NEO_REG_P1CNT;
+}
+
+static int ng_neogeo_is_p2cnt_addr(uint32_t addr) {
+    return (addr & 0x00FE0001u) == NG_NEO_REG_P2CNT;
+}
+
+static int ng_neogeo_is_status_b_addr(uint32_t addr) {
+    return (addr & 0x00FE0001u) == NG_NEO_REG_STATUS_B;
+}
+
+static int ng_neogeo_is_port_output_addr(uint32_t addr) {
+    return (addr & 0x00FE0071u) == NG_NEO_REG_POUTPUT;
 }
 
 static int ng_neogeo_is_system_rom_addr(uint32_t addr) {
@@ -75,8 +97,20 @@ uint8_t ng68k_read8(uint32_t addr) {
     if (ng_neogeo_is_backup_ram_addr(addr)) {
         return g_ng_neogeo_backup_ram[addr & (NG_NEO_BACKUP_RAM_BYTES - 1u)];
     }
+    if (ng_neogeo_is_p1cnt_addr(addr)) {
+        return g_ng_neogeo_p1cnt;
+    }
     if (ng_neogeo_is_dipswitch_addr(addr)) {
         return g_ng_neogeo_dipswitch;
+    }
+    if (ng_neogeo_is_p2cnt_addr(addr)) {
+        return g_ng_neogeo_p2cnt;
+    }
+    if (ng_neogeo_is_status_b_addr(addr)) {
+        return g_ng_neogeo_status_b;
+    }
+    if (ng_neogeo_is_port_output_addr(addr)) {
+        return g_ng_neogeo_port_output;
     }
     if (ng_neogeo_is_system_rom_addr(addr)) {
         uint32_t rom_offset = (addr - 0x00C00000u) % NG_NEO_SYSTEM_ROM_BYTES;
@@ -122,6 +156,10 @@ void ng68k_write8(uint32_t addr, uint8_t value) {
     }
     if (ng_neogeo_is_dipswitch_addr(addr)) {
         ++g_ng_neogeo_watchdog_kicks;
+        return;
+    }
+    if (ng_neogeo_is_port_output_addr(addr)) {
+        g_ng_neogeo_port_output = value;
         return;
     }
 
@@ -269,13 +307,19 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_timer_counter_value = 0;
     g_ng_neogeo_timer_counter_loaded = 0;
     g_ng_neogeo_current_scanline = 0;
+    g_ng_neogeo_interrupt_polls = 0;
     g_ng_neogeo_watchdog_kicks = 0;
+    g_ng_neogeo_port_output = 0;
     memset(g_ng_neogeo_work_ram, 0, sizeof(g_ng_neogeo_work_ram));
     memset(g_ng_neogeo_palette_ram, 0, sizeof(g_ng_neogeo_palette_ram));
     memset(g_ng_neogeo_backup_ram, 0, sizeof(g_ng_neogeo_backup_ram));
     g_ng_neogeo_palette_bank = 0;
     g_ng_neogeo_backup_ram_unlocked = 0;
     ng_m68k_clear_interrupt_level();
+}
+
+void ng_neogeo_set_auto_vblank_interval(uint32_t interrupt_polls) {
+    g_ng_neogeo_auto_vblank_interval = interrupt_polls;
 }
 
 static void ng_neogeo_refresh_interrupt_level(void) {
@@ -361,6 +405,14 @@ uint32_t ng_neogeo_watchdog_kicks(void) {
     return g_ng_neogeo_watchdog_kicks;
 }
 
+uint32_t ng_neogeo_interrupt_polls(void) {
+    return g_ng_neogeo_interrupt_polls;
+}
+
+uint8_t ng_neogeo_port_output(void) {
+    return g_ng_neogeo_port_output;
+}
+
 uint16_t ng_neogeo_lspc_mode(void) {
     return g_ng_neogeo_lspc_mode;
 }
@@ -382,6 +434,12 @@ uint16_t ng_neogeo_current_scanline(void) {
 }
 
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {
+    ++g_ng_neogeo_interrupt_polls;
+    if (g_ng_neogeo_auto_vblank_interval != 0u &&
+        (g_ng_neogeo_interrupt_polls % g_ng_neogeo_auto_vblank_interval) == 0u) {
+        ng_neogeo_request_vblank_interrupt();
+    }
+
     uint8_t pending_level = (uint8_t)(g_ng_m68k_interrupt_level & 7u);
 
     if (!level || !vector || pending_level == 0u) {
