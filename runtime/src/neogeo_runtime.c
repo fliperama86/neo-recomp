@@ -4,6 +4,10 @@
 
 NgM68kState g_ng_m68k;
 
+static uint8_t g_ng_m68k_interrupt_level;
+static uint8_t g_ng_m68k_interrupt_vector;
+static uint8_t g_ng_m68k_level7_edge;
+
 uint8_t ng68k_read8(uint32_t addr) {
     fprintf(stderr, "ng68k_read8 miss at $%06X\n", addr & 0xFFFFFFu);
     return 0xFF;
@@ -48,9 +52,42 @@ void ng_m68k_stop_until_interrupt(uint16_t sr) {
     fprintf(stderr, "m68k STOP until interrupt sr=$%04X\n", sr);
 }
 
+void ng_m68k_set_interrupt_level(uint8_t level, uint8_t vector) {
+    level = (uint8_t)(level & 7u);
+    if (level == 7u && g_ng_m68k_interrupt_level < 7u) {
+        g_ng_m68k_level7_edge = 1u;
+    } else if (level < 7u) {
+        g_ng_m68k_level7_edge = 0u;
+    }
+    g_ng_m68k_interrupt_level = level;
+    g_ng_m68k_interrupt_vector = vector;
+}
+
+void ng_m68k_clear_interrupt_level(void) {
+    g_ng_m68k_interrupt_level = 0;
+    g_ng_m68k_interrupt_vector = 0;
+    g_ng_m68k_level7_edge = 0;
+}
+
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {
-    (void)current_mask;
-    (void)level;
-    (void)vector;
-    return 0;
+    uint8_t pending_level = (uint8_t)(g_ng_m68k_interrupt_level & 7u);
+
+    if (!level || !vector || pending_level == 0u) {
+        return 0;
+    }
+
+    if (pending_level == 7u && g_ng_m68k_level7_edge) {
+        g_ng_m68k_level7_edge = 0;
+        *level = pending_level;
+        *vector = g_ng_m68k_interrupt_vector;
+        return 1;
+    }
+
+    if (pending_level <= (current_mask & 7u)) {
+        return 0;
+    }
+
+    *level = pending_level;
+    *vector = g_ng_m68k_interrupt_vector;
+    return 1;
 }

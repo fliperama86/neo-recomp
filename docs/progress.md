@@ -11,7 +11,7 @@ project orientation; update this file after each meaningful green slice.
 - Branch: `main`
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
-- Current test status: 6/6 passing
+- Current test status: 7/7 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
@@ -206,6 +206,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a default runtime IPL controller with
+  `ng_m68k_set_interrupt_level()`, `ng_m68k_clear_interrupt_level()`, and
+  mask-aware `ng_m68k_take_interrupt()`. Unit coverage verifies ordinary mask
+  inhibition plus the MC68000 level-7 lower-to-7 edge case.
 - local: Added runtime-supplied instruction-boundary interrupts. Generated C now
   polls before each emitted instruction, accepted interrupts stack the current
   instruction PC, and `RTE` returns through instruction-start continuations
