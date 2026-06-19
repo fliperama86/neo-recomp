@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `ORI`/`ANDI`/`EORI #imm,CCR/SR` validation so
+  each status-immediate form requires its exact opcode word in addition
+  to the existing size, immediate-width, and no-operand metadata checks.
+  `test_m68k_validate` covered mismatched CCR/SR/status opcodes red first.
 - local: Tightened `ADDQ`/`SUBQ` decode and validation so word-sized
   address-register quick ops keep their word opcode size, byte-sized
   address-register quick opcodes decode as `UNKNOWN`, and validator

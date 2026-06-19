@@ -1673,7 +1673,36 @@ static int validate_word_data_to_dreg(const NgM68kInstr *instr) {
 }
 
 static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
+    uint16_t expected_opcode = 0u;
+
     if (instr->byte_length != 4u || !valid_control_immediate_fields(instr)) {
+        return 0;
+    }
+
+    switch (instr->mnemonic) {
+    case NG_M68K_ORI_TO_CCR:
+        expected_opcode = 0x003Cu;
+        break;
+    case NG_M68K_ANDI_TO_CCR:
+        expected_opcode = 0x023Cu;
+        break;
+    case NG_M68K_EORI_TO_CCR:
+        expected_opcode = 0x0A3Cu;
+        break;
+    case NG_M68K_ORI_TO_SR:
+        expected_opcode = 0x007Cu;
+        break;
+    case NG_M68K_ANDI_TO_SR:
+        expected_opcode = 0x027Cu;
+        break;
+    case NG_M68K_EORI_TO_SR:
+        expected_opcode = 0x0A7Cu;
+        break;
+    default:
+        return 0;
+    }
+
+    if (instr->opcode != expected_opcode) {
         return 0;
     }
 
@@ -1682,12 +1711,8 @@ static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
     case NG_M68K_ANDI_TO_CCR:
     case NG_M68K_EORI_TO_CCR:
         return instr->size == 1u && instr->immediate <= 0xFFu;
-    case NG_M68K_ORI_TO_SR:
-    case NG_M68K_ANDI_TO_SR:
-    case NG_M68K_EORI_TO_SR:
-        return instr->size == 2u && instr->immediate <= 0xFFFFu;
     default:
-        return 0;
+        return instr->size == 2u && instr->immediate <= 0xFFFFu;
     }
 }
 

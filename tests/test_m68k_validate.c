@@ -3745,6 +3745,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ORI_TO_CCR;
+    instr.opcode = 0x003Cu;
     instr.byte_length = 4u;
     instr.size = 1u;
     instr.immediate = 0x1Fu;
@@ -3752,6 +3753,15 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ORI_TO_CCR;
+    instr.opcode = 0x023Cu;
+    instr.byte_length = 4u;
+    instr.size = 1u;
+    instr.immediate = 0x1Fu;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ORI_TO_CCR;
+    instr.opcode = 0x003Cu;
     instr.byte_length = 4u;
     instr.size = 1u;
     instr.immediate = 0x1Fu;
@@ -3760,6 +3770,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ORI_TO_CCR;
+    instr.opcode = 0x003Cu;
     instr.byte_length = 4u;
     instr.size = 1u;
     instr.immediate = 0x1Fu;
@@ -3768,6 +3779,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ANDI_TO_CCR;
+    instr.opcode = 0x023Cu;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.immediate = 0x1Fu;
@@ -3775,6 +3787,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_EORI_TO_CCR;
+    instr.opcode = 0x0A3Cu;
     instr.byte_length = 4u;
     instr.size = 1u;
     instr.immediate = 0x100u;
@@ -3782,6 +3795,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ORI_TO_SR;
+    instr.opcode = 0x007Cu;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.immediate = 0x2700u;
@@ -3789,6 +3803,15 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ORI_TO_SR;
+    instr.opcode = 0x003Cu;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.immediate = 0x2700u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ORI_TO_SR;
+    instr.opcode = 0x007Cu;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.immediate = 0x2700u;
@@ -3797,6 +3820,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ORI_TO_SR;
+    instr.opcode = 0x007Cu;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.immediate = 0x2700u;
@@ -3805,6 +3829,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ANDI_TO_SR;
+    instr.opcode = 0x027Cu;
     instr.byte_length = 4u;
     instr.size = 1u;
     instr.immediate = 0xFFu;
@@ -3812,6 +3837,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_EORI_TO_SR;
+    instr.opcode = 0x0A7Cu;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.immediate = 0x10000u;
