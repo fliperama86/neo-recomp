@@ -11,7 +11,7 @@ project orientation; update this file after each meaningful green slice.
 - Branch: `main`
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
-- Current test status: 8/8 passing
+- Current test status: 9/9 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a minimal game TOML parser and wired `--game` into function
+  discovery. `[functions].entry` and `[functions].extra` now seed discovery
+  alongside the cartridge entry, and `test_game_config` raises the suite to
+  9 tests.
 - local: Broadened the post-decode legality validator with failing tests
   first. It now catches invalid `ADDQ/SUBQ` quick/address-register forms,
   non-alterable `TST`/`CMPI` targets, invalid `CHK` operands, multiply/divide

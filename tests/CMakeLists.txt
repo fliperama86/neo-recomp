@@ -18,6 +18,11 @@ add_executable(test_function_discovery
 )
 target_link_libraries(test_function_discovery PRIVATE neo_recompiler_core)
 
+add_executable(test_game_config
+    test_game_config.c
+)
+target_link_libraries(test_game_config PRIVATE neo_recompiler_core)
+
 add_executable(test_c_emitter
     test_c_emitter.c
 )
@@ -59,6 +64,7 @@ if(MSVC)
     target_compile_options(test_m68k_decode PRIVATE /W4)
     target_compile_options(test_m68k_validate PRIVATE /W4)
     target_compile_options(test_function_discovery PRIVATE /W4)
+    target_compile_options(test_game_config PRIVATE /W4)
     target_compile_options(test_c_emitter PRIVATE /W4)
     target_compile_options(test_runtime_interrupts PRIVATE /W4)
     target_compile_options(test_opcode_sweep PRIVATE /W4)
@@ -69,6 +75,7 @@ else()
     target_compile_options(test_m68k_decode PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_m68k_validate PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_function_discovery PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(test_game_config PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_c_emitter PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_runtime_interrupts PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_opcode_sweep PRIVATE -Wall -Wextra -Wpedantic)
@@ -80,6 +87,7 @@ add_test(NAME test_p_rom COMMAND test_p_rom)
 add_test(NAME test_m68k_decode COMMAND test_m68k_decode)
 add_test(NAME test_m68k_validate COMMAND test_m68k_validate)
 add_test(NAME test_function_discovery COMMAND test_function_discovery)
+add_test(NAME test_game_config COMMAND test_game_config)
 add_test(NAME test_c_emitter COMMAND test_c_emitter)
 add_test(NAME test_runtime_interrupts COMMAND test_runtime_interrupts)
 add_test(NAME test_opcode_sweep COMMAND test_opcode_sweep)

@@ -145,5 +145,27 @@ int main(void) {
         ng_program_rom_free(&rom);
     }
 
+    {
+        NgProgramRom rom = make_rom(0xA0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x10u, 0x4EB9u); /* JSR $00000080 */
+        write32(&rom, 0x12u, 0x00000080u);
+        write16(&rom, 0x16u, 0x4E75u);
+        write16(&rom, 0x40u, 0x4E75u);
+        write16(&rom, 0x80u, 0x4E75u);
+
+        const uint32_t seeds[] = {0x00000040u, 0x00000010u, 0x00000200u};
+        CHECK(ng_function_discover_from_seeds(&rom, seeds, 3u, &discovery));
+        CHECK(discovery.count == 4u);
+        CHECK(discovery.addrs[0] == 0x40u);
+        CHECK(discovery.addrs[1] == 0x10u);
+        CHECK(discovery.addrs[2] == 0x80u);
+        CHECK(discovery.addrs[3] == 0x16u);
+        CHECK(!ng_function_discovery_contains(&discovery, 0x200u));
+
+        ng_program_rom_free(&rom);
+    }
+
     return 0;
 }

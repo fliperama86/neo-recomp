@@ -21,3 +21,7 @@ int ng_function_discovery_add(NgFunctionDiscovery *discovery,
 int ng_function_discover_from_entry(const NgProgramRom *rom,
                                     uint32_t entry,
                                     NgFunctionDiscovery *out);
+int ng_function_discover_from_seeds(const NgProgramRom *rom,
+                                    const uint32_t *seeds,
+                                    uint32_t seed_count,
+                                    NgFunctionDiscovery *out);

@@ -119,12 +119,27 @@ static void scan_function_candidate(const NgProgramRom *rom,
 int ng_function_discover_from_entry(const NgProgramRom *rom,
                                     uint32_t entry,
                                     NgFunctionDiscovery *out) {
+    return ng_function_discover_from_seeds(rom, &entry, 1u, out);
+}
+
+int ng_function_discover_from_seeds(const NgProgramRom *rom,
+                                    const uint32_t *seeds,
+                                    uint32_t seed_count,
+                                    NgFunctionDiscovery *out) {
     if (!rom || !out) {
         return 0;
     }
 
     ng_function_discovery_init(out);
-    if (!ng_function_discovery_add(out, rom, entry)) {
+
+    if (!seeds || seed_count == 0u) {
+        return 0;
+    }
+
+    for (uint32_t i = 0; i < seed_count; ++i) {
+        ng_function_discovery_add(out, rom, seeds[i]);
+    }
+    if (out->count == 0u) {
         return 0;
     }
 

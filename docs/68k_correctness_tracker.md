@@ -22,7 +22,7 @@ Current verification command:
 ctest --test-dir build --output-on-failure
 ```
 
-Last local verification: **8/8 passing** on 2026-06-19.
+Last local verification: **9/9 passing** on 2026-06-19.
 
 ## Done and Covered
 
@@ -51,6 +51,7 @@ Last local verification: **8/8 passing** on 2026-06-19.
 | LSPC timer register model and frame/VBlank scheduling | Done | `tests/test_runtime_interrupts.c`; runtime `REG_LSPCMODE`, `REG_TIMERHIGH`, `REG_TIMERLOW`, `REG_TIMERSTOP`, `ng_neogeo_begin_vblank()`, `ng_neogeo_advance_timer()`, `ng_neogeo_advance_scanline()`, and `ng_neogeo_advance_frame()`. | Covered behavior includes timer reload-value writes, reload-on-`REG_TIMERLOW`, reload-on-VBlank, reload-on-zero repeat mode, interrupt-enable gating, VBlank IRQ requests on explicit VBlank/frame start and NTSC scanline wrap, timer IRQ priority over pending VBlank, IRQACK clearing, odd-byte GPU/LSPC register writes duplicating the byte into both halves, and NTSC 384-pixel/264-scanline frame advancement. This is not yet tied to generated CPU cycle accounting. |
 | Codegen diagnostics for unsupported/decode failures | Done | `tests/test_c_emitter.c`; `NgEmitDiagnostics` and `ng_emit_c_checked()` in `recompiler/src/c_emitter.c`. | Checked C emission now records unsupported decoded instructions and decode errors and fails generation instead of silently relying only on generated runtime dispatch misses. |
 | Initial post-decode legality validator | Done | `tests/test_m68k_validate.c`; `recompiler/src/m68k_validate.c`. | The validator rejects `UNKNOWN`/`INVALID`, illegal control-EA uses, illegal `MOVE` destinations, invalid condition numbers, selected data-alterable requirements, `ADDQ/SUBQ` quick/address-register size mistakes, `TST`/`CMPI` non-alterable destinations, `CHK` source/destination mistakes, multiply/divide destination mistakes, and `EXT`/`SWAP` non-data-register forms. Checked emission now consults it before emitting an instruction. |
+| Game TOML function seed parsing | Done | `tests/test_game_config.c`, `tests/test_function_discovery.c`; `recompiler/src/game_config.c`, `recompiler/src/function_discovery.c`, and `recompiler/src/main.c`. | `--game` now parses `[functions].entry` and `[functions].extra`, discovery can start from a seed list, unmapped seeds are ignored, and CLI discovery folds game-config seeds together with the cartridge entry. Only function seed metadata is parsed so far. |
 | Basic trace exception entry | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; generated `ng_service_trace()` helper. | Generated code snapshots the SR T bit before executing each instruction. Linear fall-through instructions, taken `BRA`/`Bcc`, taken `DBcc`, `JSR`/`BSR`/`JMP`, `RTS`, `STOP`, `RTE`/`RTR`, `TRAP`, taken `TRAPV`, failed `CHK`, and divide-by-zero paths now vector through trace vector 9 after execution when trace was enabled at instruction start. Trace stacks the architectural next/target PC, or for traced instruction exceptions the exception-handler PC after that exception frame is built, plus current saved SR on `SSP`, and clears the live T bit during exception entry. Generated-exec also covers no-trace behavior for not-executed illegal, A-line, F-line, and privilege cases, plus trace-before-pending-interrupt priority. |
 | All 16 condition predicates available to generated code | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; condition predicate helper in `recompiler/src/c_emitter.c`. | Only selected branch/condition behavior is oracle-covered; full flag correctness is partial. |
 
@@ -104,8 +105,9 @@ should **not** replace the real supervisor/user stack switching tracked here.
 4. **Broaden post-decode legality validator**: make invalid source/destination
    effective-address combinations and CPU-family scope explicit for every
    decoded instruction family.
-5. **Game metadata and dispatch audits**: parse `games/*.toml`, classify direct/
-   computed/jump-table/unresolved targets, and fail smoke runs on dispatch gaps.
+5. **Dispatch and metadata audits**: expand `games/*.toml` beyond function
+   seeds, classify direct/computed/jump-table/unresolved targets, and fail smoke
+   runs on dispatch gaps.
 6. **Full exception/trace priority matrix**: broaden coverage across every
    generated exception class, address/bus errors once implemented, and nested
    exception/vector-fetch failure cases.

@@ -1,5 +1,6 @@
 #include "c_emitter.h"
 #include "function_discovery.h"
+#include "game_config.h"
 #include "m68k_analyze.h"
 #include "m68k_decode.h"
 #include "m68k_stub.h"
@@ -10,6 +11,7 @@
 #include <string.h>
 
 #define CLI_MAX_FUNCTION_PREVIEWS 4u
+#define CLI_MAX_DISCOVERY_SEEDS (1u + NG_GAME_CONFIG_MAX_FUNCTIONS * 2u)
 
 static void print_usage(const char *argv0) {
     fprintf(stderr,
@@ -129,6 +131,15 @@ static int emit_c_file(const char *path,
     return 1;
 }
 
+static void add_discovery_seed(uint32_t *seeds,
+                               uint32_t *seed_count,
+                               uint32_t seed) {
+    if (!seeds || !seed_count || *seed_count >= CLI_MAX_DISCOVERY_SEEDS) {
+        return;
+    }
+    seeds[(*seed_count)++] = seed;
+}
+
 int main(int argc, char **argv) {
     const char *game_path = NULL;
     const char *p1_path = NULL;
@@ -158,6 +169,12 @@ int main(int argc, char **argv) {
         return 2;
     }
 
+    NgGameConfig game_config;
+    if (!ng_game_config_load(game_path, &game_config)) {
+        fprintf(stderr, "cannot load game config: %s\n", game_path);
+        return 1;
+    }
+
     NgProgramRom rom = {0};
     int loaded = neo_path ? ng_program_rom_load_neo(&rom, neo_path)
                           : ng_program_rom_load(&rom, p1_path, p2_path);
@@ -167,6 +184,10 @@ int main(int argc, char **argv) {
     }
 
     printf("game config: %s\n", game_path);
+    printf("game config functions: entry=%u extra=%u%s\n",
+           game_config.entry_count,
+           game_config.extra_count,
+           game_config.truncated ? " (truncated)" : "");
     printf("program image: %u bytes\n", rom.size);
     if (rom.size >= 8) {
         uint32_t initial_ssp = ng_program_rom_initial_ssp(&rom);
@@ -185,8 +206,18 @@ int main(int argc, char **argv) {
             if (ng_program_rom_addr_is_mapped(&rom, cart_entry)) {
                 print_decode_preview(&rom, "entry preview", cart_entry, 16, 1);
 
+                uint32_t seeds[CLI_MAX_DISCOVERY_SEEDS];
+                uint32_t seed_count = 0;
+                add_discovery_seed(seeds, &seed_count, cart_entry);
+                for (uint32_t i = 0; i < game_config.entry_count; ++i) {
+                    add_discovery_seed(seeds, &seed_count, game_config.entry[i]);
+                }
+                for (uint32_t i = 0; i < game_config.extra_count; ++i) {
+                    add_discovery_seed(seeds, &seed_count, game_config.extra[i]);
+                }
+
                 NgFunctionDiscovery discovery;
-                if (ng_function_discover_from_entry(&rom, cart_entry, &discovery)) {
+                if (ng_function_discover_from_seeds(&rom, seeds, seed_count, &discovery)) {
                     print_function_candidates(&rom, &discovery);
                     if (emit_c_path && !emit_c_file(emit_c_path, &rom, &discovery)) {
                         ng_program_rom_free(&rom);

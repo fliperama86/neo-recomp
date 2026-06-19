@@ -27,7 +27,7 @@ set of patterns to adapt deliberately.
 | Supervisor/user stacks | Active `SSP`/`USP` switching is now covered for full-SR writes, exception entry, `STOP`, and `RTE`. | Runtime state comments assume `A7 = SSP` and `USP` is a separate shadow; good enough for Genesis game paths, not a complete user-mode model. | Do **not** copy this simplification; keep the official MC68000 stack model. |
 | Interrupts/STOP | Runtime-approved `STOP` wake, instruction-boundary interrupts, a basic IPL/level-7-edge runtime controller, cartridge VBlank/timer/reset-pending source APIs, and memory-mapped `REG_IRQACK` clearing are covered; timer/VBlank scheduling remains open. | Runtime has cooperative VBlank and STOP yield hooks, but many semantics are tuned to Genesis/Sonic. | Use it as a design reference for runtime scheduling, not as a 68000 spec oracle. |
 | Cycle timing | Missing. | Emits estimated per-instruction cycles and uses a cycle accumulator for VBlank/audio timing. | Add only after semantic correctness; make cycle estimates separately testable. |
-| Game config | Current `--game` is accepted but not actually parsed into discovery/runtime metadata. | TOML config drives output prefix, disassembly discovery files, RAM layout, jump tables, protected ranges, code-address oracles, and per-game hooks. | `neo-recomp` should parse `games/*.toml` for real metadata before serious real-ROM smoke work. |
+| Game config | `--game` now parses `[functions].entry` and `[functions].extra` as discovery seeds. | TOML config drives output prefix, disassembly discovery files, RAM layout, jump tables, protected ranges, code-address oracles, and per-game hooks. | Expand `games/*.toml` beyond function seeds before serious real-ROM smoke work. |
 | Tracking docs | Added `docs/68k_correctness_tracker.md`; progress and finish plan exist. | Has `COVERAGE.md`, `PRINCIPLES.md`, debug docs, and generated dispatch audits. | Keep our tracker, and add machine-generated audits as implementation catches up. |
 
 ## 2026-06-19 Follow-Up Contrast
@@ -111,8 +111,8 @@ These reinforce items already in `68k_correctness_tracker.md`:
 2. Extend **codegen diagnostics** into dispatch/jump-table audits and unresolved
    dynamic control-flow classification before the next serious real-ROM smoke
    loop.
-3. Add **game TOML parsing** so `--game` drives real metadata instead of being a
-   printed path.
+3. Expand **game TOML parsing** beyond function seeds so `--game` drives more
+   discovery/runtime metadata.
 4. **Broaden the post-decode legality validator** and route invalid encodings
    to loud diagnostics/trap behavior.
 5. Add a **trusted oracle harness** for CPU semantics and per-function parity.
