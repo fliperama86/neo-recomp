@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `ADDX`/`SUBX` extended arithmetic and
+  `ABCD`/`SBCD` packed-BCD pair forms against the Motorola/NXP Programmer's
+  Reference Manual. The validator now requires exact 2-byte register-pair or
+  predecrement-pair metadata, matching source/destination register fields,
+  register bounds, no stray immediate/condition fields, and byte-only BCD
+  forms. `test_m68k_validate` covered malformed metadata first.
 - local: Fact-checked MC68000 `CMPM (Ay)+,(Ax)+` metadata against
   the Motorola/NXP Programmer's Reference Manual. The validator now requires
   byte/word/long size, exact 2-byte length, postincrement source and

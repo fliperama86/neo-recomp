@@ -92,10 +92,24 @@ static int valid_word_or_long(uint8_t size) {
 }
 
 static int valid_extend_pair(const NgM68kInstr *instr) {
-    return (instr->src.mode == NG_M68K_EA_DREG &&
-            instr->dst.mode == NG_M68K_EA_DREG) ||
-           (instr->src.mode == NG_M68K_EA_APRE &&
-            instr->dst.mode == NG_M68K_EA_APRE);
+    if (instr->byte_length != 2u ||
+        instr->immediate != 0u ||
+        instr->condition != 0u ||
+        instr->src.reg >= 8u ||
+        instr->dst.reg >= 8u ||
+        instr->src_reg != instr->src.reg ||
+        instr->reg != instr->dst.reg) {
+        return 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_DREG &&
+        instr->dst.mode == NG_M68K_EA_DREG) {
+        return instr->form == NG_M68K_FORM_DREG_TO_DREG;
+    }
+
+    return instr->src.mode == NG_M68K_EA_APRE &&
+           instr->dst.mode == NG_M68K_EA_APRE &&
+           instr->form == NG_M68K_FORM_NONE;
 }
 
 static int valid_no_operand_2byte(const NgM68kInstr *instr) {

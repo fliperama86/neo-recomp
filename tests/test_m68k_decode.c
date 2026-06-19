@@ -871,8 +871,10 @@ int main(void) {
         CHECK(instr.size == 2);
         CHECK(instr.src.mode == NG_M68K_EA_DREG);
         CHECK(instr.src.reg == 0);
+        CHECK(instr.src_reg == 0);
         CHECK(instr.dst.mode == NG_M68K_EA_DREG);
         CHECK(instr.dst.reg == 1);
+        CHECK(instr.reg == 1);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "SUBX.W D0,D1") == 0);
     }
@@ -886,8 +888,10 @@ int main(void) {
         CHECK(instr.size == 1);
         CHECK(instr.src.mode == NG_M68K_EA_DREG);
         CHECK(instr.src.reg == 0);
+        CHECK(instr.src_reg == 0);
         CHECK(instr.dst.mode == NG_M68K_EA_DREG);
         CHECK(instr.dst.reg == 1);
+        CHECK(instr.reg == 1);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "ABCD.B D0,D1") == 0);
     }
@@ -901,8 +905,10 @@ int main(void) {
         CHECK(instr.size == 1);
         CHECK(instr.src.mode == NG_M68K_EA_APRE);
         CHECK(instr.src.reg == 1);
+        CHECK(instr.src_reg == 1);
         CHECK(instr.dst.mode == NG_M68K_EA_APRE);
         CHECK(instr.dst.reg == 4);
+        CHECK(instr.reg == 4);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "SBCD.B -(A1),-(A4)") == 0);
     }
@@ -916,8 +922,10 @@ int main(void) {
         CHECK(instr.size == 2);
         CHECK(instr.src.mode == NG_M68K_EA_APRE);
         CHECK(instr.src.reg == 5);
+        CHECK(instr.src_reg == 5);
         CHECK(instr.dst.mode == NG_M68K_EA_APRE);
         CHECK(instr.dst.reg == 6);
+        CHECK(instr.reg == 6);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "ADDX.W -(A5),-(A6)") == 0);
     }
