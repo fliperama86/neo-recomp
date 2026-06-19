@@ -16,7 +16,7 @@
 
 static void print_usage(const char *argv0) {
     fprintf(stderr,
-            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>) [--emit-c <out.c>] [--emit-dispatch-audit <out.txt>]\n",
+            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>) [--emit-c <out.c>] [--emit-dispatch-audit <out.txt>] [--fail-on-dispatch-gaps]\n",
             argv0);
 }
 
@@ -181,6 +181,7 @@ int main(int argc, char **argv) {
     const char *neo_path = NULL;
     const char *emit_c_path = NULL;
     const char *emit_dispatch_audit_path = NULL;
+    int fail_on_dispatch_gaps = 0;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--game") == 0 && i + 1 < argc) {
@@ -195,6 +196,8 @@ int main(int argc, char **argv) {
             emit_c_path = argv[++i];
         } else if (strcmp(argv[i], "--emit-dispatch-audit") == 0 && i + 1 < argc) {
             emit_dispatch_audit_path = argv[++i];
+        } else if (strcmp(argv[i], "--fail-on-dispatch-gaps") == 0) {
+            fail_on_dispatch_gaps = 1;
         } else {
             print_usage(argv[0]);
             return 2;
@@ -263,6 +266,24 @@ int main(int argc, char **argv) {
                         !emit_dispatch_audit_file(emit_dispatch_audit_path, &rom, &discovery)) {
                         ng_program_rom_free(&rom);
                         return 1;
+                    }
+                    if (fail_on_dispatch_gaps) {
+                        NgDispatchAudit audit;
+                        if (!ng_dispatch_audit_build(&rom, &discovery, &audit)) {
+                            fprintf(stderr, "failed to build dispatch audit\n");
+                            ng_program_rom_free(&rom);
+                            return 1;
+                        }
+                        if (ng_dispatch_audit_has_gaps(&audit)) {
+                            fprintf(stderr,
+                                    "dispatch audit gaps: missing_direct=%u computed=%u table_missing=%u%s\n",
+                                    audit.missing_direct_count,
+                                    audit.computed_count,
+                                    audit.jump_table_missing_entries,
+                                    audit.truncated ? " truncated" : "");
+                            ng_program_rom_free(&rom);
+                            return 1;
+                        }
                     }
                 }
             } else {

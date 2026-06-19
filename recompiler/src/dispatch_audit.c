@@ -183,6 +183,16 @@ int ng_dispatch_audit_build(const NgProgramRom *rom,
     return 1;
 }
 
+int ng_dispatch_audit_has_gaps(const NgDispatchAudit *audit) {
+    if (!audit) {
+        return 0;
+    }
+    return audit->missing_direct_count != 0u ||
+           audit->computed_count != 0u ||
+           audit->jump_table_missing_entries != 0u ||
+           audit->truncated;
+}
+
 int ng_dispatch_audit_write(FILE *out, const NgDispatchAudit *audit) {
     if (!out || !audit) {
         return 0;

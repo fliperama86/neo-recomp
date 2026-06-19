@@ -42,4 +42,5 @@ void ng_dispatch_audit_init(NgDispatchAudit *audit);
 int ng_dispatch_audit_build(const NgProgramRom *rom,
                             const NgFunctionDiscovery *discovery,
                             NgDispatchAudit *audit);
+int ng_dispatch_audit_has_gaps(const NgDispatchAudit *audit);
 int ng_dispatch_audit_write(FILE *out, const NgDispatchAudit *audit);

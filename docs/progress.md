@@ -207,6 +207,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added dispatch-audit gap enforcement. `ng_dispatch_audit_has_gaps()`
+  is covered by unit tests, and the CLI now accepts `--fail-on-dispatch-gaps`
+  to make smoke runs fail on missing direct targets, computed dispatches,
+  unresolved table entries, or audit truncation.
 - local: Added manual `[[jump_table]]` discovery metadata inspired by the
   reference pipeline. Game TOML now parses abs32, pcrel16, and BRA-table
   formats, discovery folds those targets into the function worklist, and the
@@ -479,7 +483,7 @@ Real-ROM smoke remains a near follow-up once a local `.neo` input is available.
 Near follow-ups:
 
 - Parse `games/*.toml` beyond function/discovery-file/jump-table metadata into machine-checkable discovery/runtime metadata.
-- Enforce dispatch-audit gaps in smoke runs and add interior-label checks.
+- Add interior-label checks and broaden dispatch-audit target patterns beyond direct/computed/current table cases.
 - Migrate more instruction families onto the generic EA helpers instead of adding bespoke forms.
 - Broaden the decode/codegen legality layer so invalid source/destination EA combinations fail loudly.
 - Add byte/word/long helpers for arithmetic flags instead of ad hoc emitted flag code.

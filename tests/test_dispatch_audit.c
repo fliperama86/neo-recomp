@@ -77,6 +77,7 @@ int main(void) {
     CHECK(audit.jump_table_count == 1u);
     CHECK(audit.jump_table_resolved_entries == 3u);
     CHECK(audit.jump_table_missing_entries == 1u);
+    CHECK(ng_dispatch_audit_has_gaps(&audit));
     CHECK(!audit.truncated);
 
     CHECK(audit.count == 4u);
@@ -111,6 +112,11 @@ int main(void) {
     CHECK(strstr(text, "$00001A JUMP_TABLE JMP table=$00001C resolved=3 missing=1") != NULL);
     CHECK(strstr(text, "$000060 COMPUTED JSR target=<runtime>") != NULL);
     CHECK(strstr(text, "$000070 DIRECT JSR target=$000300 discovered=no") != NULL);
+
+    audit.missing_direct_count = 0u;
+    audit.computed_count = 0u;
+    audit.jump_table_missing_entries = 0u;
+    CHECK(!ng_dispatch_audit_has_gaps(&audit));
 
     ng_program_rom_free(&rom);
     return 0;
