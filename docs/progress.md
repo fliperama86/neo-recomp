@@ -79,7 +79,7 @@ $001F3C COMPUTED JSR target=<runtime> allowed=yes
 $05BF8A COMPUTED JMP target=<runtime> allowed=yes
 ```
 
-The discovery candidate cap is now 1024; Metal Slug currently discovers 668
+The discovery candidate cap is now 8192; Metal Slug currently discovers 668
 candidate entry/instruction-boundary addresses without truncation after seeding
 the cart VBlank vector handler (`$0008F6`). The previous
 missing direct P-ROM targets (`$05DC1C`, `$05DC34`, `$024FB8`) are now
@@ -169,9 +169,11 @@ returned pc=$C00438 sr=$2104 sp=$0010F2F6
 ```
 
 That means generated BIOS code can wait for VBlank, enter the generated cart
-VBlank handler, and return with the next missing BIOS entry at `$C00438`. The
-local BIOS discovery still reports `BIOS candidates: 1024 (truncated)`, so this
-remains a checkpoint slice rather than a complete BIOS recompilation.
+VBlank handler, and return with the next missing BIOS entry at `$C00438`. With
+the larger discovery budget, the default BIOS seed list now reports
+`BIOS candidates: 2139` without truncation; `$C00438` remains the default
+checkpoint because it is a separate BIOS handoff that is not yet reached by the
+current static seed list.
 
 Generated dispatch now splits the per-address switch from the public dispatch
 entry and uses a pending-address loop, so nested `JMP`/`JSR`/`RTS`/exception
@@ -196,13 +198,19 @@ as a headless sound command/reply latch, preserving the previous default
 `0xFF` read value and recording 68000->Z80 commands without emulating the Z80 or
 YM2610. The next BIOS step exposed a wider port-output mirror at `$380021`, so
 the port-output latch now accepts odd addresses under the documented
-`$380000/$390000` mirror. With further local-only BIOS seeds through `$C18690`,
-the current local frontier is:
+`$380000/$390000` mirror. With the 8192-candidate budget and further local-only
+BIOS seeds through the `$C187xx`/`$C180xx` BIOS helper chain, the current local
+frontier is:
 
 ```text
-dispatch miss at $C17EC6
-returned pc=$C17EC6 sr=$2004 sp=$0010F2F8
+dispatch miss at $C18208
+returned pc=$C18208 sr=$2000 sp=$0010F2FC
 ```
+
+That expanded local BIOS probe still reports `BIOS candidates: 8192
+(truncated)`, so the next work is still targeted BIOS frontier selection or
+more precise BIOS CFG discovery rather than blindly treating it as a complete
+BIOS recompilation.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.

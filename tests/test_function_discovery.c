@@ -307,9 +307,9 @@ int main(void) {
     }
 
     {
-        const uint32_t seed_count = 300u;
+        const uint32_t seed_count = 5000u;
         NgProgramRom rom = make_rom(seed_count * 2u);
-        uint32_t seeds[300];
+        uint32_t seeds[5000];
         CHECK(rom.data != NULL);
 
         for (uint32_t i = 0; i < seed_count; ++i) {
