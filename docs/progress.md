@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `EXT`/`SWAP` validation so opcode class, size bit,
+  and register bits must match the decoded data-register metadata
+  (`$488n` for `EXT.W`, `$48Cn` for `EXT.L`, `$484n` for `SWAP`).
+  `test_m68k_validate` covered mismatched opcode/register and
+  cross-family opcode metadata red first.
 - local: Tightened `MOVEQ` validation so opcode register bits and
   immediate byte must match the decoded data-register destination and
   sign-extended immediate. `test_m68k_validate` covered mismatched

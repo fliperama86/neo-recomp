@@ -1274,10 +1274,15 @@ static int validate_ext_swap(const NgM68kInstr *instr) {
     }
 
     if (instr->mnemonic == NG_M68K_EXT) {
-        return instr->size == 2u || instr->size == 4u;
+        uint16_t expected_opcode =
+            (uint16_t)(((instr->size == 4u) ? 0x48C0u : 0x4880u) |
+                       instr->reg);
+        return (instr->size == 2u || instr->size == 4u) &&
+               instr->opcode == expected_opcode;
     }
 
-    return instr->size == 2u;
+    return instr->size == 2u &&
+           instr->opcode == (uint16_t)(0x4840u | instr->reg);
 }
 
 static int validate_scc(const NgM68kInstr *instr) {
