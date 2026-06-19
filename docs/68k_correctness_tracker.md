@@ -47,6 +47,7 @@ Last local verification: **7/7 passing** on 2026-06-19.
 | Runtime-supplied instruction-boundary interrupts | Done | `tests/test_c_emitter.c`, `tests/test_function_discovery.c`, `tests/test_generated_exec.c`; per-instruction `ng_service_interrupt()` checks in generated C. | Generated code now polls for runtime-approved interrupts before each emitted instruction. Accepted interrupts stack the current instruction PC, vector to the handler, and `RTE` returns through discovered instruction-start continuations. |
 | Runtime interrupt mask and level-7 controller | Done | `tests/test_runtime_interrupts.c`; runtime `ng_m68k_set_interrupt_level()`, `ng_m68k_clear_interrupt_level()`, and `ng_m68k_take_interrupt()`. | The default runtime now tracks an asserted IPL level/vector, inhibits levels lower than or equal to the current SR mask, and treats a lower-to-level-7 transition as a one-shot nonmaskable edge even when the current mask is 7. |
 | NeoGeo cartridge interrupt source model | Done | `tests/test_runtime_interrupts.c`; runtime `ng_neogeo_request_*_interrupt()` and `ng_neogeo_ack_interrupts()`. | VBlank, timer, and reset-pending sources map to cartridge-system autovector levels 1, 2, and 3 respectively, with IRQACK-style bits selecting which pending sources to clear. Highest pending level drives the runtime IPL controller. |
+| Memory-mapped `REG_IRQACK` | Done | `tests/test_runtime_interrupts.c`; runtime `ng68k_write8()`/`ng68k_write16()` handling for `$3C000C`. | Word writes to `$3C000C` and low-byte writes to `$3C000D` clear the corresponding pending NeoGeo IRQ sources through `ng_neogeo_ack_interrupts()`. |
 | All 16 condition predicates available to generated code | Done | `tests/test_c_emitter.c`, `tests/test_generated_exec.c`; condition predicate helper in `recompiler/src/c_emitter.c`. | Only selected branch/condition behavior is oracle-covered; full flag correctness is partial. |
 
 ## Partial / Needs Broader Proof
@@ -59,7 +60,7 @@ Last local verification: **7/7 passing** on 2026-06-19.
 | Arithmetic/divide semantics | Partial | `MULS/MULU`, `DIVS/DIVU`, `ADD/SUB/CMP`, extend arithmetic, BCD, and unary RMW paths exist. | Exact overflow, quotient/remainder, divide-by-zero, undefined/unaffected flags, and edge-case behavior against a trusted 68000 oracle. |
 | `MOVEM` | Partial | Long/word register-list transfers and predecrement paths are emitted for covered cases. | Full ordering, mask, word sign-extension, and all valid EA modes verified against oracle fixtures. |
 | Exception stack semantics | Partial | Basic SR/PC exception frames, supervisor stack selection, and vector dispatch are emitted for covered generated paths. | Exact vector fetch ordering, address/bus error frames, and all exception priorities. |
-| Interrupt model | Partial | `STOP` and ordinary instruction boundaries can accept runtime-approved interrupts, stack a format-0 frame, update the interrupt mask, vector to a handler, and return via `RTE`. The default runtime has IPL mask, level-7-edge tracking, and cartridge VBlank/timer/reset-pending source APIs. | Interrupt priority against other exceptions, memory-mapped IRQACK/LSPC timer behavior, and actual frame/timer scheduling. |
+| Interrupt model | Partial | `STOP` and ordinary instruction boundaries can accept runtime-approved interrupts, stack a format-0 frame, update the interrupt mask, vector to a handler, and return via `RTE`. The default runtime has IPL mask, level-7-edge tracking, cartridge VBlank/timer/reset-pending source APIs, and memory-mapped `REG_IRQACK` clearing. | Interrupt priority against other exceptions, LSPC timer registers, and actual VBlank/timer scheduling. |
 | Function discovery / CFG | Partial | Direct calls, instruction-start continuations, `JSR`/`BSR` continuations, `STOP` continuations, tail jumps, and a known PC-index jump-table shape are discovered conservatively. | Conditional branch basic-block splitting, indirect jump tables beyond the current pattern, data-driven targets, and robust real-ROM CFG recovery without excessive duplicate generation. |
 | `g_ng_m68k.pc` | Partial | Dispatch uses function addresses and local labels; some stack frames include explicit return PCs. | Generated code does not consistently maintain architectural `PC` after each instruction or at every exception boundary. |
 | Real-ROM frontier tracking | Partial | `docs/progress.md` records the last Metal Slug frontier and notes it is stale. | Rerun the Metal Slug smoke and replace stale `DC.W` frontier data with the current first failure. |
@@ -69,7 +70,7 @@ Last local verification: **7/7 passing** on 2026-06-19.
 
 | Area | Status | Required work |
 | --- | --- | --- |
-| Memory-mapped IRQACK / timer scheduling | Missing | Wire the runtime IRQ source API to the NeoGeo memory map, LSPC timer registers, VBlank scheduling, and exception-priority rules. |
+| LSPC timer / VBlank scheduling | Missing | Implement LSPC timer registers, VBlank scheduling, and exception-priority rules. |
 | Trace mode | Missing | Implement trace-bit behavior and trace exceptions. |
 | Address/bus error precision | Missing | Handle odd word/long accesses and unmapped/bus-error cases with correct exception behavior if required by real software. |
 | Full oracle/fuzz harness | Missing | Add a trusted 68000 reference runner or generated randomized fixtures for every implemented instruction family, size, EA mode, and edge case. |
@@ -88,9 +89,8 @@ should **not** replace the real supervisor/user stack switching tracked here.
 
 ## Ordered TDD Backlog
 
-1. **Memory-mapped IRQACK / timer scheduling**: add tests for IRQACK writes,
-   LSPC timer registers, VBlank scheduling, and interrupt priority against
-   other exceptions.
+1. **LSPC timer / VBlank scheduling**: add tests for timer registers, VBlank
+   scheduling, and interrupt priority against other exceptions.
 2. **Trusted oracle/fuzz harness**: compare generated C against an external or
    embedded 68000 reference for per-instruction semantic edge cases.
 3. **Real-ROM smoke refresh**: regenerate Metal Slug C, capture the current first

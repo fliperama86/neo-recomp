@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+#define NG_REG_IRQACK 0x003C000Cu
+
 NgM68kState g_ng_m68k;
 
 static uint8_t g_ng_m68k_interrupt_level;
@@ -27,11 +29,19 @@ uint32_t ng68k_read32(uint32_t addr) {
 }
 
 void ng68k_write8(uint32_t addr, uint8_t value) {
+    if ((addr & 0x00FFFFFFu) == (NG_REG_IRQACK + 1u)) {
+        ng_neogeo_ack_interrupts(value);
+        return;
+    }
     fprintf(stderr, "ng68k_write8 miss at $%06X value=$%02X\n",
             addr & 0xFFFFFFu, value);
 }
 
 void ng68k_write16(uint32_t addr, uint16_t value) {
+    if ((addr & 0x00FFFFFFu) == NG_REG_IRQACK) {
+        ng_neogeo_ack_interrupts(value);
+        return;
+    }
     ng68k_write8(addr, (uint8_t)(value >> 8));
     ng68k_write8(addr + 1, (uint8_t)value);
 }

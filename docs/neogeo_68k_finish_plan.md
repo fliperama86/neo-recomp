@@ -71,7 +71,7 @@ Tasks:
 - Verify exception stack-frame layout and return behavior.
 - Broaden interrupt entry beyond runtime-supplied instruction-boundary polling,
   the basic IPL controller, and the cartridge IRQ source API by wiring
-  memory-mapped IRQACK/LSPC timer behavior and priority interactions.
+  LSPC timer/VBlank scheduling and priority interactions.
 
 Exit criteria:
 

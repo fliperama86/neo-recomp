@@ -206,6 +206,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Wired the first NeoGeo interrupt memory-map path: word writes to
+  `$3C000C REG_IRQACK` and low-byte writes to `$3C000D` now clear pending IRQ
+  sources through the runtime IRQACK handler, covered by runtime tests.
 - local: Added NeoGeo cartridge interrupt source APIs for VBlank, timer, and
   reset-pending IRQs. Runtime tests verify cartridge autovector levels 1/2/3,
   source priority, and IRQACK-style clearing bits.
