@@ -749,6 +749,40 @@ static int oracle_exec(const uint8_t *program,
             pc = next_pc;
             continue;
         }
+        if ((op & 0xF138u) == 0x0108u) {
+            uint8_t data_reg = (uint8_t)((op >> 9) & 7u);
+            uint8_t addr_reg = (uint8_t)(op & 7u);
+            uint8_t dreg_to_mem = (uint8_t)((op >> 7) & 1u);
+            uint8_t is_long = (uint8_t)((op & 0x0040u) != 0u);
+            int16_t displacement = (int16_t)program_read16(program, size, pc + 2u);
+            uint32_t addr = (uint32_t)((int32_t)state->a[addr_reg] +
+                                       (int32_t)displacement);
+            if (dreg_to_mem) {
+                uint32_t value = state->d[data_reg];
+                if (is_long) {
+                    bus_write8(bus, addr, (uint8_t)(value >> 24));
+                    bus_write8(bus, addr + 2u, (uint8_t)(value >> 16));
+                    bus_write8(bus, addr + 4u, (uint8_t)(value >> 8));
+                    bus_write8(bus, addr + 6u, (uint8_t)value);
+                } else {
+                    bus_write8(bus, addr, (uint8_t)(value >> 8));
+                    bus_write8(bus, addr + 2u, (uint8_t)value);
+                }
+            } else if (is_long) {
+                state->d[data_reg] =
+                    ((uint32_t)bus_read8(bus, addr) << 24) |
+                    ((uint32_t)bus_read8(bus, addr + 2u) << 16) |
+                    ((uint32_t)bus_read8(bus, addr + 4u) << 8) |
+                    (uint32_t)bus_read8(bus, addr + 6u);
+            } else {
+                state->d[data_reg] =
+                    (state->d[data_reg] & 0xFFFF0000u) |
+                    ((uint32_t)bus_read8(bus, addr) << 8) |
+                    (uint32_t)bus_read8(bus, addr + 2u);
+            }
+            pc += 4u;
+            continue;
+        }
         if ((op & 0xF100u) == 0x0100u) {
             uint8_t op_kind = (uint8_t)((op >> 6) & 3u);
             uint8_t mode = (uint8_t)((op >> 3) & 7u);
@@ -3000,6 +3034,35 @@ int main(void) {
     CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
     CHECK(g_ng_m68k.a[7] == 0x000001ECu);
     CHECK(ng68k_read32(0x000001ECu) == 0x000001F0u);
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = SR_S;
+    expected_state.a[7] = 0x000001F0u;
+    expected_state.ssp = expected_state.a[7];
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x00000780u,
+                      &expected_state, expected_bus, 0));
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = SR_S;
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000780u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.d[0] == expected_state.d[0]);
+    CHECK(g_ng_m68k.d[1] == expected_state.d[1]);
+    CHECK(g_ng_m68k.sr == expected_state.sr);
+    CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+    CHECK(g_ng_m68k.d[1] == 0xA1B2C3D4u);
+    CHECK(ng68k_read8(0x000001C0u) == 0xA1u);
+    CHECK(ng68k_read8(0x000001C2u) == 0xB2u);
+    CHECK(ng68k_read8(0x000001C4u) == 0xC3u);
+    CHECK(ng68k_read8(0x000001C6u) == 0xD4u);
+    CHECK(ng68k_read16(0x000001BCu) == (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C));
 
     return 0;
 }

@@ -18,7 +18,7 @@ set of patterns to adapt deliberately.
 | Area | `neo-recomp` now | `segagenesisrecomp` reference | Takeaway for `neo-recomp` |
 | --- | --- | --- | --- |
 | Target | Neo Geo P-ROM / 68000 bring-up. | Sega Genesis 68000 with playable Sonic milestones. | Keep NeoGeo hardware/runtime design separate; do not import Genesis assumptions. |
-| CPU correctness strategy | Synthetic generated-C oracle fixture plus unit tests and opcode emission sweep. Recent slices cover exception stack/trace behavior that the reference coverage audit still lists as stubbed or partial for several instruction traps. | L1 decoder tests, synthetic decoder tests, validator tests, and L3 per-function oracle against `clown68000`. | Our next large harness should be a trusted 68000 oracle/fuzz layer, not only a hand-written mini interpreter. |
+| CPU correctness strategy | Synthetic generated-C oracle fixture plus unit tests and opcode emission sweep. Recent slices cover exception stack/trace behavior and generated-exec `MOVEP` transfer semantics. | L1 decoder tests, synthetic decoder tests, validator tests, and L3 per-function oracle against `clown68000`; current local source implements more CPU families than its older `COVERAGE.md` audit claims. | Our next large harness should be a trusted 68000 oracle/fuzz layer, not only a hand-written mini interpreter. |
 | Function discovery | Conservative static seeds from cartridge entry, direct call targets, continuations, tail jumps, and one PC-index jump-table shape. | Static worklist plus disassembly-generated seeds, labels, jump tables, code-address oracles, protected ranges, blacklists, dispatch-miss feedback, and interior-label auditing. | Add machine-checkable CFG/discovery inputs before expecting real-ROM boot progress. |
 | Unsupported behavior visibility | Checked emission reports unsupported/decode failures through `NgEmitDiagnostics`; generated code logs runtime dispatch misses; a dispatch audit now classifies direct, computed, and PC-index jump-table sites and can fail smoke runs via `--fail-on-dispatch-gaps`. | Centralized codegen diagnostics count unsupported/TODO paths and can fail generation; dispatch audit classifies dynamic jump sites. | Keep broadening unresolved dynamic control-flow classification and interior-label checks. |
 | Opcode legality | Tracker marks this partial; an initial `m68k_validate.c` now rejects selected illegal post-decode forms. | Has `m68k_validator.c` as a post-decode MC68000 legality gate. Coverage doc still calls legality non-exhaustive. | Broaden our validator into a spec-driven legality layer before broad real-ROM scanning. |
@@ -35,11 +35,13 @@ set of patterns to adapt deliberately.
 The reference audit is useful, but it is not a drop-in checklist for our current
 CPU work. Fact-checked local files show two different strengths:
 
-- `segagenesisrecomp/COVERAGE.md` still lists several CPU semantics as decoded
-  but stubbed or collapsed (`MOVEP`, BCD ops, `CHK`, `TRAP`, `STOP`, `TRAPV`,
-  `RTR`, `CMPM`, immediate-to-CCR/SR, and illegal/A/F-line classes).
-  `neo-recomp` has generated-exec coverage for those families or their basic
-  exception paths, so copying that implementation would regress CPU behavior.
+- `segagenesisrecomp/COVERAGE.md` is stale for some CPU families: current
+  local source has codegen cases for `MOVEP`, `CHK`, `ABCD`/`SBCD`/`NBCD`,
+  `TRAPV`, `RTR`, `RESET`, and `ILLEGAL`/A-line/F-line paths. It is still not
+  equivalent to our CPU work because the reference runtime routes traps through
+  loud abort hooks rather than architectural SR/PC exception frames, and its
+  `STOP`/interrupt behavior is Genesis/Sonic scheduling glue rather than our
+  tested interrupt-frame wake/resume model.
 - The reference is ahead on **project scaffolding**: `game_config.c`, generated
   dispatch audits, disassembly-sourced seeds/jump tables, interior-label checks,
   and L3 oracle tests. We have now adapted discovery-file seed merging plus

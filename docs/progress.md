@@ -133,7 +133,8 @@ Covered by executable generated-C validation:
     address-indirect memory and predecrement register-to-memory masks, including
     MC68000 predecrement mask reversal and initial-`A7` storage when `A7` is
     also in the saved register list
-  - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests
+  - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests and
+    generated-exec long Dn→alternate-byte-memory→Dn round-trip with flags preserved
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
     source and absolute SR destination forms
   - `MOVE An,USP` and `MOVE USP,An` user-stack-pointer transfers
@@ -212,6 +213,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generated-exec `MOVEP.L` coverage after cross-checking the
+  Motorola/NXP programmer's reference and the local Genesis reference. The
+  synthetic fixture now performs `D0 -> (d16,A0) alternate bytes -> D1`,
+  verifies bytes land at offsets `+0/+2/+4/+6`, and confirms `MOVEP` leaves
+  condition codes unchanged.
 - local: Fact-checked MC68000 `MOVEM` predecrement ordering. The
   generated-exec oracle and fixture now cover the reversed predecrement mask
   correspondence (`#$8000` saving `D0`) and the MC68000/MC68010 rule that
