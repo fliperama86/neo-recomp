@@ -32,6 +32,11 @@ static void write32(NgProgramRom *rom, uint32_t addr, uint32_t value) {
 int main(void) {
     NgM68kInstr instr;
 
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = (NgM68kMnemonic)255u;
+    instr.byte_length = 2u;
+    CHECK(!ng_m68k_validate(&instr));
+
     {
         NgProgramRom rom = make_rom(0x08u);
         CHECK(rom.data != NULL);

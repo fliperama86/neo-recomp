@@ -2562,6 +2562,6 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_MOVEQ:
         return validate_moveq(instr);
     default:
-        return 1;
+        return 0;
     }
 }

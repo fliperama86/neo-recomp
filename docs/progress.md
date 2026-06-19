@@ -252,6 +252,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened the post-decode validator fallback so out-of-range or
+  otherwise unhandled mnemonic enum values are rejected instead of silently
+  accepted. `test_m68k_validate` covered an unknown enum value red first.
 - local: Tightened `BTST`/`BCHG`/`BCLR`/`BSET` validation so
   static and dynamic bit-op opcode kind, source register, and destination
   EA bits must match decoded metadata. `test_m68k_validate` covered
