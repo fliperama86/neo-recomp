@@ -147,8 +147,8 @@ Covered by executable generated-C validation:
     address-indexed register-to-memory destinations, absolute-word
     register-to-memory destinations, plus address-displacement,
     address-indexed, absolute-long, and PC-relative memory-to-register sources
-    with sparse D/A masks and word-index sign extension covered for indexed
-    transfers
+    with sparse D/A masks, extension-word PC bases, and word-index sign
+    extension covered for indexed transfers
   - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests and
     generated-exec long Dn→alternate-byte-memory→Dn round-trip with flags preserved
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `MOVEM` PC-indexed memory-to-register transfers against
+  the Motorola/NXP Programmer's Reference Manual. Generated-exec now covers
+  `MOVEM.W (d8,PC,Dn.W),D5/A6`, verifying the extension-word PC base,
+  word-index sign extension, sparse D/A load order, word sign-extension into
+  both data and address registers, and CCR preservation.
 - local: Fact-checked `MOVEM` indexed control-mode ordering against the
   Motorola/NXP Programmer's Reference Manual. Generated-exec now covers sparse
   D/A-mask long transfers through `(d8,An,Dn.W)` in both directions,
