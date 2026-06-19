@@ -113,7 +113,9 @@ Covered by executable generated-C validation:
   generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
 - condition operations: `Scc <ea>` and `DBcc Dn,disp` share the same
   condition predicate table; generated-exec covers all 16 `Scc` predicates
-  across every `N/Z/V/C` combination, plus a `DBF` spot check
+  across every `N/Z/V/C` combination, all 16 `DBcc` predicates across every
+  `N/Z/V/C` combination on the counter-exhaustion fall-through path, plus a
+  taken-branch `DBF` spot check
 - flags: `N`/`Z` for covered operations; `C`/`X` for tested byte
   subtract/extend-add paths and register-count-zero shift/rotate cases
 - data movement:
@@ -236,6 +238,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a deterministic generated-exec `DBcc` condition matrix. The
+  fixture now evaluates all 16 predicates across all 16 `N/Z/V/C`
+  combinations, using a counter-exhaustion fall-through case to prove true
+  predicates leave `D0` unchanged while false predicates decrement it to
+  `$FFFF`, with CCR unchanged. Codegen also suppresses impossible local labels
+  for never-branching `BF`/`DBT` target candidates.
 - local: Added a deterministic generated-exec `Scc` condition matrix. The
   fixture now evaluates all 16 condition predicates across all 16 `N/Z/V/C`
   combinations, checks byte results, and verifies the CCR snapshot is unchanged

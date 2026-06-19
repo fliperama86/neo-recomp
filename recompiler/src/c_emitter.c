@@ -2564,9 +2564,16 @@ static int addr_in_list(const uint32_t *addrs, uint32_t count, uint32_t addr) {
 }
 
 static int instr_has_local_branch_target(const NgM68kInstr *instr) {
-    return instr->mnemonic == NG_M68K_BRA ||
-           instr->mnemonic == NG_M68K_BCC ||
-           instr->mnemonic == NG_M68K_DBCC;
+    if (instr->mnemonic == NG_M68K_BRA) {
+        return 1;
+    }
+    if (instr->mnemonic == NG_M68K_BCC) {
+        return instr->condition != 1u; /* BF never branches. */
+    }
+    if (instr->mnemonic == NG_M68K_DBCC) {
+        return instr->condition != 0u; /* DBT never decrements or branches. */
+    }
+    return 0;
 }
 
 static void emit_stub_body(FILE *out, uint32_t addr) {
