@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `LEA` validation so decoded PC-relative
+  target/displacement metadata and absolute-source targets must match
+  the source EA, while non-targeting control sources reject stray target
+  metadata. `test_m68k_validate` covered mismatched PC-relative target,
+  displacement, absolute target, and stray address-indirect target metadata
+  red first.
 - local: Tightened `MOVEM` validation so opcode direction, size bit,
   and transfer EA bits must match decoded register-list metadata.
   `test_m68k_validate` covered mismatched register-to-memory size and

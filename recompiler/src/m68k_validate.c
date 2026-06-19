@@ -1100,6 +1100,27 @@ static int validate_pea(const NgM68kInstr *instr) {
            instr->opcode == (uint16_t)(0x4840u | ea_field);
 }
 
+static int validate_lea_legacy_fields(const NgM68kInstr *instr) {
+    if (instr->form != NG_M68K_FORM_NONE ||
+        instr->absolute_addr != 0u) {
+        return 0;
+    }
+
+    switch (instr->src.mode) {
+    case NG_M68K_EA_PC_DISP:
+        return instr->target == instr->src.absolute_addr &&
+               instr->displacement == instr->src.displacement;
+    case NG_M68K_EA_PC_INDEX:
+    case NG_M68K_EA_ABS_W:
+    case NG_M68K_EA_ABS_L:
+        return instr->target == instr->src.absolute_addr &&
+               instr->displacement == 0;
+    default:
+        return instr->target == 0u &&
+               instr->displacement == 0;
+    }
+}
+
 static int validate_lea(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
     uint8_t ea_field = 0u;
@@ -1111,6 +1132,7 @@ static int validate_lea(const NgM68kInstr *instr) {
            instr->immediate == 0u &&
            instr->src_reg == 0u &&
            instr->condition == 0u &&
+           validate_lea_legacy_fields(instr) &&
            exact_control_source_ext_length(instr, &ext_len) &&
            ea_opcode_field(&instr->src, &ea_field) &&
            instr->byte_length == (uint8_t)(2u + ext_len) &&
