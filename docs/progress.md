@@ -130,7 +130,9 @@ Covered by executable generated-C validation:
   - generic `LEA <ea>,An` control-address loads covered so far by PC-relative
     and displacement sources
   - `MOVEM.W/L` register-list transfers covered so far by long Dn masks to/from
-    address-indirect memory and predecrement register-to-memory masks
+    address-indirect memory and predecrement register-to-memory masks, including
+    MC68000 predecrement mask reversal and initial-`A7` storage when `A7` is
+    also in the saved register list
   - `MOVEP.W/L` staggered peripheral transfers covered by decode/emitter tests
   - `MOVE <ea>,CCR/SR` and `MOVE SR/CCR,<ea>` covered so far by immediate CCR
     source and absolute SR destination forms
@@ -210,6 +212,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `MOVEM` predecrement ordering. The
+  generated-exec oracle and fixture now cover the reversed predecrement mask
+  correspondence (`#$8000` saving `D0`) and the MC68000/MC68010 rule that
+  `MOVEM.L #$0001,-(A7)` stores the initial, not decremented, `A7` value when
+  the addressing register is also in the saved list.
 - local: Added generated-exec and static emitter coverage for
   `MOVE.L #imm,Dn`. This caught an immediate-to-data-register emission path
   that decoded as long but wrote only the low word; generated code now writes
