@@ -276,6 +276,7 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened immediate logical/arithmetic/compare validation so `CMPI` and `ORI`/`ANDI`/`EORI`/`ADDI`/`SUBI` reject stray source-EA payload fields while still accepting their extension-word immediate and data-alterable destination metadata. `test_m68k_validate` covered `CMPI` and `EORI` no-source payload mutations red first.
 - local: Added generated-exec oracle coverage for canonical `ILLEGAL`, A-line,
   and F-line exception entry. The oracle now vectors `$4AFC` through vector 4,
   `$Axxx` through vector 10, and `$Fxxx` through vector 11 while saving the

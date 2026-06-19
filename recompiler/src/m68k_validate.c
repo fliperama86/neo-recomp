@@ -1993,7 +1993,7 @@ static int validate_immediate_dest_legacy_fields(const NgM68kInstr *instr) {
     if (instr->src_reg != 0u ||
         instr->condition != 0u ||
         instr->target != 0u ||
-        instr->src.mode != NG_M68K_EA_NONE) {
+        !ea_is_empty(&instr->src)) {
         return 0;
     }
 
