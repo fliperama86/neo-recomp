@@ -2081,12 +2081,6 @@ static int emit_instr(FILE *out,
         }
         break;
     case NG_M68K_MOVEA:
-        if (instr->form == NG_M68K_FORM_PC_INDEX_TO_AREG) {
-            fprintf(out,
-                    "    g_ng_m68k.a[%u] = ng68k_read32(0x%08Xu + (uint32_t)(int16_t)(g_ng_m68k.d[%u] & 0xFFFFu));\n",
-                    instr->reg, instr->target & 0x00FFFFFFu, instr->src_reg);
-            return 1;
-        }
         if (emit_movea_generic(out, instr)) {
             return 1;
         }

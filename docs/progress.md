@@ -252,6 +252,7 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generated-exec coverage for `MOVEA.W (d8,PC,Dn.W),An` so PC-index word sources are read with the extension-word PC base, sign-extended into the address register, and leave CCR unchanged. Removed the narrow PC-index `MOVEA.L` special path so `MOVEA` uses the shared EA reader and word sign-extension logic.
 - local: Added generated-exec coverage for `CMPI.B #imm,Dn` signed-overflow flag behavior, proving `$80 - $01` sets `V`, clears `N/Z/C`, and preserves `X`. Removed the byte data-register special emission/oracle paths so `CMPI` uses the shared full compare flag logic.
 - local: Tightened the post-decode validator fallback so out-of-range or
   otherwise unhandled mnemonic enum values are rejected instead of silently

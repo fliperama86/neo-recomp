@@ -992,7 +992,8 @@ int main(void) {
         CHECK(strstr(text, "if (!ng_require_supervisor(0x00000008u)) return;") != NULL);
         CHECK(strstr(text, "ng_set_sr((uint16_t)(g_ng_m68k.sr & 0xF8FFu));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | ng68k_read8(0x0010FDAEu);") != NULL);
-        CHECK(strstr(text, "g_ng_m68k.a[0] = ng68k_read32(0x00000018u + (uint32_t)(int16_t)(g_ng_m68k.d[0] & 0xFFFFu));") != NULL);
+        CHECK(strstr(text, "uint32_t ng_ea_000012 = ng68k_read32((uint32_t)(0x00000018u + (int32_t)(int16_t)(g_ng_m68k.d[0] & 0xFFFFu)));") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[0] = (uint32_t)(ng_ea_000012);") != NULL);
         CHECK(strstr(text, "ng_generated_call(g_ng_m68k.a[0]);") != NULL);
 
         ng_program_rom_free(&rom);
