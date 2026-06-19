@@ -1799,6 +1799,17 @@ static int emit_shift_rotate_dreg(FILE *out, const NgM68kInstr *instr) {
     }
     fprintf(out, "        g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0x%08Xu) | (ng_result & 0x%08Xu);\n",
             instr->dst.reg, instr->dst.reg, ng_dreg_keep_mask(instr->size), value_mask);
+    fprintf(out, "      } else {\n");
+    fprintf(out, "        g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
+    fprintf(out, "        if ((ng_result & 0x%08Xu) == 0) g_ng_m68k.sr |= NG_CCR_Z;\n",
+            value_mask);
+    fprintf(out, "        if (ng_result & 0x%08Xu) g_ng_m68k.sr |= NG_CCR_N;\n",
+            sign_mask);
+    if (is_rox) {
+        fprintf(out, "        if (g_ng_m68k.sr & NG_CCR_X) g_ng_m68k.sr |= NG_CCR_C;\n");
+    }
+    fprintf(out, "        g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0x%08Xu) | (ng_result & 0x%08Xu);\n",
+            instr->dst.reg, instr->dst.reg, ng_dreg_keep_mask(instr->size), value_mask);
     fprintf(out, "      }\n");
     fprintf(out, "    }\n");
     (void)bits;

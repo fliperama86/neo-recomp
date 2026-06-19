@@ -113,7 +113,8 @@ Covered by executable generated-C validation:
   generated-exec coverage includes `BNE`, `BEQ`, `BCC`, and `BMI`
 - condition operations: `Scc <ea>` and `DBcc Dn,disp` share the same
   condition predicate table, with generated-exec coverage for `SMI` and `DBF`
-- flags: `N`/`Z` for covered operations; `C`/`X` for tested byte subtract/extend-add paths
+- flags: `N`/`Z` for covered operations; `C`/`X` for tested byte
+  subtract/extend-add paths and register-count-zero shift/rotate cases
 - data movement:
   - `MOVEQ`
   - `MOVE.B/W #imm,Dn`
@@ -196,7 +197,8 @@ Covered by executable generated-C validation:
   - `NBCD <ea>` covered so far by absolute byte memory destinations
   - `EXT.W Dn`, `EXT.L Dn`, and `SWAP Dn`
   - data-register `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` decode/emission,
-    covered so far by generated-exec logical shift pairs
+    covered so far by generated-exec logical shift pairs and zero-count
+    register-count flag cases
   - memory `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` word forms, covered so far by
     an absolute-memory logical shift
   - `PEA <ea>` control-address pushes covered so far by displacement sources
@@ -207,6 +209,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 register-count-zero shift/rotate condition-code
+  behavior against the Motorola/NXP Programmer's Reference Manual. The
+  generated-exec oracle and fixture now cover `LSL.W Dn,Dm`, `ROL.W Dn,Dm`,
+  and `ROXL.W Dn,Dm` with a zero register count, including X preservation,
+  N/Z recomputation, C clearing for logical/pure rotates, and C mirroring X
+  for ROX zero-count cases.
 - local: Tightened CPU-only branch legality for MC68000 control flow.
   `test_m68k_validate` now covers valid byte/word `BRA`/`BSR`/`Bcc` forms,
   rejects 68020-style long branch lengths for the current MC68000 target, and

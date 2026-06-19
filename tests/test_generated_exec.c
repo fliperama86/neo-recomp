@@ -1425,7 +1425,13 @@ static int oracle_exec(const uint8_t *program,
                                            (uint8_t)(count_field == 0u ? 8u : count_field);
             uint32_t result = state->d[reg] & mask;
 
-            if (count != 0u) {
+            if (count == 0u) {
+                state->sr = (uint16_t)(state->sr & 0xFFF0u);
+                if ((result & mask) == 0) state->sr |= CCR_Z;
+                if (result & sign_mask) state->sr |= CCR_N;
+                if (kind == 2u && (state->sr & CCR_X)) state->sr |= CCR_C;
+                state->d[reg] = (state->d[reg] & ~mask) | (result & mask);
+            } else {
                 uint8_t last = 0;
                 uint8_t v = 0;
                 uint8_t x = (state->sr & CCR_X) ? 1u : 0u;
@@ -2852,6 +2858,33 @@ int main(void) {
     CHECK(ng68k_read16(0x000001EAu) == (uint16_t)(SR_S | SR_T));
     CHECK(ng68k_read32(0x000001ECu) == 0x000006A2u);
     CHECK(ng68k_read16(0x000001E4u) == 0x0000u);
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = SR_S;
+    expected_state.a[7] = 0x000001F0u;
+    expected_state.ssp = expected_state.a[7];
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x000006C0u,
+                      &expected_state, expected_bus, 0));
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = SR_S;
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x000006C0u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.d[0] == expected_state.d[0]);
+    CHECK(g_ng_m68k.a[7] == expected_state.a[7]);
+    CHECK(g_ng_m68k.sr == expected_state.sr);
+    CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+    CHECK((g_ng_m68k.d[0] & 0xFFFFu) == 0x8001u);
+    CHECK(ng68k_read16(0x000001A0u) == 0x2018u); /* LSL count 0: X preserved, C/V/Z clear, N set */
+    CHECK(ng68k_read16(0x000001A2u) == 0x2018u); /* ROL count 0: X preserved, C/V/Z clear, N set */
+    CHECK(ng68k_read16(0x000001A4u) == 0x2019u); /* ROXL count 0: C mirrors preserved X */
 
     return 0;
 }
