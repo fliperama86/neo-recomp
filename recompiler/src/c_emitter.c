@@ -2366,9 +2366,10 @@ static int emit_instr(FILE *out,
     case NG_M68K_PEA: {
         char addr_expr[256];
         if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
-            fprintf(out, "    g_ng_m68k.a[7] -= 4u;\n");
-            fprintf(out, "    ng68k_write32(g_ng_m68k.a[7], (uint32_t)(%s));\n",
+            fprintf(out, "    { uint32_t ng_pea_addr = (uint32_t)(%s);\n",
                     addr_expr);
+            fprintf(out, "      g_ng_m68k.a[7] -= 4u;\n");
+            fprintf(out, "      ng68k_write32(g_ng_m68k.a[7], ng_pea_addr); }\n");
             return 1;
         }
         break;

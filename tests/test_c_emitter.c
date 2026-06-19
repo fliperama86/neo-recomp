@@ -474,8 +474,9 @@ int main(void) {
         CHECK(strstr(text, "/* $0000EE: SUB.B D7,(A0)+ */") != NULL);
         CHECK(strstr(text, "uint32_t ng_addr_0000EE = g_ng_m68k.a[0];") != NULL);
         CHECK(strstr(text, "/* $0000F6: PEA ($10,A0) */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_pea_addr = (uint32_t)((uint32_t)(g_ng_m68k.a[0] + (int32_t)16));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[7] -= 4u;") != NULL);
-        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], (uint32_t)((uint32_t)(g_ng_m68k.a[0] + (int32_t)16)));") != NULL);
+        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], ng_pea_addr);") != NULL);
         CHECK(strstr(text, "/* $000100: LINK A5,#-4 */") != NULL);
         CHECK(strstr(text, "{ uint32_t ng_old_an = g_ng_m68k.a[5];") != NULL);
         CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], ng_old_an);") != NULL);

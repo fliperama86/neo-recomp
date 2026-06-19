@@ -269,9 +269,10 @@ Covered by executable generated-C validation:
     `ROXR.B`, and `ROR.W` flag/result edge cases
   - memory `ASL/ASR/LSL/LSR/ROXL/ROXR/ROL/ROR` word forms, covered so far by
     absolute-memory logical shift, `ROXL.W`, and `ASL.W` flag/result cases
-  - `PEA <ea>` control-address pushes covered so far by displacement and
-    PC-relative sources, including extension-word PC base calculation and CCR
-    preservation
+  - `PEA <ea>` control-address pushes covered so far by displacement,
+    address-indirect `A7`, and PC-relative sources, including extension-word PC
+    base calculation, CCR preservation, and source-EA capture before the stack
+    push decrements `A7`
   - `ORI/ANDI/EORI #imm,CCR/SR` immediate status-register operations
 
 Important caveat: this is not a complete 68000 condition-code model. `C`/`X`
@@ -283,6 +284,10 @@ and `V` are only trusted where generated-exec tests cover them.
   generated-exec fixture covered `MOVE.L A7,-(A7)` red first and now checks
   that the pushed longword is the old stack pointer value, not the
   already-decremented destination `A7`.
+- local: Fixed `PEA` stack-push source-address capture. The generated-exec
+  fixture covered `PEA (A7)` red first and now checks that the pushed longword
+  is the old `A7` effective address while condition codes remain unchanged
+  until the following recording instruction.
 - local: Fixed `UNLK A7` stack-pointer alias semantics. `test_generated_exec`
   now covers opcode `$4E5F` red first and checks that `A7` becomes the
   longword read from the old stack pointer, without the normal post-pop `+4`

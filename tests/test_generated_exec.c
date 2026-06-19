@@ -4153,6 +4153,37 @@ int main(void) {
 
     memset(&expected_state, 0, sizeof(expected_state));
     memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C);
+    expected_state.a[7] = 0x000001F0u;
+    expected_state.ssp = expected_state.a[7];
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x00005F80u,
+                      &expected_state, expected_bus, 0));
+    CHECK(expected_state.a[7] == 0x000001ECu);
+    CHECK(bus_read32(expected_bus, 0x000001ECu) == 0x000001F0u);
+    CHECK(bus_read32(expected_bus, 0x00001298u) == 0x000001F0u);
+    CHECK(bus_read16(expected_bus, 0x0000129Cu) ==
+          (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C));
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C);
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00005F80u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.a[7] == expected_state.a[7]);
+    CHECK(ng68k_read32(0x000001ECu) == 0x000001F0u);
+    CHECK(ng68k_read32(0x00001298u) == 0x000001F0u);
+    CHECK(ng68k_read16(0x0000129Cu) ==
+          (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C));
+    CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+    CHECK(g_ng_m68k.pc == 0x00005F92u);
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
     expected_state.sr = SR_S;
     expected_state.a[7] = 0x000001F0u;
     expected_state.ssp = expected_state.a[7];
