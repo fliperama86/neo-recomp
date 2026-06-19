@@ -1037,6 +1037,8 @@ static int validate_lea(const NgM68kInstr *instr) {
 
 static int validate_move_sr_ccr(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t expected_opcode = 0u;
 
     if (instr->size != 2u ||
         instr->immediate != 0u ||
@@ -1056,7 +1058,12 @@ static int validate_move_sr_ccr(const NgM68kInstr *instr) {
             !move_destination_ext_length(&instr->dst, &ext_len)) {
             return 0;
         }
-        return instr->byte_length == (uint8_t)(2u + ext_len);
+        if (!ea_opcode_field(&instr->dst, &ea_field)) {
+            return 0;
+        }
+        expected_opcode = (uint16_t)(0x40C0u | ea_field);
+        return instr->byte_length == (uint8_t)(2u + ext_len) &&
+               instr->opcode == expected_opcode;
     }
 
     if (instr->src.mode == NG_M68K_EA_NONE) {
@@ -1066,7 +1073,13 @@ static int validate_move_sr_ccr(const NgM68kInstr *instr) {
     if (!exact_data_source_ext_length(instr, &ext_len)) {
         return 0;
     }
-    return instr->byte_length == (uint8_t)(2u + ext_len);
+    if (!ea_opcode_field(&instr->src, &ea_field)) {
+        return 0;
+    }
+    expected_opcode = (uint16_t)((instr->mnemonic == NG_M68K_MOVE_CCR ?
+                                  0x44C0u : 0x46C0u) | ea_field);
+    return instr->byte_length == (uint8_t)(2u + ext_len) &&
+           instr->opcode == expected_opcode;
 }
 
 static int movem_reg_to_mem_ext_length(const NgM68kEa *ea,
@@ -1344,6 +1357,15 @@ static int ea_opcode_field(const NgM68kEa *ea, uint8_t *out_field) {
         return 1;
     case NG_M68K_EA_ABS_L:
         *out_field = 0x39u;
+        return 1;
+    case NG_M68K_EA_PC_DISP:
+        *out_field = 0x3Au;
+        return 1;
+    case NG_M68K_EA_PC_INDEX:
+        *out_field = 0x3Bu;
+        return 1;
+    case NG_M68K_EA_IMM:
+        *out_field = 0x3Cu;
         return 1;
     default:
         return 0;

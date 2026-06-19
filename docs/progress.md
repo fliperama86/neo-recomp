@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `MOVE SR,<ea>`, `MOVE <ea>,CCR`, and
+  `MOVE <ea>,SR` validation so opcode class and EA bits must match
+  the decoded source/destination metadata, including PC-relative source
+  forms. `test_m68k_validate` covered mismatched opcode EA and
+  direction metadata red first.
 - local: Tightened `ORI`/`ANDI`/`EORI #imm,CCR/SR` validation so
   each status-immediate form requires its exact opcode word in addition
   to the existing size, immediate-width, and no-operand metadata checks.
