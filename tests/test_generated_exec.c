@@ -1393,11 +1393,22 @@ static int oracle_exec(const uint8_t *program,
             if (immediate == 0) {
                 immediate = 8;
             }
-            if (size_code == 3u || mode == 1u ||
-                (mode == 7u && reg >= 2u)) {
+            if (size_code == 3u || (mode == 7u && reg >= 2u)) {
                 return 0;
             }
             src = immediate;
+            if (mode == 1u) {
+                if (size_code == 0u) {
+                    return 0;
+                }
+                if (is_sub) {
+                    state->a[reg] -= src;
+                } else {
+                    state->a[reg] += src;
+                }
+                pc = next_pc;
+                continue;
+            }
             if (mode == 0u) {
                 dst = state->d[reg] & mask;
                 if (is_sub) {
@@ -3201,6 +3212,30 @@ int main(void) {
     CHECK(ng68k_read32(0x00000210u) == 0x11111111u);
     CHECK(ng68k_read32(0x00000214u) == 0x22222222u);
     CHECK(ng68k_read16(0x00000208u) == (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C));
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = SR_S;
+    expected_state.a[7] = 0x000001F0u;
+    expected_state.ssp = expected_state.a[7];
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x00000940u,
+                      &expected_state, expected_bus, 0));
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = SR_S;
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000940u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.a[0] == expected_state.a[0]);
+    CHECK(g_ng_m68k.sr == expected_state.sr);
+    CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+    CHECK(g_ng_m68k.a[0] == 0x0000FFFFu);
+    CHECK(ng68k_read16(0x00000220u) == (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C));
 
     return 0;
 }

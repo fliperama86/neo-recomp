@@ -150,15 +150,17 @@ Covered by executable generated-C validation:
   - generic `ADD.B/W/L Dn,<ea>` paths covered so far by postincrement memory
     destinations
   - generic `ADDQ.B/W/L #imm,<ea>` paths covered so far by Dn destinations
-    and address-register destinations
+    and address-register destinations, including word-sized address-register
+    full-32-bit arithmetic with CCR preservation
   - generic `SUB.B/W/L <ea>,Dn` paths covered so far by Dn reads, including
     byte borrow-to-`X/C` flag behavior
   - generic `SUB.B/W/L Dn,<ea>` paths covered so far by postincrement memory
     destinations
   - generic `SUBI.B/W/L #imm,<ea>` paths covered so far by postincrement
     memory destinations
-  - generic `SUBQ.B/W/L #imm,<ea>` paths covered so far by Dn and
-    postincrement memory destinations
+  - generic `SUBQ.B/W/L #imm,<ea>` paths covered so far by Dn,
+    address-register, and postincrement memory destinations, including
+    word-sized address-register full-32-bit arithmetic with CCR preservation
   - generic `CMP.B/W/L <ea>,Dn` paths covered so far by Dn and abs reads,
     including byte overflow with `X` preserved
   - generic `ADDA.W/L <ea>,An`, `SUBA.W/L <ea>,An`, and
@@ -221,6 +223,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `ADDQ`/`SUBQ` address-register behavior. The
+  generated-exec oracle and fixture now cover word-sized quick operations using
+  full 32-bit address arithmetic and preserving all CCR bits.
 - local: Fact-checked `MOVEM` postincrement memory-to-register self-load
   behavior. Generated-exec now covers `MOVEM.L (A4)+,D0/A4`, proving the memory
   value for `A4` is ignored and `A4` receives the final postincremented EA,
