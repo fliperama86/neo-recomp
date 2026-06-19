@@ -15,6 +15,12 @@ static uint8_t g_ng_neogeo_palette_ram[NG_NEO_PALETTE_BANK_BYTES *
 static uint8_t g_ng_neogeo_palette_bank;
 static uint8_t g_ng_neogeo_backup_ram[NG_NEO_BACKUP_RAM_BYTES];
 static uint8_t g_ng_neogeo_backup_ram_unlocked;
+static uint16_t g_ng_neogeo_vram[0x10000u];
+static uint16_t g_ng_neogeo_vram_addr;
+static uint16_t g_ng_neogeo_vram_mod;
+static uint8_t g_ng_neogeo_shadow_enabled;
+static uint8_t g_ng_neogeo_bios_vectors_enabled;
+static uint8_t g_ng_neogeo_board_fix_enabled;
 static uint8_t g_ng_neogeo_p1cnt = 0xFFu;
 static uint8_t g_ng_neogeo_p2cnt = 0xFFu;
 static uint8_t g_ng_neogeo_status_b = 0xFFu;
@@ -73,6 +79,24 @@ static int ng_neogeo_is_port_output_addr(uint32_t addr) {
     return (addr & 0x00FE0071u) == NG_NEO_REG_POUTPUT;
 }
 
+static int ng_neogeo_is_system_latch_addr(uint32_t addr) {
+    return (addr & 0x00FE0001u) == 0x003A0001u;
+}
+
+static int ng_neogeo_is_lspc_addr(uint32_t addr) {
+    return addr >= NG_NEO_REG_VRAMADDR && addr <= (NG_NEO_REG_TIMERSTOP + 1u);
+}
+
+static uint8_t ng_neogeo_hi_or_lo(uint16_t value, uint32_t addr) {
+    return (addr & 1u) ? (uint8_t)value : (uint8_t)(value >> 8);
+}
+
+static uint16_t ng_neogeo_vram_data(void) {
+    return g_ng_neogeo_vram[g_ng_neogeo_vram_addr];
+}
+
+static void ng_neogeo_write_lspc_word(uint32_t addr, uint16_t value);
+
 static int ng_neogeo_is_system_rom_addr(uint32_t addr) {
     return addr >= 0x00C00000u && addr <= 0x00CFFFFFu;
 }
@@ -111,6 +135,25 @@ uint8_t ng68k_read8(uint32_t addr) {
     }
     if (ng_neogeo_is_port_output_addr(addr)) {
         return g_ng_neogeo_port_output;
+    }
+    if (ng_neogeo_is_lspc_addr(addr)) {
+        switch (addr & 0x00FFFFFEu) {
+        case NG_NEO_REG_VRAMADDR:
+        case NG_NEO_REG_VRAMRW:
+            return ng_neogeo_hi_or_lo(ng_neogeo_vram_data(), addr);
+        case NG_NEO_REG_VRAMMOD:
+            return ng_neogeo_hi_or_lo(g_ng_neogeo_vram_mod, addr);
+        case NG_NEO_REG_LSPCMODE:
+            return ng_neogeo_hi_or_lo(g_ng_neogeo_lspc_mode, addr);
+        case NG_NEO_REG_TIMERHIGH:
+            return ng_neogeo_hi_or_lo((uint16_t)(g_ng_neogeo_timer_reload_value >> 16), addr);
+        case NG_NEO_REG_TIMERLOW:
+            return ng_neogeo_hi_or_lo((uint16_t)g_ng_neogeo_timer_reload_value, addr);
+        case NG_NEO_REG_TIMERSTOP:
+            return ng_neogeo_hi_or_lo(g_ng_neogeo_timer_stop, addr);
+        default:
+            return 0xFFu;
+        }
     }
     if (ng_neogeo_is_system_rom_addr(addr)) {
         uint32_t rom_offset = (addr - 0x00C00000u) % NG_NEO_SYSTEM_ROM_BYTES;
@@ -162,56 +205,65 @@ void ng68k_write8(uint32_t addr, uint8_t value) {
         g_ng_neogeo_port_output = value;
         return;
     }
-
-    switch (addr) {
-    case NG_NEO_REG_SRAMLOCK:
-        g_ng_neogeo_backup_ram_unlocked = 0u;
-        return;
-    case NG_NEO_REG_SRAMUNLOCK:
-        g_ng_neogeo_backup_ram_unlocked = 1u;
-        return;
-    case NG_NEO_REG_PALBANK1:
-        g_ng_neogeo_palette_bank = 1u;
-        return;
-    case NG_NEO_REG_PALBANK0:
-        g_ng_neogeo_palette_bank = 0u;
-        return;
-    case NG_NEO_REG_LSPCMODE + 1u:
-        ng68k_write16(NG_NEO_REG_LSPCMODE,
-                      (uint16_t)(((uint16_t)value << 8) | value));
-        return;
-    case NG_NEO_REG_TIMERHIGH + 1u:
-        ng68k_write16(NG_NEO_REG_TIMERHIGH,
-                      (uint16_t)(((uint16_t)value << 8) | value));
-        return;
-    case NG_NEO_REG_TIMERLOW + 1u:
-        ng68k_write16(NG_NEO_REG_TIMERLOW,
-                      (uint16_t)(((uint16_t)value << 8) | value));
-        return;
-    case NG_NEO_REG_IRQACK + 1u:
-        ng_neogeo_ack_interrupts(value);
-        return;
-    case NG_NEO_REG_TIMERSTOP + 1u:
-        ng68k_write16(NG_NEO_REG_TIMERSTOP,
-                      (uint16_t)(((uint16_t)value << 8) | value));
-        return;
-    default:
-        break;
+    if (ng_neogeo_is_system_latch_addr(addr)) {
+        switch (addr & 0x1Fu) {
+        case NG_NEO_REG_NOSHADOW & 0x1Fu:
+            g_ng_neogeo_shadow_enabled = 0u;
+            return;
+        case NG_NEO_REG_SHADOW & 0x1Fu:
+            g_ng_neogeo_shadow_enabled = 1u;
+            return;
+        case NG_NEO_REG_SWPBIOS & 0x1Fu:
+            g_ng_neogeo_bios_vectors_enabled = 1u;
+            return;
+        case NG_NEO_REG_SWPROM & 0x1Fu:
+            g_ng_neogeo_bios_vectors_enabled = 0u;
+            return;
+        case NG_NEO_REG_BRDFIX & 0x1Fu:
+            g_ng_neogeo_board_fix_enabled = 1u;
+            return;
+        case NG_NEO_REG_CRTFIX & 0x1Fu:
+            g_ng_neogeo_board_fix_enabled = 0u;
+            return;
+        case NG_NEO_REG_SRAMLOCK & 0x1Fu:
+            g_ng_neogeo_backup_ram_unlocked = 0u;
+            return;
+        case NG_NEO_REG_SRAMUNLOCK & 0x1Fu:
+            g_ng_neogeo_backup_ram_unlocked = 1u;
+            return;
+        case NG_NEO_REG_PALBANK1 & 0x1Fu:
+            g_ng_neogeo_palette_bank = 1u;
+            return;
+        case NG_NEO_REG_PALBANK0 & 0x1Fu:
+            g_ng_neogeo_palette_bank = 0u;
+            return;
+        default:
+            return;
+        }
     }
+    if (ng_neogeo_is_lspc_addr(addr)) {
+        ng_neogeo_write_lspc_word(addr & 0x00FFFFFEu,
+                                  (uint16_t)(((uint16_t)value << 8) | value));
+        return;
+    }
+
     fprintf(stderr, "ng68k_write8 miss at $%06X value=$%02X\n",
             addr & 0xFFFFFFu, value);
 }
 
-void ng68k_write16(uint32_t addr, uint16_t value) {
-    addr &= 0x00FFFFFFu;
-    if (ng_neogeo_is_palette_addr(addr)) {
-        uint32_t offset = ng_neogeo_palette_offset(addr) & ~1u;
-        g_ng_neogeo_palette_ram[offset] = (uint8_t)(value >> 8);
-        g_ng_neogeo_palette_ram[offset + 1u] = (uint8_t)value;
-        return;
-    }
-
+static void ng_neogeo_write_lspc_word(uint32_t addr, uint16_t value) {
     switch (addr) {
+    case NG_NEO_REG_VRAMADDR:
+        g_ng_neogeo_vram_addr = value;
+        return;
+    case NG_NEO_REG_VRAMRW:
+        g_ng_neogeo_vram[g_ng_neogeo_vram_addr] = value;
+        g_ng_neogeo_vram_addr = (uint16_t)(g_ng_neogeo_vram_addr +
+                                           g_ng_neogeo_vram_mod);
+        return;
+    case NG_NEO_REG_VRAMMOD:
+        g_ng_neogeo_vram_mod = value;
+        return;
     case NG_NEO_REG_LSPCMODE:
         g_ng_neogeo_lspc_mode = value;
         return;
@@ -236,6 +288,20 @@ void ng68k_write16(uint32_t addr, uint16_t value) {
         return;
     default:
         break;
+    }
+}
+
+void ng68k_write16(uint32_t addr, uint16_t value) {
+    addr &= 0x00FFFFFFu;
+    if (ng_neogeo_is_palette_addr(addr)) {
+        uint32_t offset = ng_neogeo_palette_offset(addr) & ~1u;
+        g_ng_neogeo_palette_ram[offset] = (uint8_t)(value >> 8);
+        g_ng_neogeo_palette_ram[offset + 1u] = (uint8_t)value;
+        return;
+    }
+    if (ng_neogeo_is_lspc_addr(addr)) {
+        ng_neogeo_write_lspc_word(addr & 0x00FFFFFEu, value);
+        return;
     }
     ng68k_write8(addr, (uint8_t)(value >> 8));
     ng68k_write8(addr + 1, (uint8_t)value);
@@ -310,7 +376,13 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_interrupt_polls = 0;
     g_ng_neogeo_watchdog_kicks = 0;
     g_ng_neogeo_port_output = 0;
+    g_ng_neogeo_vram_addr = 0;
+    g_ng_neogeo_vram_mod = 0;
+    g_ng_neogeo_shadow_enabled = 0;
+    g_ng_neogeo_bios_vectors_enabled = 0;
+    g_ng_neogeo_board_fix_enabled = 0;
     memset(g_ng_neogeo_work_ram, 0, sizeof(g_ng_neogeo_work_ram));
+    memset(g_ng_neogeo_vram, 0, sizeof(g_ng_neogeo_vram));
     memset(g_ng_neogeo_palette_ram, 0, sizeof(g_ng_neogeo_palette_ram));
     memset(g_ng_neogeo_backup_ram, 0, sizeof(g_ng_neogeo_backup_ram));
     g_ng_neogeo_palette_bank = 0;
@@ -411,6 +483,26 @@ uint32_t ng_neogeo_interrupt_polls(void) {
 
 uint8_t ng_neogeo_port_output(void) {
     return g_ng_neogeo_port_output;
+}
+
+uint8_t ng_neogeo_shadow_enabled(void) {
+    return g_ng_neogeo_shadow_enabled;
+}
+
+uint8_t ng_neogeo_bios_vectors_enabled(void) {
+    return g_ng_neogeo_bios_vectors_enabled;
+}
+
+uint8_t ng_neogeo_board_fix_enabled(void) {
+    return g_ng_neogeo_board_fix_enabled;
+}
+
+uint16_t ng_neogeo_vram_addr(void) {
+    return g_ng_neogeo_vram_addr;
+}
+
+uint16_t ng_neogeo_vram_mod(void) {
+    return g_ng_neogeo_vram_mod;
 }
 
 uint16_t ng_neogeo_lspc_mode(void) {

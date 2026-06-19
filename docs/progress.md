@@ -178,8 +178,9 @@ entry and uses a pending-address loop, so nested `JMP`/`JSR`/`RTS`/exception
 dispatches no longer grow the host C stack. The combined cart/BIOS smoke wrapper
 uses the same trampoline shape for cross-module handoffs. As an integration
 probe, manually adding `$C00438` to the local BIOS seed list no longer stack
-overflows; it runs farther, logs still-unimplemented hardware writes around
-`$3A0003` and `$3C0000-$3C0005`, and currently returns at:
+overflows. After adding narrow system-latch coverage and a headless VRAM port
+backing store for `$3A0003` and `$3C0000-$3C0005`, that extended probe runs
+without those bus-write misses and currently returns at:
 
 ```text
 dispatch miss at $C11142

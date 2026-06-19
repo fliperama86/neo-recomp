@@ -14,11 +14,20 @@ typedef int (*NgExternalDispatchHandler)(uint32_t addr);
 #define NG_NEO_REG_P2CNT     0x00340000u
 #define NG_NEO_REG_STATUS_B  0x00380000u
 #define NG_NEO_REG_POUTPUT   0x00380001u
+#define NG_NEO_REG_NOSHADOW  0x003A0001u
+#define NG_NEO_REG_SWPBIOS   0x003A0003u
+#define NG_NEO_REG_BRDFIX    0x003A000Bu
 #define NG_NEO_REG_LSPCMODE  0x003C0006u
+#define NG_NEO_REG_VRAMADDR  0x003C0000u
+#define NG_NEO_REG_VRAMRW    0x003C0002u
+#define NG_NEO_REG_VRAMMOD   0x003C0004u
 #define NG_NEO_REG_TIMERHIGH 0x003C0008u
 #define NG_NEO_REG_TIMERLOW  0x003C000Au
 #define NG_NEO_REG_IRQACK    0x003C000Cu
 #define NG_NEO_REG_TIMERSTOP 0x003C000Eu
+#define NG_NEO_REG_SHADOW    0x003A0011u
+#define NG_NEO_REG_SWPROM    0x003A0013u
+#define NG_NEO_REG_CRTFIX    0x003A001Bu
 #define NG_NEO_REG_PALBANK1  0x003A000Fu
 #define NG_NEO_REG_PALBANK0  0x003A001Fu
 #define NG_NEO_REG_SRAMLOCK  0x003A000Du
@@ -57,6 +66,11 @@ void ng_neogeo_advance_frame(void);
 uint32_t ng_neogeo_watchdog_kicks(void);
 uint32_t ng_neogeo_interrupt_polls(void);
 uint8_t ng_neogeo_port_output(void);
+uint8_t ng_neogeo_shadow_enabled(void);
+uint8_t ng_neogeo_bios_vectors_enabled(void);
+uint8_t ng_neogeo_board_fix_enabled(void);
+uint16_t ng_neogeo_vram_addr(void);
+uint16_t ng_neogeo_vram_mod(void);
 uint16_t ng_neogeo_lspc_mode(void);
 uint16_t ng_neogeo_timer_stop(void);
 uint32_t ng_neogeo_timer_reload(void);

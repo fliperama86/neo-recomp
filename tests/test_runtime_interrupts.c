@@ -74,6 +74,22 @@ int main(void) {
     ng_neogeo_reset_runtime();
     CHECK(ng_neogeo_port_output() == 0x00u);
 
+    CHECK(ng_neogeo_shadow_enabled() == 0u);
+    CHECK(ng_neogeo_bios_vectors_enabled() == 0u);
+    CHECK(ng_neogeo_board_fix_enabled() == 0u);
+    ng68k_write8(NG_NEO_REG_SHADOW, 0xFFu);
+    CHECK(ng_neogeo_shadow_enabled() == 1u);
+    ng68k_write8(NG_NEO_REG_NOSHADOW, 0xFFu);
+    CHECK(ng_neogeo_shadow_enabled() == 0u);
+    ng68k_write8(NG_NEO_REG_SWPBIOS, 0xFFu);
+    CHECK(ng_neogeo_bios_vectors_enabled() == 1u);
+    ng68k_write8(NG_NEO_REG_SWPROM, 0xFFu);
+    CHECK(ng_neogeo_bios_vectors_enabled() == 0u);
+    ng68k_write8(NG_NEO_REG_BRDFIX, 0xFFu);
+    CHECK(ng_neogeo_board_fix_enabled() == 1u);
+    ng68k_write8(NG_NEO_REG_CRTFIX, 0xFFu);
+    CHECK(ng_neogeo_board_fix_enabled() == 0u);
+
     CHECK(ng_neogeo_interrupt_polls() == 0u);
     ng_neogeo_set_auto_vblank_interval(3u);
     CHECK(!ng_m68k_take_interrupt(7, &level, &vector));
@@ -123,7 +139,7 @@ int main(void) {
     CHECK(ng68k_read16(0x00400000u) == 0x0000u);
     ng68k_write16(0x00400000u, 0xBEEFu);
     CHECK(ng68k_read16(0x00400000u) == 0xBEEFu);
-    ng68k_write8(NG_NEO_REG_PALBANK0, 0x00u);
+    ng68k_write8(0x003B001Fu, 0x00u);
     CHECK(ng68k_read16(0x00400000u) == 0x1234u);
     ng68k_write8(NG_NEO_REG_PALBANK1, 0x00u);
     CHECK(ng68k_read16(0x00400000u) == 0xBEEFu);
@@ -132,7 +148,7 @@ int main(void) {
 
     ng68k_write16(0x00D00000u, 0x1111u);
     CHECK(ng68k_read16(0x00D00000u) == 0x0000u);
-    ng68k_write8(NG_NEO_REG_SRAMUNLOCK, 0x00u);
+    ng68k_write8(0x003B001Du, 0x00u);
     ng68k_write16(0x00D00000u, 0xCAFEu);
     CHECK(ng68k_read16(0x00D00000u) == 0xCAFEu);
     CHECK(ng68k_read16(0x00D10000u) == 0xCAFEu);
@@ -141,6 +157,23 @@ int main(void) {
     ng68k_write8(NG_NEO_REG_SRAMLOCK, 0x00u);
     ng68k_write16(0x00D00000u, 0x1234u);
     CHECK(ng68k_read16(0x00D00000u) == 0xCAFEu);
+
+    ng_neogeo_reset_runtime();
+    CHECK(ng_neogeo_vram_addr() == 0u);
+    CHECK(ng_neogeo_vram_mod() == 0u);
+    ng68k_write16(NG_NEO_REG_VRAMADDR, 0x0100u);
+    ng68k_write16(NG_NEO_REG_VRAMMOD, 0x0002u);
+    CHECK(ng_neogeo_vram_addr() == 0x0100u);
+    CHECK(ng_neogeo_vram_mod() == 0x0002u);
+    ng68k_write16(NG_NEO_REG_VRAMRW, 0xBEEFu);
+    CHECK(ng_neogeo_vram_addr() == 0x0102u);
+    ng68k_write16(NG_NEO_REG_VRAMADDR, 0x0100u);
+    CHECK(ng68k_read16(NG_NEO_REG_VRAMRW) == 0xBEEFu);
+    CHECK(ng_neogeo_vram_addr() == 0x0100u);
+    ng68k_write8(NG_NEO_REG_VRAMMOD + 1u, 0xFFu);
+    CHECK(ng_neogeo_vram_mod() == 0xFFFFu);
+    ng68k_write8(NG_NEO_REG_VRAMADDR, 0x12u);
+    CHECK(ng_neogeo_vram_addr() == 0x1212u);
 
     uint8_t *large_program_rom = (uint8_t *)calloc(0x100004u, 1u);
     CHECK(large_program_rom != NULL);
