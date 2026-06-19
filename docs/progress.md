@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `ADDQ`/`SUBQ` quick operations against
+  the Motorola/NXP Programmer's Reference Manual. The validator now enforces
+  quick counts 1-8 with no source operand, exact destination-EA instruction
+  lengths, data-alterable destinations, and the word/long-only address
+  register forms whose CCR is unaffected. `test_m68k_validate` covered the
+  malformed metadata first.
 - local: Fact-checked MC68000 `BCHG`/`BCLR`/`BSET` bit operations
   against the Motorola/NXP Programmer's Reference Manual. The validator now
   distinguishes dynamic Dn bit-number forms from static immediate-bit forms,
