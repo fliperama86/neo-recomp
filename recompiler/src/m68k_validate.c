@@ -401,7 +401,13 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                instr->size == 1u &&
                ea_is_data_alterable(&instr->dst);
     case NG_M68K_DBCC:
-        return instr->condition <= 15u && instr->reg < 8u;
+        return instr->byte_length == 4u &&
+               instr->size == 2u &&
+               instr->condition <= 15u &&
+               instr->reg < 8u &&
+               instr->immediate == 0u &&
+               instr->src_reg == 0u &&
+               no_ea_operands(instr);
     case NG_M68K_ASL:
     case NG_M68K_ASR:
     case NG_M68K_LSL:

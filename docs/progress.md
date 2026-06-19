@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `DBcc Dn,<label>` against the Motorola/NXP Programmer's
+  Reference Manual. Decode now records the architectural word-sized counter
+  operation, and the validator rejects malformed `DBcc` metadata unless it is a
+  4-byte, word-sized, operand-free instruction with a valid condition and data
+  register counter. `test_m68k_decode` and `test_m68k_validate` covered the
+  failures first.
 - local: Fact-checked `BTST` effective-address tables against the
   Motorola/NXP Programmer's Reference Manual. Static immediate-bit `BTST` now
   decodes and emits read-only PC-relative data destinations, static

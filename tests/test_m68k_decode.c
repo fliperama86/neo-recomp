@@ -1725,8 +1725,11 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0x000110u, &instr));
         CHECK(instr.mnemonic == NG_M68K_DBCC);
         CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 2);
         CHECK(instr.condition == 1u);
         CHECK(instr.reg == 7);
+        CHECK(instr.src.mode == NG_M68K_EA_NONE);
+        CHECK(instr.dst.mode == NG_M68K_EA_NONE);
         CHECK(instr.displacement == -18);
         CHECK(instr.target == 0x000100u);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));

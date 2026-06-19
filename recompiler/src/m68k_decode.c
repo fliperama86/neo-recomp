@@ -1560,6 +1560,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
         if (ea_mode == 1u) {
             out->mnemonic = NG_M68K_DBCC;
             out->byte_length = 4;
+            out->size = NG_M68K_SIZE_WORD;
             out->reg = ea_reg;
             out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
             out->target = (uint32_t)((int32_t)(addr + 2u) + (int32_t)out->displacement);
