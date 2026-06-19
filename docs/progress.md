@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `TST` validation so opcode size and source EA bits
+  must match decoded metadata in addition to data-alterable EA, length,
+  and no-stray-field checks. `test_m68k_validate` covered a mismatched
+  opcode-size `TST.W D1` case red first.
 - local: Tightened binary `ADD`/`SUB`/`CMP`/`OR`/`AND`/`EOR`
   validation so opcode operation, direction, size, source register,
   destination register, and EA bits must match decoded metadata.

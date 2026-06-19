@@ -1765,12 +1765,30 @@ static int validate_tst_legacy_fields(const NgM68kInstr *instr) {
 
 static int validate_tst(const NgM68kInstr *instr) {
     uint8_t src_ext = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t size_bits = 0u;
+    uint16_t expected_opcode = 0u;
 
-    return valid_size(instr->size) &&
-           exact_data_source_ext_length(instr, &src_ext) &&
-           ea_is_data_alterable(&instr->src) &&
-           validate_tst_legacy_fields(instr) &&
-           instr->byte_length == (uint8_t)(2u + src_ext);
+    if (instr->size == 1u) {
+        size_bits = 0x0000u;
+    } else if (instr->size == 2u) {
+        size_bits = 0x0040u;
+    } else if (instr->size == 4u) {
+        size_bits = 0x0080u;
+    } else {
+        return 0;
+    }
+
+    if (!exact_data_source_ext_length(instr, &src_ext) ||
+        !ea_opcode_field(&instr->src, &ea_field) ||
+        !ea_is_data_alterable(&instr->src) ||
+        !validate_tst_legacy_fields(instr) ||
+        instr->byte_length != (uint8_t)(2u + src_ext)) {
+        return 0;
+    }
+
+    expected_opcode = (uint16_t)(0x4A00u | size_bits | ea_field);
+    return instr->opcode == expected_opcode;
 }
 
 static int validate_immediate_dest_legacy_fields(const NgM68kInstr *instr) {
