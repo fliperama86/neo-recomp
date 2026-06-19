@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `Scc <ea>` against the Motorola/NXP Programmer's
+  Reference Manual. The validator now rejects malformed `Scc` metadata unless
+  it is a byte-sized condition-store with no source/immediate operands and a
+  data-alterable destination encoded at a valid MC68000 instruction length.
+  `test_m68k_validate` covered valid and invalid forms first.
 - local: Fact-checked `DBcc Dn,<label>` against the Motorola/NXP Programmer's
   Reference Manual. Decode now records the architectural word-sized counter
   operation, and the validator rejects malformed `DBcc` metadata unless it is a

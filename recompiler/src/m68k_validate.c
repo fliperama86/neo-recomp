@@ -144,6 +144,10 @@ static int validate_btst(const NgM68kInstr *instr) {
     return 1;
 }
 
+static int valid_scc_length(uint8_t byte_length) {
+    return byte_length == 2u || byte_length == 4u || byte_length == 6u;
+}
+
 static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
     if (instr->byte_length != 4u || !no_ea_operands(instr)) {
         return 0;
@@ -397,8 +401,13 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                instr->src.mode == NG_M68K_EA_NONE &&
                instr->dst.mode == NG_M68K_EA_DREG;
     case NG_M68K_SCC:
-        return instr->condition <= 15u &&
+        return valid_scc_length(instr->byte_length) &&
+               instr->condition <= 15u &&
                instr->size == 1u &&
+               instr->immediate == 0u &&
+               instr->reg == 0u &&
+               instr->src_reg == 0u &&
+               instr->src.mode == NG_M68K_EA_NONE &&
                ea_is_data_alterable(&instr->dst);
     case NG_M68K_DBCC:
         return instr->byte_length == 4u &&
