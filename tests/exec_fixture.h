@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#define NG_EXEC_FIXTURE_SIZE 0x494u
-#define NG_EXEC_FIXTURE_ADDR_COUNT 35u
+#define NG_EXEC_FIXTURE_SIZE 0x4F4u
+#define NG_EXEC_FIXTURE_ADDR_COUNT 41u
 
 #if defined(__GNUC__) || defined(__clang__)
 #define NG_EXEC_FIXTURE_MAYBE_UNUSED __attribute__((unused))
@@ -400,6 +400,21 @@ static void ng_exec_fixture_fill(uint8_t *data, uint32_t size) {
     ng_exec_fixture_write16(data, 0x488u, 0x2700u);
     ng_exec_fixture_write16(data, 0x490u, 0x4E72u); /* DBcc trace handler: STOP #$2700 */
     ng_exec_fixture_write16(data, 0x492u, 0x2700u);
+
+    ng_exec_fixture_write16(data, 0x4A0u, 0x4EB9u); /* JSR $0004B0 */
+    ng_exec_fixture_write32(data, 0x4A2u, 0x000004B0u);
+    ng_exec_fixture_write16(data, 0x4A6u, 0x4E72u); /* return continuation: STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x4A8u, 0x2700u);
+    ng_exec_fixture_write16(data, 0x4B0u, 0x4E72u); /* callee target: STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x4B2u, 0x2700u);
+    ng_exec_fixture_write16(data, 0x4C0u, 0x4E72u); /* JSR trace handler: STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x4C2u, 0x2700u);
+
+    ng_exec_fixture_write16(data, 0x4D0u, 0x4E72u); /* RTS return target: STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x4D2u, 0x2700u);
+    ng_exec_fixture_write16(data, 0x4E0u, 0x4E75u); /* RTS */
+    ng_exec_fixture_write16(data, 0x4F0u, 0x4E72u); /* RTS trace handler: STOP #$2700 */
+    ng_exec_fixture_write16(data, 0x4F2u, 0x2700u);
 }
 
 static NG_EXEC_FIXTURE_MAYBE_UNUSED uint32_t ng_exec_fixture_addr(uint32_t index) {
@@ -439,6 +454,12 @@ static NG_EXEC_FIXTURE_MAYBE_UNUSED uint32_t ng_exec_fixture_addr(uint32_t index
         0x00000470u,
         0x00000480u,
         0x00000490u,
+        0x000004A0u,
+        0x000004B0u,
+        0x000004C0u,
+        0x000004D0u,
+        0x000004E0u,
+        0x000004F0u,
     };
     return index < NG_EXEC_FIXTURE_ADDR_COUNT ? addrs[index] : 0;
 }

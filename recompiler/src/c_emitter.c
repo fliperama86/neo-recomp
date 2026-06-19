@@ -2008,6 +2008,7 @@ static int emit_instr(FILE *out,
     case NG_M68K_RTS:
         fprintf(out, "    { uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]);\n");
         fprintf(out, "      g_ng_m68k.a[7] += 4u;\n");
+        fprintf(out, "      if (ng_service_trace(ng_pc)) return;\n");
         fprintf(out, "      ng_generated_call(ng_pc);\n");
         fprintf(out, "    }\n");
         fprintf(out, "    return;\n");
@@ -2479,16 +2480,21 @@ static int emit_instr(FILE *out,
             instr->form != NG_M68K_FORM_PC_RELATIVE) {
             char addr_expr[256];
             if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
+                fprintf(out, "    if (ng_service_trace(%s)) return;\n", addr_expr);
                 fprintf(out, "    ng_generated_call(%s);\n", addr_expr);
                 fprintf(out, "    return;\n");
                 return 0;
             }
         }
+        fprintf(out, "    if (ng_service_trace(0x%08Xu)) return;\n",
+                instr->target & 0x00FFFFFFu);
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_BSR:
         emit_push_return_address(out, instr->addr + instr->byte_length);
+        fprintf(out, "    if (ng_service_trace(0x%08Xu)) return;\n",
+                instr->target & 0x00FFFFFFu);
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
         fprintf(out, "    return;\n");
         return 0;
@@ -2498,11 +2504,14 @@ static int emit_instr(FILE *out,
             instr->form != NG_M68K_FORM_PC_RELATIVE) {
             char addr_expr[256];
             if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
+                fprintf(out, "    if (ng_service_trace(%s)) return;\n", addr_expr);
                 fprintf(out, "    ng_generated_call(%s);\n", addr_expr);
                 fprintf(out, "    return;\n");
                 return 0;
             }
         }
+        fprintf(out, "    if (ng_service_trace(0x%08Xu)) return;\n",
+                instr->target & 0x00FFFFFFu);
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
         fprintf(out, "    return;\n");
         return 0;

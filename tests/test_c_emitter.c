@@ -117,10 +117,12 @@ int main(void) {
         CHECK(strstr(text, "uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src;") != NULL);
         CHECK(strstr(text, "if (ng_full > 0x0000FFFFu) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);
         CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x0000000Au);") != NULL);
+        CHECK(strstr(text, "if (ng_service_trace(0x00000020u)) return;") != NULL);
         CHECK(strstr(text, "ng_generated_call(0x00000020u);") != NULL);
         CHECK(strstr(text, "/* $00000A: JMP $000030 */") != NULL);
         CHECK(strstr(text, "ng_generated_call(0x00000030u);") != NULL);
         CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]);") != NULL);
+        CHECK(strstr(text, "if (ng_service_trace(ng_pc)) return;") != NULL);
         CHECK(strstr(text, "ng_generated_call(ng_pc);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[7] += 4u;") != NULL);
         CHECK(strstr(text, "return;") != NULL);

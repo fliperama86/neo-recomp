@@ -206,6 +206,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Extended trace exception coverage to subroutine and return control
+  flow. `JSR`/`BSR`/`JMP` now trace to the target PC after any return-address
+  push, and `RTS` traces to the popped return PC before dispatching.
 - local: Extended trace exception coverage to taken `DBcc` paths. The generated
   decrement-and-branch path now services trace with the taken target PC after
   updating the counter and before jumping.
