@@ -1718,12 +1718,51 @@ static int validate_address_reg_op_legacy_fields(const NgM68kInstr *instr) {
 
 static int validate_address_reg_op(const NgM68kInstr *instr) {
     uint8_t src_ext = 0u;
+    uint8_t ea_field = 0u;
+    uint16_t expected_opcode = 0u;
 
-    return valid_word_or_long(instr->size) &&
-           move_source_ext_length(instr, &src_ext) &&
-           instr->dst.mode == NG_M68K_EA_AREG &&
-           validate_address_reg_op_legacy_fields(instr) &&
-           instr->byte_length == (uint8_t)(2u + src_ext);
+    if (!valid_word_or_long(instr->size) ||
+        !move_source_ext_length(instr, &src_ext) ||
+        !ea_opcode_field(&instr->src, &ea_field) ||
+        instr->dst.mode != NG_M68K_EA_AREG ||
+        !validate_address_reg_op_legacy_fields(instr) ||
+        instr->byte_length != (uint8_t)(2u + src_ext)) {
+        return 0;
+    }
+
+    if (instr->mnemonic == NG_M68K_MOVEA) {
+        uint16_t size_base = instr->size == 2u ? 0x3000u : 0x2000u;
+        expected_opcode = (uint16_t)(size_base |
+                                     ((uint16_t)instr->dst.reg << 9) |
+                                     0x0040u |
+                                     ea_field);
+        return instr->opcode == expected_opcode;
+    }
+
+    {
+        uint16_t base_opcode = 0u;
+        uint16_t opmode_bits = instr->size == 2u ? 0x00C0u : 0x01C0u;
+
+        switch (instr->mnemonic) {
+        case NG_M68K_ADDA:
+            base_opcode = 0xD000u;
+            break;
+        case NG_M68K_SUBA:
+            base_opcode = 0x9000u;
+            break;
+        case NG_M68K_CMPA:
+            base_opcode = 0xB000u;
+            break;
+        default:
+            return 0;
+        }
+
+        expected_opcode = (uint16_t)(base_opcode |
+                                     ((uint16_t)instr->dst.reg << 9) |
+                                     opmode_bits |
+                                     ea_field);
+        return instr->opcode == expected_opcode;
+    }
 }
 
 static int validate_tst_legacy_fields(const NgM68kInstr *instr) {
