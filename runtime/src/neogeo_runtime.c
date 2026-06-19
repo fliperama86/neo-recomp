@@ -1,9 +1,13 @@
 #include "ngrecomp/neogeo_runtime.h"
 
 #include <stdio.h>
+#include <string.h>
 
 NgM68kState g_ng_m68k;
 
+static const uint8_t *g_ng_neogeo_program_rom;
+static uint32_t g_ng_neogeo_program_rom_size;
+static uint8_t g_ng_neogeo_work_ram[0x10000u];
 static uint8_t g_ng_m68k_interrupt_level;
 static uint8_t g_ng_m68k_interrupt_vector;
 static uint8_t g_ng_m68k_level7_edge;
@@ -21,6 +25,19 @@ static void ng_neogeo_reload_timer_counter(void) {
 }
 
 uint8_t ng68k_read8(uint32_t addr) {
+    addr &= 0x00FFFFFFu;
+    if (addr <= 0x000FFFFFu) {
+        return addr < g_ng_neogeo_program_rom_size && g_ng_neogeo_program_rom ?
+            g_ng_neogeo_program_rom[addr] : 0xFFu;
+    }
+    if (addr >= 0x00100000u && addr <= 0x0010FFFFu) {
+        return g_ng_neogeo_work_ram[addr & 0xFFFFu];
+    }
+    if (addr >= 0x00200000u && addr <= 0x002FFFFFu) {
+        uint32_t rom_offset = 0x00100000u + (addr - 0x00200000u);
+        return rom_offset < g_ng_neogeo_program_rom_size && g_ng_neogeo_program_rom ?
+            g_ng_neogeo_program_rom[rom_offset] : 0xFFu;
+    }
     fprintf(stderr, "ng68k_read8 miss at $%06X\n", addr & 0xFFFFFFu);
     return 0xFF;
 }
@@ -38,7 +55,13 @@ uint32_t ng68k_read32(uint32_t addr) {
 }
 
 void ng68k_write8(uint32_t addr, uint8_t value) {
-    switch (addr & 0x00FFFFFFu) {
+    addr &= 0x00FFFFFFu;
+    if (addr >= 0x00100000u && addr <= 0x0010FFFFu) {
+        g_ng_neogeo_work_ram[addr & 0xFFFFu] = value;
+        return;
+    }
+
+    switch (addr) {
     case NG_NEO_REG_LSPCMODE + 1u:
         ng68k_write16(NG_NEO_REG_LSPCMODE,
                       (uint16_t)(((uint16_t)value << 8) | value));
@@ -66,7 +89,8 @@ void ng68k_write8(uint32_t addr, uint8_t value) {
 }
 
 void ng68k_write16(uint32_t addr, uint16_t value) {
-    switch (addr & 0x00FFFFFFu) {
+    addr &= 0x00FFFFFFu;
+    switch (addr) {
     case NG_NEO_REG_LSPCMODE:
         g_ng_neogeo_lspc_mode = value;
         return;
@@ -130,6 +154,11 @@ void ng_m68k_clear_interrupt_level(void) {
     g_ng_m68k_level7_edge = 0;
 }
 
+void ng_neogeo_set_program_rom(const uint8_t *data, uint32_t size) {
+    g_ng_neogeo_program_rom = data;
+    g_ng_neogeo_program_rom_size = size;
+}
+
 void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_irq_pending = 0;
     g_ng_neogeo_lspc_mode = 0;
@@ -138,6 +167,7 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_timer_counter_value = 0;
     g_ng_neogeo_timer_counter_loaded = 0;
     g_ng_neogeo_current_scanline = 0;
+    memset(g_ng_neogeo_work_ram, 0, sizeof(g_ng_neogeo_work_ram));
     ng_m68k_clear_interrupt_level();
 }
 

@@ -207,6 +207,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added the first default runtime bus slice: fixed P-ROM reads,
+  the repo's banked P-ROM window, 64KiB work RAM reads/writes, big-endian
+  word/long helpers, and 24-bit wrapping for covered regions.
 - local: Added a dispatch/control-flow audit artifact. `test_dispatch_audit`
   covers direct calls, missing direct targets, computed runtime dispatches,
   and PC-index jump tables; the CLI can now write it with
@@ -470,4 +473,4 @@ Near follow-ups:
 - Replace narrow condition handling with a tested condition-code helper table.
 - Start separating instruction semantics into reusable generated helper functions when repeated emitted C becomes noisy.
 - Add a tiny standalone ROM-like fixture that is closer to a hand-authored mini program than the current unit fixture.
-- Begin runtime bus coverage for Neo Geo-visible regions that generated code already touches.
+- Continue runtime bus coverage for palette RAM, backup/system RAM, BIOS/system registers, VRAM-facing ports, inputs, sound latch/Z80 communication, watchdog, and protection/bank-switch variants.

@@ -1,6 +1,7 @@
 #include "ngrecomp/neogeo_runtime.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define CHECK(expr) do { \
@@ -13,11 +14,45 @@
 int main(void) {
     uint8_t level = 0;
     uint8_t vector = 0;
+    const uint8_t program_rom[] = {
+        0x12u, 0x34u, 0x56u, 0x78u,
+        0x9Au, 0xBCu, 0xDEu, 0xF0u,
+    };
 
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
     ng_neogeo_reset_runtime();
     ng_m68k_clear_interrupt_level();
     CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+
+    ng_neogeo_set_program_rom(program_rom, (uint32_t)sizeof(program_rom));
+    CHECK(ng68k_read8(0x000000u) == 0x12u);
+    CHECK(ng68k_read16(0x000000u) == 0x1234u);
+    CHECK(ng68k_read32(0x000000u) == 0x12345678u);
+    CHECK(ng68k_read8(0x01000000u) == 0x12u);
+    CHECK(ng68k_read8(0x000007u) == 0xF0u);
+    CHECK(ng68k_read8(0x000008u) == 0xFFu);
+    ng68k_write8(0x000000u, 0xAAu);
+    CHECK(ng68k_read8(0x000000u) == 0x12u);
+
+    ng68k_write8(0x00100000u, 0xA5u);
+    CHECK(ng68k_read8(0x00100000u) == 0xA5u);
+    ng68k_write16(0x00100002u, 0xBEEFu);
+    CHECK(ng68k_read16(0x00100002u) == 0xBEEFu);
+    ng68k_write32(0x0010FFFCu, 0xCAFEBABEu);
+    CHECK(ng68k_read32(0x0010FFFCu) == 0xCAFEBABEu);
+    CHECK(ng68k_read8(0x01100000u) == 0xA5u);
+
+    uint8_t *large_program_rom = (uint8_t *)calloc(0x100004u, 1u);
+    CHECK(large_program_rom != NULL);
+    large_program_rom[0x100000u] = 0xCAu;
+    large_program_rom[0x100001u] = 0xFEu;
+    large_program_rom[0x100002u] = 0xBAu;
+    large_program_rom[0x100003u] = 0xBEu;
+    ng_neogeo_set_program_rom(large_program_rom, 0x100004u);
+    CHECK(ng68k_read32(0x00200000u) == 0xCAFEBABEu);
+    CHECK(ng68k_read32(0x01200000u) == 0xCAFEBABEu);
+    free(large_program_rom);
+    ng_neogeo_set_program_rom(program_rom, (uint32_t)sizeof(program_rom));
 
     ng_m68k_set_interrupt_level(4, 28);
     CHECK(!ng_m68k_take_interrupt(4, &level, &vector));

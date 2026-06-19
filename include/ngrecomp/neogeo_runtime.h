@@ -43,6 +43,7 @@ void ng_neogeo_request_timer_interrupt(void);
 void ng_neogeo_request_reset_interrupt(void);
 void ng_neogeo_ack_interrupts(uint16_t ack_mask);
 
+void ng_neogeo_set_program_rom(const uint8_t *data, uint32_t size);
 void ng_neogeo_reset_runtime(void);
 void ng_neogeo_begin_vblank(void);
 void ng_neogeo_advance_timer(uint32_t pixel_ticks);
