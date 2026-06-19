@@ -520,6 +520,7 @@ static int decode_exchange(uint16_t op, NgM68kInstr *out) {
     if ((op & 0xF1F8u) == 0xC140u) {
         out->mnemonic = NG_M68K_EXG;
         out->byte_length = 2;
+        out->size = NG_M68K_SIZE_LONG;
         out->src.mode = NG_M68K_EA_DREG;
         out->src.reg = left_reg;
         out->dst.mode = NG_M68K_EA_DREG;
@@ -529,6 +530,7 @@ static int decode_exchange(uint16_t op, NgM68kInstr *out) {
     if ((op & 0xF1F8u) == 0xC148u) {
         out->mnemonic = NG_M68K_EXG;
         out->byte_length = 2;
+        out->size = NG_M68K_SIZE_LONG;
         out->src.mode = NG_M68K_EA_AREG;
         out->src.reg = left_reg;
         out->dst.mode = NG_M68K_EA_AREG;
@@ -538,6 +540,7 @@ static int decode_exchange(uint16_t op, NgM68kInstr *out) {
     if ((op & 0xF1F8u) == 0xC188u) {
         out->mnemonic = NG_M68K_EXG;
         out->byte_length = 2;
+        out->size = NG_M68K_SIZE_LONG;
         out->src.mode = NG_M68K_EA_DREG;
         out->src.reg = left_reg;
         out->dst.mode = NG_M68K_EA_AREG;

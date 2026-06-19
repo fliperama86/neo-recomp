@@ -682,6 +682,7 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_EXG);
         CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
         CHECK(instr.src.mode == NG_M68K_EA_DREG);
         CHECK(instr.src.reg == 0);
         CHECK(instr.dst.mode == NG_M68K_EA_DREG);

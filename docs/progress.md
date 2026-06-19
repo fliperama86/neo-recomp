@@ -207,6 +207,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Continued the CPU-only MC68000 legality pass against the Motorola/NXP
+  Programmer's Reference Manual. The validator now catches invalid
+  `ADDA`/`SUBA`/`CMPA`, `MOVEA`, `EXG`, `LINK`/`UNLK`, `MOVEP`, `MOVEM`,
+  `CMPM`, `ADDX`/`SUBX`, `ABCD`/`SBCD`, shift/rotate, `Scc`, and `DBcc`
+  forms, and `EXG` decode now records its architectural long size; tests were
+  added first in `test_m68k_validate`/`test_m68k_decode`.
 - local: Refocused on pure MC68000 CPU legality and broadened the
   post-decode validator. It now rejects invalid immediate logical/arithmetic
   destinations, invalid `ADD`/`SUB`/`CMP`/`OR`/`AND`/`EOR` source/destination
