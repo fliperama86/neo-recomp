@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `PEA` validation so top-level target, absolute-address,
+  and displacement metadata must stay empty while the control source EA carries
+  the address payload. `test_m68k_validate` covered stray address-displacement
+  and PC-relative `PEA` metadata red first.
 - local: Tightened `MOVEP` validation so both data-register and
   address-displacement operands must use canonical no-stray EA payloads
   in both directions. `test_m68k_validate` covered stray source/destination

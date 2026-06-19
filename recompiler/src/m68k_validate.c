@@ -1094,6 +1094,9 @@ static int validate_pea(const NgM68kInstr *instr) {
            instr->reg == 0u &&
            instr->condition == 0u &&
            instr->form == NG_M68K_FORM_NONE &&
+           instr->target == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0 &&
            exact_control_source_ext_length(instr, &ext_len) &&
            ea_opcode_field(&instr->src, &ea_field) &&
            instr->byte_length == (uint8_t)(2u + ext_len) &&
