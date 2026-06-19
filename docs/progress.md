@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `LINK`/`UNLK` validation so the opcode class and
+  low register bits must match the decoded address-register metadata
+  (`$4E50+n` for `LINK An,#disp`, `$4E58+n` for `UNLK An`).
+  `test_m68k_validate` covered mismatched opcode/register and
+  cross-family opcode metadata red first.
 - local: Tightened privileged `MOVE USP` validation so `MOVE An,USP`
   now requires opcode `$4E6n`, `MOVE USP,An` requires opcode
   `$4E68+n`, and the opcode register/direction must match the decoded

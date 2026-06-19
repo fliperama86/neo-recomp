@@ -1173,11 +1173,13 @@ static int validate_link_unlk(const NgM68kInstr *instr) {
     }
 
     if (instr->mnemonic == NG_M68K_LINK) {
-        return instr->byte_length == 4u &&
+        return instr->opcode == (uint16_t)(0x4E50u | instr->reg) &&
+               instr->byte_length == 4u &&
                instr->size == 2u;
     }
 
-    return instr->byte_length == 2u &&
+    return instr->opcode == (uint16_t)(0x4E58u | instr->reg) &&
+           instr->byte_length == 2u &&
            instr->size == 0u &&
            instr->displacement == 0;
 }
