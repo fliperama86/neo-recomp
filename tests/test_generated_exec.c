@@ -565,6 +565,11 @@ static int oracle_exec(const uint8_t *program,
         }
         if ((op & 0xFFF8u) == 0x4E58u) {
             uint8_t reg = (uint8_t)(op & 7u);
+            if (reg == 7u) {
+                state->a[7] = bus_read32(bus, state->a[7]);
+                pc += 2u;
+                continue;
+            }
             state->a[7] = state->a[reg];
             state->a[reg] = bus_read32(bus, state->a[7]);
             state->a[7] += 4u;
@@ -4084,6 +4089,37 @@ int main(void) {
     CHECK(g_ng_m68k.a[7] == 0x000001E8u);
     CHECK(ng68k_read32(0x000001ECu) == 0x000001F0u);
     CHECK(g_ng_m68k.pc == 0x00005F48u);
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C);
+    expected_state.a[7] = 0x000001F0u;
+    expected_state.ssp = expected_state.a[7];
+    bus_write32(expected_bus, 0x000001F0u, 0x000014A0u);
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x00005F50u,
+                      &expected_state, expected_bus, 0));
+    CHECK(expected_state.a[7] == 0x000014A0u);
+    CHECK(bus_read16(expected_bus, 0x0000128Cu) ==
+          (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C));
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C);
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    ng68k_write32(0x000001F0u, 0x000014A0u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00005F50u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+    CHECK(g_ng_m68k.a[7] == expected_state.a[7]);
+    CHECK(g_ng_m68k.sr == expected_state.sr);
+    CHECK(g_ng_m68k.a[7] == 0x000014A0u);
+    CHECK(ng68k_read16(0x0000128Cu) ==
+          (uint16_t)(SR_S | CCR_X | CCR_N | CCR_Z | CCR_V | CCR_C));
+    CHECK(g_ng_m68k.pc == 0x00005F5Cu);
 
     memset(&expected_state, 0, sizeof(expected_state));
     memset(expected_bus, 0, sizeof(expected_bus));

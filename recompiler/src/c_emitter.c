@@ -2062,6 +2062,10 @@ static int emit_instr(FILE *out,
                 instr->displacement);
         return 1;
     case NG_M68K_UNLK:
+        if (instr->reg == 7u) {
+            fprintf(out, "    g_ng_m68k.a[7] = ng68k_read32(g_ng_m68k.a[7]);\n");
+            return 1;
+        }
         fprintf(out, "    g_ng_m68k.a[7] = g_ng_m68k.a[%u];\n", instr->reg);
         fprintf(out, "    g_ng_m68k.a[%u] = ng68k_read32(g_ng_m68k.a[7]);\n",
                 instr->reg);

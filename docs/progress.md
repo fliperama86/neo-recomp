@@ -276,6 +276,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fixed `UNLK A7` stack-pointer alias semantics. `test_generated_exec`
+  now covers opcode `$4E5F` red first and checks that `A7` becomes the
+  longword read from the old stack pointer, without the normal post-pop `+4`
+  applied for non-`A7` frame registers.
 - local: Fixed `LINK A7,#disp` stack-frame semantics so the value pushed on
   the stack is the old predecrement `A7`, not the already-decremented stack
   pointer. The generated-exec fixture now covers `LINK A7,#-4` red first and
