@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `STOP` and `TRAP` validation so `STOP` now
+  requires opcode `$4E72`, and `TRAP #n` now requires a `$4E4n`
+  opcode whose low nibble matches the decoded vector immediate.
+  `test_m68k_validate` covered mismatched opcode/immediate metadata
+  red first.
 - local: Tightened `ILLEGAL`/A-line/F-line validation so the decoded
   emulator-exception vector now has to match the opcode class: `$4AFC`
   uses vector 4 metadata, A-line opcodes use vector 10 metadata, and

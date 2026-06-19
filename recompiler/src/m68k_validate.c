@@ -237,6 +237,23 @@ static int validate_illegal_opcode_metadata(const NgM68kInstr *instr) {
     return 0;
 }
 
+static int validate_stop_metadata(const NgM68kInstr *instr) {
+    return instr->opcode == 0x4E72u &&
+           instr->byte_length == 4u &&
+           instr->size == 0u &&
+           instr->immediate <= 0xFFFFu &&
+           valid_control_immediate_fields(instr);
+}
+
+static int validate_trap_metadata(const NgM68kInstr *instr) {
+    return (instr->opcode & 0xFFF0u) == 0x4E40u &&
+           (instr->opcode & 0x000Fu) == instr->immediate &&
+           instr->byte_length == 2u &&
+           instr->size == 0u &&
+           instr->immediate <= 15u &&
+           valid_control_immediate_fields(instr);
+}
+
 static int validate_move_usp(const NgM68kInstr *instr) {
     if (instr->byte_length != 2u ||
         instr->size != 4u ||
@@ -1726,15 +1743,9 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_ILLEGAL:
         return validate_illegal_opcode_metadata(instr);
     case NG_M68K_STOP:
-        return instr->byte_length == 4u &&
-               instr->size == 0u &&
-               instr->immediate <= 0xFFFFu &&
-               valid_control_immediate_fields(instr);
+        return validate_stop_metadata(instr);
     case NG_M68K_TRAP:
-        return instr->byte_length == 2u &&
-               instr->size == 0u &&
-               instr->immediate <= 15u &&
-               valid_control_immediate_fields(instr);
+        return validate_trap_metadata(instr);
     case NG_M68K_BRA:
     case NG_M68K_BSR:
     case NG_M68K_BCC:
