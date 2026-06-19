@@ -50,6 +50,20 @@ target_link_libraries(test_generated_smoke_harness PRIVATE
     neo_runtime
 )
 
+add_executable(test_generated_smoke_trampoline
+    test_generated_smoke_trampoline.c
+    ../tools/generated_smoke_harness.c
+)
+target_compile_definitions(test_generated_smoke_trampoline PRIVATE
+    NG_GENERATED_SMOKE_NO_MAIN
+    NG_GENERATED_SMOKE_HAS_BIOS
+    NG_GENERATED_SMOKE_COMBINED_DISPATCH
+)
+target_link_libraries(test_generated_smoke_trampoline PRIVATE
+    neo_recompiler_core
+    neo_runtime
+)
+
 add_executable(test_opcode_sweep
     test_opcode_sweep.c
 )
@@ -86,6 +100,7 @@ if(MSVC)
     target_compile_options(test_c_emitter PRIVATE /W4)
     target_compile_options(test_runtime_interrupts PRIVATE /W4)
     target_compile_options(test_generated_smoke_harness PRIVATE /W4)
+    target_compile_options(test_generated_smoke_trampoline PRIVATE /W4)
     target_compile_options(test_opcode_sweep PRIVATE /W4)
     target_compile_options(generate_exec_fixture PRIVATE /W4)
     target_compile_options(test_generated_exec PRIVATE /W4)
@@ -99,6 +114,7 @@ else()
     target_compile_options(test_c_emitter PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_runtime_interrupts PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_generated_smoke_harness PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(test_generated_smoke_trampoline PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_opcode_sweep PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(generate_exec_fixture PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_generated_exec PRIVATE -Wall -Wextra -Wpedantic)
@@ -113,5 +129,6 @@ add_test(NAME test_game_config COMMAND test_game_config)
 add_test(NAME test_c_emitter COMMAND test_c_emitter)
 add_test(NAME test_runtime_interrupts COMMAND test_runtime_interrupts)
 add_test(NAME test_generated_smoke_harness COMMAND test_generated_smoke_harness)
+add_test(NAME test_generated_smoke_trampoline COMMAND test_generated_smoke_trampoline)
 add_test(NAME test_opcode_sweep COMMAND test_opcode_sweep)
 add_test(NAME test_generated_exec COMMAND test_generated_exec)

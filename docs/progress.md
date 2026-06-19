@@ -11,7 +11,7 @@ project orientation; update this file after each meaningful green slice.
 - Branch: `main`
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
-- Current test status: 11/11 passing
+- Current test status: 12/12 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
@@ -156,10 +156,11 @@ ng68k_write8 miss at $300001 value=$FF
 ```
 
 The runtime now handles `$300001` as the active-low DIP switch read and watchdog
-kick write. The smoke harness also supports a combined cart/BIOS dispatcher,
-uses an auto-VBlank interrupt interval for BIOS-backed smoke, and the runtime now
-covers default active-low P1/P2/status-B input reads plus the port-output latch.
-With the default BIOS seed list above, the current BIOS-backed checkpoint is:
+kick write. The smoke harness also supports a trampoline-safe combined cart/BIOS
+dispatcher, uses an auto-VBlank interrupt interval for BIOS-backed smoke, and
+the runtime now covers default active-low P1/P2/status-B input reads plus the
+port-output latch. With the default BIOS seed list above, the current
+BIOS-backed checkpoint is:
 
 ```text
 starting cart entry $0007CC ssp=$0010F300
@@ -171,6 +172,22 @@ That means generated BIOS code can wait for VBlank, enter the generated cart
 VBlank handler, and return with the next missing BIOS entry at `$C00438`. The
 local BIOS discovery still reports `BIOS candidates: 1024 (truncated)`, so this
 remains a checkpoint slice rather than a complete BIOS recompilation.
+
+Generated dispatch now splits the per-address switch from the public dispatch
+entry and uses a pending-address loop, so nested `JMP`/`JSR`/`RTS`/exception
+dispatches no longer grow the host C stack. The combined cart/BIOS smoke wrapper
+uses the same trampoline shape for cross-module handoffs. As an integration
+probe, manually adding `$C00438` to the local BIOS seed list no longer stack
+overflows; it runs farther, logs still-unimplemented hardware writes around
+`$3A0003` and `$3C0000-$3C0005`, and currently returns at:
+
+```text
+dispatch miss at $C11142
+returned pc=$C11142 sr=$2004 sp=$0010F300
+```
+
+That extended probe is intentionally not the default documented seed list yet;
+it is the next frontier finder for small runtime bus slices.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.

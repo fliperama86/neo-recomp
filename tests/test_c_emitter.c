@@ -72,8 +72,17 @@ int main(void) {
     CHECK(strstr(text, "#define NG_SR_S 0x2000u") != NULL);
     CHECK(strstr(text, "#define NG_SR_T 0x8000u") != NULL);
     CHECK(strstr(text, "#define NG_GENERATED_CALL ng_generated_call") != NULL);
+    CHECK(strstr(text, "#define NG_GENERATED_STEP ng_generated_step") != NULL);
     CHECK(strstr(text, "#define NG_GENERATED_DISPATCH NG_GENERATED_CALL") != NULL);
+    CHECK(strstr(text, "static void NG_GENERATED_STEP(uint32_t addr);") != NULL);
+    CHECK(strstr(text, "static int ng_generated_dispatch_active;") != NULL);
+    CHECK(strstr(text, "static int ng_generated_dispatch_pending;") != NULL);
+    CHECK(strstr(text, "static uint32_t ng_generated_dispatch_addr;") != NULL);
+    CHECK(strstr(text, "static void NG_GENERATED_STEP(uint32_t addr)") != NULL);
     CHECK(strstr(text, "void NG_GENERATED_CALL(uint32_t addr)") != NULL);
+    CHECK(strstr(text, "if (ng_generated_dispatch_active)") != NULL);
+    CHECK(strstr(text, "while (ng_generated_dispatch_pending)") != NULL);
+    CHECK(strstr(text, "NG_GENERATED_STEP(ng_next_addr);") != NULL);
     CHECK(strstr(text, "static void ng_set_sr(uint16_t value)") != NULL);
     CHECK(strstr(text, "g_ng_m68k.usp = g_ng_m68k.a[7];") != NULL);
     CHECK(strstr(text, "g_ng_m68k.ssp = g_ng_m68k.a[7];") != NULL);

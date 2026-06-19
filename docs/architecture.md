@@ -11,6 +11,12 @@ only about:
 - `ng_call_by_address`
 - runtime hooks for interrupts, traps, and dispatch misses
 
+Generated dispatch should stay trampoline/tail-call oriented: generated
+control-flow handoffs enqueue the next 68k PC and unwind the host C stack before
+running the next generated routine. Host integrations that combine multiple
+generated modules, such as cart plus BIOS, should preserve that same shape at
+the module boundary.
+
 The concrete Neo Geo runtime includes that ABI and supplies one implementation.
 Tests may supply a fake implementation, and future host integrations can do the
 same without changing generated C or the recompiler.

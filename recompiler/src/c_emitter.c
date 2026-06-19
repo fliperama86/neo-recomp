@@ -65,10 +65,17 @@ static void emit_header(FILE *out) {
     fprintf(out, "#ifndef NG_GENERATED_CALL\n");
     fprintf(out, "#define NG_GENERATED_CALL ng_generated_call\n");
     fprintf(out, "#endif\n\n");
+    fprintf(out, "#ifndef NG_GENERATED_STEP\n");
+    fprintf(out, "#define NG_GENERATED_STEP ng_generated_step\n");
+    fprintf(out, "#endif\n\n");
     fprintf(out, "#ifndef NG_GENERATED_DISPATCH\n");
     fprintf(out, "#define NG_GENERATED_DISPATCH NG_GENERATED_CALL\n");
     fprintf(out, "#endif\n\n");
     fprintf(out, "void NG_GENERATED_DISPATCH(uint32_t addr);\n\n");
+    fprintf(out, "static void NG_GENERATED_STEP(uint32_t addr);\n\n");
+    fprintf(out, "static int ng_generated_dispatch_active;\n");
+    fprintf(out, "static int ng_generated_dispatch_pending;\n");
+    fprintf(out, "static uint32_t ng_generated_dispatch_addr;\n\n");
     fprintf(out, "static void ng_set_sr(uint16_t value) {\n");
     fprintf(out, "    uint16_t old_sr = g_ng_m68k.sr;\n");
     fprintf(out, "    if ((old_sr ^ value) & NG_SR_S) {\n");
@@ -148,7 +155,7 @@ static void emit_declarations(FILE *out, const NgFunctionDiscovery *discovery) {
 
 static void emit_dispatch(FILE *out, const NgFunctionDiscovery *discovery) {
     fprintf(out, "\n");
-    fprintf(out, "void NG_GENERATED_CALL(uint32_t addr) {\n");
+    fprintf(out, "static void NG_GENERATED_STEP(uint32_t addr) {\n");
     fprintf(out, "    addr &= 0x00FFFFFFu;\n");
     fprintf(out, "    g_ng_m68k.pc = addr;\n");
     fprintf(out, "    switch (addr) {\n");
@@ -160,6 +167,23 @@ static void emit_dispatch(FILE *out, const NgFunctionDiscovery *discovery) {
     }
     fprintf(out, "    default: ng_call_by_address(addr); return;\n");
     fprintf(out, "    }\n");
+    fprintf(out, "}\n\n");
+    fprintf(out, "void NG_GENERATED_CALL(uint32_t addr) {\n");
+    fprintf(out, "    addr &= 0x00FFFFFFu;\n");
+    fprintf(out, "    if (ng_generated_dispatch_active) {\n");
+    fprintf(out, "        ng_generated_dispatch_addr = addr;\n");
+    fprintf(out, "        ng_generated_dispatch_pending = 1;\n");
+    fprintf(out, "        return;\n");
+    fprintf(out, "    }\n");
+    fprintf(out, "    ng_generated_dispatch_active = 1;\n");
+    fprintf(out, "    ng_generated_dispatch_addr = addr;\n");
+    fprintf(out, "    ng_generated_dispatch_pending = 1;\n");
+    fprintf(out, "    while (ng_generated_dispatch_pending) {\n");
+    fprintf(out, "        uint32_t ng_next_addr = ng_generated_dispatch_addr;\n");
+    fprintf(out, "        ng_generated_dispatch_pending = 0;\n");
+    fprintf(out, "        NG_GENERATED_STEP(ng_next_addr);\n");
+    fprintf(out, "    }\n");
+    fprintf(out, "    ng_generated_dispatch_active = 0;\n");
     fprintf(out, "}\n\n");
 }
 

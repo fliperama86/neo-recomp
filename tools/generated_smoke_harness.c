@@ -21,7 +21,11 @@ static void ng_generated_smoke_call_bios(uint32_t addr) {
 #ifdef NG_GENERATED_SMOKE_COMBINED_DISPATCH
 void ng_cart_generated_call(uint32_t addr);
 
-void ng_generated_call(uint32_t addr) {
+static int g_ng_generated_smoke_dispatch_active;
+static int g_ng_generated_smoke_dispatch_pending;
+static uint32_t g_ng_generated_smoke_dispatch_addr;
+
+static void ng_generated_smoke_dispatch_one(uint32_t addr) {
     addr &= 0x00FFFFFFu;
     if (addr >= 0x00C00000u && addr <= 0x00CFFFFFu) {
         uint32_t bios_addr =
@@ -30,6 +34,24 @@ void ng_generated_call(uint32_t addr) {
         return;
     }
     ng_cart_generated_call(addr);
+}
+
+void ng_generated_call(uint32_t addr) {
+    addr &= 0x00FFFFFFu;
+    if (g_ng_generated_smoke_dispatch_active) {
+        g_ng_generated_smoke_dispatch_addr = addr;
+        g_ng_generated_smoke_dispatch_pending = 1;
+        return;
+    }
+    g_ng_generated_smoke_dispatch_active = 1;
+    g_ng_generated_smoke_dispatch_addr = addr;
+    g_ng_generated_smoke_dispatch_pending = 1;
+    while (g_ng_generated_smoke_dispatch_pending) {
+        uint32_t next_addr = g_ng_generated_smoke_dispatch_addr;
+        g_ng_generated_smoke_dispatch_pending = 0;
+        ng_generated_smoke_dispatch_one(next_addr);
+    }
+    g_ng_generated_smoke_dispatch_active = 0;
 }
 #else
 void ng_generated_call(uint32_t addr);
