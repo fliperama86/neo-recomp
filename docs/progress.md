@@ -186,8 +186,9 @@ Covered by executable generated-C validation:
     postincrement memory destinations
   - `MULU.W <ea>,Dn` and `MULS.W <ea>,Dn` covered so far by immediate sources
   - `DIVU.W <ea>,Dn` and `DIVS.W <ea>,Dn` covered so far by immediate sources,
-    divide-by-zero exception-vector emission, and a signed quotient-overflow
-    case that leaves the destination operand unchanged
+    divide-by-zero exception-vector emission, signed and unsigned
+    quotient-overflow cases that leave the destination operand unchanged, and
+    required `X/V/C` behavior on overflow
   - `EXG` register exchanges covered for data-register, address-register, and
     data-register/address-register pairs, with CCR preserved
   - `ANDI.B #imm,(d16,An)`
@@ -234,6 +235,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `DIVU.W` quotient-overflow semantics. Generated-exec now
+  covers an unsigned quotient larger than 16 bits, verifying `V` set, `C`
+  clear, `X` preserved, and the destination data register left unchanged.
 - local: Fact-checked `LEA` PC-index effective-address semantics.
   Generated-exec now covers `LEA (d8,PC,D0.W),A2`, proving the extension-word
   PC base plus word index calculation and condition-code preservation.
