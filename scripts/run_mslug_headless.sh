@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 NEO_PATH="${1:-$HOME/Documents/Games/Mister/NEOGEO/mslug.neo}"
 BIOS_PATH="${2:-$HOME/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1}"
-TIMEOUT_SECONDS="${NG_MSLUG_TIMEOUT:-3}"
+DISPATCH_BUDGET="${NG_MSLUG_DISPATCH_BUDGET:-100000}"
 
 CFLAGS=(-std=c99 -Wall -Wextra -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
@@ -76,18 +76,7 @@ cc \
   "$BUILD_DIR/p_rom.o" \
   -o "$BUILD_DIR/mslug_bios_smoke_harness"
 
-python3 - "$TIMEOUT_SECONDS" "$BUILD_DIR/mslug_bios_smoke_harness" --bios "$BIOS_PATH" "$NEO_PATH" <<'PY'
-import subprocess
-import sys
-
-timeout = float(sys.argv[1])
-cmd = sys.argv[2:]
-proc = subprocess.Popen(cmd)
-try:
-    raise SystemExit(proc.wait(timeout=timeout))
-except subprocess.TimeoutExpired:
-    proc.kill()
-    proc.wait()
-    print(f"headless smoke: timed out after {timeout:g}s; this is the current expected no-miss checkpoint")
-    raise SystemExit(0)
-PY
+exec "$BUILD_DIR/mslug_bios_smoke_harness" \
+  --max-dispatches "$DISPATCH_BUDGET" \
+  --bios "$BIOS_PATH" \
+  "$NEO_PATH"

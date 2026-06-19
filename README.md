@@ -138,6 +138,19 @@ Current M1 status:
   synthetic unit test.
 - Real local smoke has been verified with `G:\Mister\NEOGEO\mslug.neo`.
 
+Current headless Metal Slug smoke:
+
+```sh
+scripts/run_mslug_headless.sh \
+  ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1
+```
+
+The BIOS is user-provided. The smoke is not playable; success currently means
+reaching the deterministic dispatch budget without a dispatch or bus miss. The
+default budget is `100000` dispatches and can be changed with
+`NG_MSLUG_DISPATCH_BUDGET=...`.
+
 ## Decoder Slice
 
 The first decoder milestone is intentionally tiny: decode enough of the Metal

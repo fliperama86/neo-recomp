@@ -9,6 +9,13 @@
 } while (0)
 
 void ng_generated_call(uint32_t addr);
+void ng_generated_smoke_reset_dispatch_stats(void);
+void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches);
+uint64_t ng_generated_smoke_dispatch_count(void);
+uint64_t ng_generated_smoke_cart_dispatch_count(void);
+uint64_t ng_generated_smoke_bios_dispatch_count(void);
+int ng_generated_smoke_dispatch_budget_hit(void);
+uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void);
 
 static uint32_t g_cart_calls;
 static uint32_t g_bios_calls;
@@ -49,7 +56,18 @@ void ng_bios_generated_call(uint32_t addr) {
     --g_bios_depth;
 }
 
+static void reset_test_counters(void) {
+    g_cart_calls = 0;
+    g_bios_calls = 0;
+    g_cart_depth = 0;
+    g_bios_depth = 0;
+    g_max_cart_depth = 0;
+    g_max_bios_depth = 0;
+    g_last_cart_addr = 0;
+}
+
 int main(void) {
+    ng_generated_smoke_reset_dispatch_stats();
     ng_generated_call(0x00000100u);
 
     CHECK(g_bios_calls == 1u);
@@ -59,5 +77,28 @@ int main(void) {
     CHECK(g_max_bios_depth == 1u);
     CHECK(g_cart_depth == 0u);
     CHECK(g_bios_depth == 0u);
+    CHECK(ng_generated_smoke_dispatch_count() == 34u);
+    CHECK(ng_generated_smoke_cart_dispatch_count() == 33u);
+    CHECK(ng_generated_smoke_bios_dispatch_count() == 1u);
+    CHECK(!ng_generated_smoke_dispatch_budget_hit());
+
+    reset_test_counters();
+    ng_generated_smoke_reset_dispatch_stats();
+    ng_generated_smoke_set_dispatch_budget(4u);
+    ng_generated_call(0x00000100u);
+
+    CHECK(g_bios_calls == 1u);
+    CHECK(g_cart_calls == 3u);
+    CHECK(g_last_cart_addr == 0x00000104u);
+    CHECK(g_max_cart_depth == 1u);
+    CHECK(g_max_bios_depth == 1u);
+    CHECK(g_cart_depth == 0u);
+    CHECK(g_bios_depth == 0u);
+    CHECK(ng_generated_smoke_dispatch_count() == 4u);
+    CHECK(ng_generated_smoke_cart_dispatch_count() == 3u);
+    CHECK(ng_generated_smoke_bios_dispatch_count() == 1u);
+    CHECK(ng_generated_smoke_dispatch_budget_hit());
+    CHECK(ng_generated_smoke_dispatch_budget_stop_addr() == 0x00000106u);
+    ng_generated_smoke_set_dispatch_budget(0u);
     return 0;
 }

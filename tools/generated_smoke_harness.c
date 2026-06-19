@@ -24,15 +24,62 @@ void ng_cart_generated_call(uint32_t addr);
 static int g_ng_generated_smoke_dispatch_active;
 static int g_ng_generated_smoke_dispatch_pending;
 static uint32_t g_ng_generated_smoke_dispatch_addr;
+static uint64_t g_ng_generated_smoke_dispatch_budget;
+static uint64_t g_ng_generated_smoke_dispatch_count;
+static uint64_t g_ng_generated_smoke_cart_dispatch_count;
+static uint64_t g_ng_generated_smoke_bios_dispatch_count;
+static uint32_t g_ng_generated_smoke_last_dispatch_addr;
+static uint32_t g_ng_generated_smoke_budget_stop_addr;
+static int g_ng_generated_smoke_budget_hit;
+
+void ng_generated_smoke_reset_dispatch_stats(void) {
+    g_ng_generated_smoke_dispatch_count = 0;
+    g_ng_generated_smoke_cart_dispatch_count = 0;
+    g_ng_generated_smoke_bios_dispatch_count = 0;
+    g_ng_generated_smoke_last_dispatch_addr = 0;
+    g_ng_generated_smoke_budget_stop_addr = 0;
+    g_ng_generated_smoke_budget_hit = 0;
+}
+
+void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches) {
+    g_ng_generated_smoke_dispatch_budget = max_dispatches;
+    g_ng_generated_smoke_budget_hit = 0;
+}
+
+uint64_t ng_generated_smoke_dispatch_count(void) {
+    return g_ng_generated_smoke_dispatch_count;
+}
+
+uint64_t ng_generated_smoke_cart_dispatch_count(void) {
+    return g_ng_generated_smoke_cart_dispatch_count;
+}
+
+uint64_t ng_generated_smoke_bios_dispatch_count(void) {
+    return g_ng_generated_smoke_bios_dispatch_count;
+}
+
+int ng_generated_smoke_dispatch_budget_hit(void) {
+    return g_ng_generated_smoke_budget_hit;
+}
+
+uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void) {
+    return g_ng_generated_smoke_budget_stop_addr;
+}
+
+uint32_t ng_generated_smoke_last_dispatch_addr(void) {
+    return g_ng_generated_smoke_last_dispatch_addr;
+}
 
 static void ng_generated_smoke_dispatch_one(uint32_t addr) {
     addr &= 0x00FFFFFFu;
     if (addr >= 0x00C00000u && addr <= 0x00CFFFFFu) {
         uint32_t bios_addr =
             0x00C00000u + ((addr - 0x00C00000u) % NG_NEO_SYSTEM_ROM_BYTES);
+        ++g_ng_generated_smoke_bios_dispatch_count;
         ng_generated_smoke_call_bios(bios_addr);
         return;
     }
+    ++g_ng_generated_smoke_cart_dispatch_count;
     ng_cart_generated_call(addr);
 }
 
@@ -49,12 +96,53 @@ void ng_generated_call(uint32_t addr) {
     while (g_ng_generated_smoke_dispatch_pending) {
         uint32_t next_addr = g_ng_generated_smoke_dispatch_addr;
         g_ng_generated_smoke_dispatch_pending = 0;
+        if (g_ng_generated_smoke_dispatch_budget != 0 &&
+            g_ng_generated_smoke_dispatch_count >=
+                g_ng_generated_smoke_dispatch_budget) {
+            g_ng_generated_smoke_budget_hit = 1;
+            g_ng_generated_smoke_budget_stop_addr = next_addr & 0x00FFFFFFu;
+            g_ng_m68k.pc = g_ng_generated_smoke_budget_stop_addr;
+            break;
+        }
+        ++g_ng_generated_smoke_dispatch_count;
+        g_ng_generated_smoke_last_dispatch_addr = next_addr & 0x00FFFFFFu;
         ng_generated_smoke_dispatch_one(next_addr);
     }
     g_ng_generated_smoke_dispatch_active = 0;
 }
 #else
 void ng_generated_call(uint32_t addr);
+
+void ng_generated_smoke_reset_dispatch_stats(void) {
+}
+
+void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches) {
+    (void)max_dispatches;
+}
+
+uint64_t ng_generated_smoke_dispatch_count(void) {
+    return 0;
+}
+
+uint64_t ng_generated_smoke_cart_dispatch_count(void) {
+    return 0;
+}
+
+uint64_t ng_generated_smoke_bios_dispatch_count(void) {
+    return 0;
+}
+
+int ng_generated_smoke_dispatch_budget_hit(void) {
+    return 0;
+}
+
+uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void) {
+    return 0;
+}
+
+uint32_t ng_generated_smoke_last_dispatch_addr(void) {
+    return 0;
+}
 #endif
 
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
@@ -120,6 +208,52 @@ static int ng_generated_smoke_read_file(const char *path,
     return 1;
 }
 
+#ifndef NG_GENERATED_SMOKE_NO_MAIN
+static int ng_generated_smoke_parse_u64(const char *text, uint64_t *out) {
+    uint64_t value = 0;
+    if (!text || !*text || !out) {
+        return 0;
+    }
+    for (const char *p = text; *p; ++p) {
+        if (*p < '0' || *p > '9') {
+            return 0;
+        }
+        uint64_t digit = (uint64_t)(*p - '0');
+        if (value > (UINT64_MAX - digit) / 10u) {
+            return 0;
+        }
+        value = value * 10u + digit;
+    }
+    *out = value;
+    return 1;
+}
+#endif
+
+static void ng_generated_smoke_print_summary(void) {
+    fprintf(stderr,
+            "smoke summary: dispatches=%llu cart=%llu bios=%llu "
+            "last=$%06X pc=$%06X sr=$%04X sp=$%08X polls=%u watchdog=%u "
+            "scanline=%u sound=$%02X port=$%02X\n",
+            (unsigned long long)ng_generated_smoke_dispatch_count(),
+            (unsigned long long)ng_generated_smoke_cart_dispatch_count(),
+            (unsigned long long)ng_generated_smoke_bios_dispatch_count(),
+            ng_generated_smoke_last_dispatch_addr() & 0x00FFFFFFu,
+            g_ng_m68k.pc & 0x00FFFFFFu,
+            g_ng_m68k.sr,
+            g_ng_m68k.a[7],
+            ng_neogeo_interrupt_polls(),
+            ng_neogeo_watchdog_kicks(),
+            ng_neogeo_current_scanline(),
+            ng_neogeo_sound_command(),
+            ng_neogeo_port_output());
+    if (ng_generated_smoke_dispatch_budget_hit()) {
+        fprintf(stderr,
+                "smoke budget reached at $%06X after %llu dispatches\n",
+                ng_generated_smoke_dispatch_budget_stop_addr() & 0x00FFFFFFu,
+                (unsigned long long)ng_generated_smoke_dispatch_count());
+    }
+}
+
 int ng_generated_smoke_run_with_bios(const char *neo_path,
                                      const char *bios_path) {
     if (!neo_path || !*neo_path) {
@@ -182,12 +316,14 @@ int ng_generated_smoke_run_with_bios(const char *neo_path,
             "starting cart entry $%06X ssp=$%08X\n",
             cart_entry & 0x00FFFFFFu,
             g_ng_m68k.ssp);
+    ng_generated_smoke_reset_dispatch_stats();
     ng_generated_call(cart_entry);
     fprintf(stderr,
             "returned pc=$%06X sr=$%04X sp=$%08X\n",
             g_ng_m68k.pc & 0x00FFFFFFu,
             g_ng_m68k.sr,
             g_ng_m68k.a[7]);
+    ng_generated_smoke_print_summary();
 
     ng_neogeo_set_external_dispatch(NULL);
     ng_neogeo_set_auto_vblank_interval(0);
@@ -204,12 +340,13 @@ int ng_generated_smoke_run(const char *neo_path) {
 
 #ifndef NG_GENERATED_SMOKE_NO_MAIN
 static void usage(const char *argv0) {
-    fprintf(stderr, "usage: %s [--bios <bios.rom>] <game.neo>\n", argv0);
+    fprintf(stderr, "usage: %s [--bios <bios.rom>] [--max-dispatches <n>] <game.neo>\n", argv0);
 }
 
 int main(int argc, char **argv) {
     const char *bios_path = NULL;
     const char *neo_path = NULL;
+    uint64_t max_dispatches = 0;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--bios") == 0) {
@@ -218,6 +355,12 @@ int main(int argc, char **argv) {
                 return 2;
             }
             bios_path = argv[i];
+        } else if (strcmp(argv[i], "--max-dispatches") == 0) {
+            if (++i >= argc ||
+                !ng_generated_smoke_parse_u64(argv[i], &max_dispatches)) {
+                usage(argv[0]);
+                return 2;
+            }
         } else if (strcmp(argv[i], "--help") == 0 ||
                    strcmp(argv[i], "-h") == 0) {
             usage(argv[0]);
@@ -234,6 +377,7 @@ int main(int argc, char **argv) {
         usage(argv[0]);
         return 2;
     }
+    ng_generated_smoke_set_dispatch_budget(max_dispatches);
     return ng_generated_smoke_run_with_bios(neo_path, bios_path);
 }
 #endif

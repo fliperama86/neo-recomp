@@ -207,17 +207,21 @@ the port-output latch now accepts odd addresses under the documented
 `$000122`/`$001F84`, all currently visible cart->BIOS direct targets
 (`$C00438`, `$C00444`, `$C0044A`, `$C004C2`, `$C004CE`), and further local-only
 BIOS seeds through the `$C187xx`/`$C180xx` helper chain, the latest local probe
-no longer returns a dispatch or bus miss before the harness timeout:
+now reaches a deterministic dispatch budget instead of relying on a wall-clock
+timeout:
 
 ```text
-TIMEOUT after 3s
 starting cart entry $0007CC ssp=$0010F300
+returned pc=$C1862E sr=$2100 sp=$0010F2AE
+smoke summary: dispatches=100000 cart=3997 bios=96003 last=$C185A0 pc=$C1862E sr=$2100 sp=$0010F2AE polls=509882 watchdog=1991 scanline=0 sound=$00 port=$1B
+smoke budget reached at $C1862E after 100000 dispatches
 ```
 
-That is the first "keeps running headless" checkpoint, but it is not yet a
-boot/attract correctness proof: the expanded BIOS probe still reports
-`BIOS candidates: 8192 (truncated)`, and the harness currently has no frame, PC,
-or game-state success oracle beyond "no miss before timeout".
+That is the first controlled "keeps running headless" checkpoint: no dispatch
+or bus miss before the budget. It is not yet a boot/attract correctness proof:
+the expanded BIOS probe still reports `BIOS candidates: 8192 (truncated)`, and
+the harness currently has no frame, PC, or game-state success oracle beyond
+"reached this dispatch budget without a miss".
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
