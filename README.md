@@ -147,9 +147,10 @@ scripts/run_mslug_headless.sh \
 ```
 
 The BIOS is user-provided. The smoke is not playable; success currently means
-reaching the deterministic dispatch budget without a dispatch or bus miss. The
-default budget is `100000` dispatches and can be changed with
-`NG_MSLUG_DISPATCH_BUDGET=...`.
+reaching deterministic dispatch budgets without a dispatch/bus miss, with
+growing runtime counters and a non-looping final tail. By default it checks
+`10000 50000 100000`; override with `NG_MSLUG_PROGRESS_BUDGETS="..."` or run
+one budget with `NG_MSLUG_DISPATCH_BUDGET=...`.
 
 ## Decoder Slice
 

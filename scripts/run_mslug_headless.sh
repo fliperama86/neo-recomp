@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 NEO_PATH="${1:-$HOME/Documents/Games/Mister/NEOGEO/mslug.neo}"
 BIOS_PATH="${2:-$HOME/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1}"
-DISPATCH_BUDGET="${NG_MSLUG_DISPATCH_BUDGET:-100000}"
+DISPATCH_BUDGETS="${NG_MSLUG_PROGRESS_BUDGETS:-${NG_MSLUG_DISPATCH_BUDGET:-10000 50000 100000}}"
 
 CFLAGS=(-std=c99 -Wall -Wextra -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
@@ -76,7 +76,85 @@ cc \
   "$BUILD_DIR/p_rom.o" \
   -o "$BUILD_DIR/mslug_bios_smoke_harness"
 
-exec "$BUILD_DIR/mslug_bios_smoke_harness" \
-  --max-dispatches "$DISPATCH_BUDGET" \
-  --bios "$BIOS_PATH" \
-  "$NEO_PATH"
+python3 - "$DISPATCH_BUDGETS" "$BUILD_DIR/mslug_bios_smoke_harness" "$BIOS_PATH" "$NEO_PATH" <<'PY'
+import re
+import subprocess
+import sys
+
+budget_text, harness, bios_path, neo_path = sys.argv[1:]
+try:
+    budgets = [int(part) for part in budget_text.split() if part]
+except ValueError:
+    print(f"invalid NG_MSLUG_PROGRESS_BUDGETS/NG_MSLUG_DISPATCH_BUDGET: {budget_text!r}", file=sys.stderr)
+    raise SystemExit(2)
+if not budgets or any(b <= 0 for b in budgets):
+    print("at least one positive dispatch budget is required", file=sys.stderr)
+    raise SystemExit(2)
+
+summary_re = re.compile(
+    r"smoke summary: dispatches=(?P<dispatches>\d+) "
+    r"cart=(?P<cart>\d+) bios=(?P<bios>\d+) "
+    r"last=\$(?P<last>[0-9A-Fa-f]+) pc=\$(?P<pc>[0-9A-Fa-f]+) "
+    r"sr=\$(?P<sr>[0-9A-Fa-f]+) sp=\$(?P<sp>[0-9A-Fa-f]+) "
+    r"polls=(?P<polls>\d+) watchdog=(?P<watchdog>\d+) "
+    r"scanline=(?P<scanline>\d+) sound=\$(?P<sound>[0-9A-Fa-f]+) "
+    r"port=\$(?P<port>[0-9A-Fa-f]+) wram_nonzero=(?P<wram_nonzero>\d+) "
+    r"wram_sum=\$(?P<wram_sum>[0-9A-Fa-f]+) vram_nonzero=(?P<vram_nonzero>\d+) "
+    r"vram_sum=\$(?P<vram_sum>[0-9A-Fa-f]+) recent_loop=(?P<recent_loop>\d+)"
+)
+
+summaries = []
+for budget in budgets:
+    print(f"=== headless smoke budget {budget} ===")
+    proc = subprocess.run(
+        [harness, "--max-dispatches", str(budget), "--bios", bios_path, neo_path],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    print(proc.stdout, end="")
+    if proc.returncode != 0:
+        print(f"headless smoke failed at budget {budget}: exit {proc.returncode}", file=sys.stderr)
+        raise SystemExit(proc.returncode)
+    if "miss at $" in proc.stdout:
+        print(f"headless smoke hit dispatch/bus miss at budget {budget}", file=sys.stderr)
+        raise SystemExit(1)
+    summary_match = summary_re.search(proc.stdout)
+    if not summary_match:
+        print(f"missing smoke summary at budget {budget}", file=sys.stderr)
+        raise SystemExit(1)
+    summary = {
+        k: int(v, 16) if k in {"last", "pc", "sr", "sp", "sound", "port", "wram_sum", "vram_sum"} else int(v)
+        for k, v in summary_match.groupdict().items()
+    }
+    if summary["dispatches"] != budget:
+        print(f"budget {budget} ended at {summary['dispatches']} dispatches", file=sys.stderr)
+        raise SystemExit(1)
+    if f"after {budget} dispatches" not in proc.stdout:
+        print(f"budget {budget} did not stop through the dispatch-budget guard", file=sys.stderr)
+        raise SystemExit(1)
+    summaries.append(summary)
+
+final = summaries[-1]
+if final["polls"] == 0 or final["watchdog"] == 0 or final["wram_nonzero"] == 0:
+    print("headless smoke did not show enough runtime progress in final summary", file=sys.stderr)
+    raise SystemExit(1)
+if final["recent_loop"] != 0:
+    print(f"final budget stopped inside a recent dispatch loop period {final['recent_loop']}", file=sys.stderr)
+    raise SystemExit(1)
+
+max_recent_loop = max(summary["recent_loop"] for summary in summaries)
+
+if len(summaries) > 1:
+    if summaries[-1]["polls"] <= summaries[0]["polls"] or summaries[-1]["watchdog"] <= summaries[0]["watchdog"]:
+        print("headless smoke counters did not grow across budgets", file=sys.stderr)
+        raise SystemExit(1)
+
+print(
+    "progress oracle: ok "
+    f"budgets={','.join(str(b) for b in budgets)} "
+    f"final_pc=${final['pc']:06X} polls={final['polls']} "
+    f"watchdog={final['watchdog']} wram_nonzero={final['wram_nonzero']} "
+    f"final_recent_loop={final['recent_loop']} max_recent_loop={max_recent_loop}"
+)
+PY
