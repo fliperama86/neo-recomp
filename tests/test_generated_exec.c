@@ -3580,5 +3580,39 @@ int main(void) {
         }
     }
 
+    for (uint32_t flags = 0u; flags < 16u; ++flags) {
+        uint32_t start = 0x00003A00u + flags * 0x200u;
+
+        memset(&expected_state, 0, sizeof(expected_state));
+        memset(expected_bus, 0, sizeof(expected_bus));
+        expected_state.sr = SR_S;
+        expected_state.a[7] = 0x000001F0u;
+        expected_state.ssp = expected_state.a[7];
+        CHECK(oracle_exec(program, (uint32_t)sizeof(program), start,
+                          &expected_state, expected_bus, 0));
+
+        memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+        memset(g_bus, 0, sizeof(g_bus));
+        g_ng_m68k.sr = SR_S;
+        g_ng_m68k.a[7] = 0x000001F0u;
+        g_ng_m68k.ssp = g_ng_m68k.a[7];
+        g_dispatch_miss_count = 0;
+
+        ng_generated_call(start);
+
+        CHECK(g_dispatch_miss_count == 0);
+        CHECK(g_ng_m68k.sr == expected_state.sr);
+        CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+        uint16_t sr = (uint16_t)(SR_S | CCR_X | flags);
+        for (uint32_t cond = 0u; cond < 16u; ++cond) {
+            int condition_true = oracle_condition_true(sr, (uint8_t)cond);
+            uint8_t marker = condition_true ? 0xFFu : 0x00u;
+            uint16_t d0 = condition_true ? 0x0001u : 0x0000u;
+            CHECK(ng68k_read8(0x00000C00u + flags * 16u + cond) == marker);
+            CHECK(ng68k_read16(0x00000E00u + flags * 32u + cond * 2u) == d0);
+            CHECK(ng68k_read16(0x00001000u + flags * 32u + cond * 2u) == sr);
+        }
+    }
+
     return 0;
 }

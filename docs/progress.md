@@ -116,8 +116,8 @@ Covered by executable generated-C validation:
 - condition operations: `Scc <ea>` and `DBcc Dn,disp` share the same
   condition predicate table; generated-exec covers all 16 `Scc` predicates
   across every `N/Z/V/C` combination, all 16 `DBcc` predicates across every
-  `N/Z/V/C` combination on the counter-exhaustion fall-through path, plus a
-  taken-branch `DBF` spot check
+  `N/Z/V/C` combination on both counter-exhaustion fall-through and
+  taken-branch paths, plus the older taken-branch `DBF` spot check
 - flags: `N`/`Z` for covered operations; `C`/`X` for tested byte
   subtract/extend-add paths and register-count-zero shift/rotate cases
 - data movement:
@@ -240,6 +240,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a deterministic generated-exec `DBcc` taken-branch matrix,
+  fact-checked against the Motorola/NXP Programmer's Reference Manual. The
+  fixture now covers all 16 predicates across all 16 `N/Z/V/C` combinations
+  with `D0=1`, verifying false predicates decrement to zero and branch over a
+  flag-neutral marker while true predicates fall through unchanged, with CCR
+  snapshots preserved before any observer store changes flags.
 - local: Added a deterministic generated-exec `Bcc` control-flow matrix. The
   fixture now covers all 14 architectural `Bcc` condition encodings across all
   16 `N/Z/V/C` combinations, using taken branches to skip a flag-neutral `ST`
