@@ -99,7 +99,9 @@ Covered by executable generated-C validation:
   instruction-boundary continuations for interrupt returns, taken `Bcc`
   targets, `DBcc` branch targets except never-branching `DBT`, and tail
   `BRA` targets are now seeded; `BRA` no longer causes discovery to scan
-  unreachable fall-through bytes as code
+  unreachable fall-through bytes as code. `RTE`/`RTR` also terminate static
+  candidate scanning because they resume from a stacked PC rather than the
+  following ROM word
 - system/exception-control paths: `TRAP`, `TRAPV`, `ILLEGAL`, A-line,
   F-line, `RESET`, `STOP`, `RTE`, and `RTR` are recognized. `TRAP`,
   `TRAPV`, `ILLEGAL`, A-line, F-line, failed `CHK`, and divide-by-zero now

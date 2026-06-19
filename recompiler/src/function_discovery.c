@@ -169,7 +169,9 @@ static void scan_function_candidate(const NgProgramRom *rom,
         if (instr.byte_length == 0 ||
             instr.mnemonic == NG_M68K_BRA ||
             instr.mnemonic == NG_M68K_JMP ||
-            instr.mnemonic == NG_M68K_RTS) {
+            instr.mnemonic == NG_M68K_RTS ||
+            instr.mnemonic == NG_M68K_RTE ||
+            instr.mnemonic == NG_M68K_RTR) {
             return;
         }
 

@@ -181,6 +181,36 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x20u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x4E73u); /* RTE: returns to stacked PC, not fall-through */
+        write16(&rom, 0x02u, 0x4E75u); /* unreachable fall-through data/code */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(discovery.count == 1u);
+        CHECK(discovery.addrs[0] == 0x00u);
+        CHECK(!ng_function_discovery_contains(&discovery, 0x02u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x20u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x4E77u); /* RTR: returns to stacked PC, not fall-through */
+        write16(&rom, 0x02u, 0x4E75u); /* unreachable fall-through data/code */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(discovery.count == 1u);
+        CHECK(discovery.addrs[0] == 0x00u);
+        CHECK(!ng_function_discovery_contains(&discovery, 0x02u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0xA0u);
         CHECK(rom.data != NULL);
 
