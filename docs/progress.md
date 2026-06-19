@@ -207,6 +207,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added a fact-checked MVS backup RAM bus slice. The runtime now
+  maps `$D00000-$DFFFFF` through a 64KiB backing store and honors
+  `REG_SRAMLOCK/UNLOCK` write protection for backup RAM writes.
 - local: Added a fact-checked NeoGeo palette RAM bus slice. The runtime
   now maps banked/mirrored palette RAM at `$400000-$7FFFFF`, handles
   `REG_PALBANK1/0` bank selection, and duplicates byte writes into both
@@ -494,4 +497,4 @@ Near follow-ups:
 - Replace narrow condition handling with a tested condition-code helper table.
 - Start separating instruction semantics into reusable generated helper functions when repeated emitted C becomes noisy.
 - Add a tiny standalone ROM-like fixture that is closer to a hand-authored mini program than the current unit fixture.
-- Continue runtime bus coverage for backup/system RAM, BIOS/system registers, VRAM-facing ports, inputs, sound latch/Z80 communication, watchdog, and protection/bank-switch variants.
+- Continue runtime bus coverage for BIOS/system registers/ROM, VRAM-facing ports, inputs, sound latch/Z80 communication, watchdog, protection/bank-switch variants, and persistent save backing.

@@ -11,6 +11,8 @@ static uint8_t g_ng_neogeo_work_ram[0x10000u];
 static uint8_t g_ng_neogeo_palette_ram[NG_NEO_PALETTE_BANK_BYTES *
                                        NG_NEO_PALETTE_BANKS];
 static uint8_t g_ng_neogeo_palette_bank;
+static uint8_t g_ng_neogeo_backup_ram[NG_NEO_BACKUP_RAM_BYTES];
+static uint8_t g_ng_neogeo_backup_ram_unlocked;
 static uint8_t g_ng_m68k_interrupt_level;
 static uint8_t g_ng_m68k_interrupt_vector;
 static uint8_t g_ng_m68k_level7_edge;
@@ -36,6 +38,10 @@ static uint32_t ng_neogeo_palette_offset(uint32_t addr) {
            (addr & (NG_NEO_PALETTE_BANK_BYTES - 1u));
 }
 
+static int ng_neogeo_is_backup_ram_addr(uint32_t addr) {
+    return addr >= 0x00D00000u && addr <= 0x00DFFFFFu;
+}
+
 uint8_t ng68k_read8(uint32_t addr) {
     addr &= 0x00FFFFFFu;
     if (addr <= 0x000FFFFFu) {
@@ -52,6 +58,9 @@ uint8_t ng68k_read8(uint32_t addr) {
     }
     if (ng_neogeo_is_palette_addr(addr)) {
         return g_ng_neogeo_palette_ram[ng_neogeo_palette_offset(addr)];
+    }
+    if (ng_neogeo_is_backup_ram_addr(addr)) {
+        return g_ng_neogeo_backup_ram[addr & (NG_NEO_BACKUP_RAM_BYTES - 1u)];
     }
     fprintf(stderr, "ng68k_read8 miss at $%06X\n", addr & 0xFFFFFFu);
     return 0xFF;
@@ -81,8 +90,20 @@ void ng68k_write8(uint32_t addr, uint8_t value) {
         g_ng_neogeo_palette_ram[offset + 1u] = value;
         return;
     }
+    if (ng_neogeo_is_backup_ram_addr(addr)) {
+        if (g_ng_neogeo_backup_ram_unlocked) {
+            g_ng_neogeo_backup_ram[addr & (NG_NEO_BACKUP_RAM_BYTES - 1u)] = value;
+        }
+        return;
+    }
 
     switch (addr) {
+    case NG_NEO_REG_SRAMLOCK:
+        g_ng_neogeo_backup_ram_unlocked = 0u;
+        return;
+    case NG_NEO_REG_SRAMUNLOCK:
+        g_ng_neogeo_backup_ram_unlocked = 1u;
+        return;
     case NG_NEO_REG_PALBANK1:
         g_ng_neogeo_palette_bank = 1u;
         return;
@@ -203,7 +224,9 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_current_scanline = 0;
     memset(g_ng_neogeo_work_ram, 0, sizeof(g_ng_neogeo_work_ram));
     memset(g_ng_neogeo_palette_ram, 0, sizeof(g_ng_neogeo_palette_ram));
+    memset(g_ng_neogeo_backup_ram, 0, sizeof(g_ng_neogeo_backup_ram));
     g_ng_neogeo_palette_bank = 0;
+    g_ng_neogeo_backup_ram_unlocked = 0;
     ng_m68k_clear_interrupt_level();
 }
 

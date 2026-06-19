@@ -58,6 +58,18 @@ int main(void) {
     ng_neogeo_reset_runtime();
     CHECK(ng68k_read16(0x00400000u) == 0x0000u);
 
+    ng68k_write16(0x00D00000u, 0x1111u);
+    CHECK(ng68k_read16(0x00D00000u) == 0x0000u);
+    ng68k_write8(NG_NEO_REG_SRAMUNLOCK, 0x00u);
+    ng68k_write16(0x00D00000u, 0xCAFEu);
+    CHECK(ng68k_read16(0x00D00000u) == 0xCAFEu);
+    CHECK(ng68k_read16(0x00D10000u) == 0xCAFEu);
+    ng68k_write8(0x00D00003u, 0x5Au);
+    CHECK(ng68k_read8(0x00D00003u) == 0x5Au);
+    ng68k_write8(NG_NEO_REG_SRAMLOCK, 0x00u);
+    ng68k_write16(0x00D00000u, 0x1234u);
+    CHECK(ng68k_read16(0x00D00000u) == 0xCAFEu);
+
     uint8_t *large_program_rom = (uint8_t *)calloc(0x100004u, 1u);
     CHECK(large_program_rom != NULL);
     large_program_rom[0x100000u] = 0xCAu;
