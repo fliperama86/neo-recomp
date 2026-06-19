@@ -110,7 +110,10 @@ Covered by executable generated-C validation:
   `TRAPV`, `ILLEGAL`, A-line, F-line, failed `CHK`, and divide-by-zero now
   push 68000-style SR/PC exception frames and dispatch through the vector
   table; `RTE`/`RTR` pop stack frames back into SR/CCR and
-  PC. Full-SR writes, `STOP`, exception entry, and `RTE` use the
+  PC. Generated-exec now specifically covers unprivileged `RTR` restoring only
+  the CCR bits from the active user stack, preserving the supervisor/system
+  byte, popping the return PC, and dispatching through that target. Full-SR
+  writes, `STOP`, exception entry, and `RTE` use the
   generated SR helper to switch active `A7` between `USP` and `SSP` when the
   S bit changes. User-mode privileged operations now vector through
   privilege-violation vector 8 with the faulting instruction PC. `STOP`

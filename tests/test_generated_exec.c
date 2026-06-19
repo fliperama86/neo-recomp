@@ -501,6 +501,16 @@ static int oracle_exec(const uint8_t *program,
             pc = target;
             continue;
         }
+        if (op == 0x4E77u) {
+            uint16_t ccr = bus_read16(bus, state->a[7]);
+            uint32_t target;
+            state->a[7] += 2u;
+            target = bus_read32(bus, state->a[7]);
+            state->a[7] += 4u;
+            state->sr = (uint16_t)((state->sr & 0xFFE0u) | (ccr & 0x001Fu));
+            pc = target;
+            continue;
+        }
         if ((op & 0xFFF0u) == 0x4E40u) {
             uint16_t saved_sr = state->sr;
             uint8_t vector = (uint8_t)(32u + (op & 0x000Fu));
@@ -3867,6 +3877,40 @@ int main(void) {
     CHECK(g_ng_m68k.sr == expected_state.sr);
     CHECK(g_reset_device_count == g_oracle_reset_device_count);
     CHECK(g_reset_device_count == 1u);
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = 0u;            /* RTR is not privileged. */
+    expected_state.a[7] = 0x00001300u; /* Active USP in user mode. */
+    expected_state.usp = expected_state.a[7];
+    expected_state.ssp = 0x000001F0u;
+    bus_write16(expected_bus, 0x00001300u, (uint16_t)(CCR_X | CCR_N | CCR_C));
+    bus_write32(expected_bus, 0x00001302u, 0x00005EE0u);
+    bus_write32(expected_bus, 32u * 4u, 0x00005EF0u);
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x00005ED0u,
+                      &expected_state, expected_bus, 0));
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = 0u;
+    g_ng_m68k.a[7] = 0x00001300u;
+    g_ng_m68k.usp = g_ng_m68k.a[7];
+    g_ng_m68k.ssp = 0x000001F0u;
+    ng68k_write16(0x00001300u, (uint16_t)(CCR_X | CCR_N | CCR_C));
+    ng68k_write32(0x00001302u, 0x00005EE0u);
+    ng68k_write32(32u * 4u, 0x00005EF0u);
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00005ED0u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(memcmp(g_bus, expected_bus, sizeof(g_bus)) == 0);
+    CHECK(g_ng_m68k.sr == expected_state.sr);
+    CHECK(g_ng_m68k.usp == expected_state.usp);
+    CHECK(g_ng_m68k.a[7] == expected_state.a[7]);
+    CHECK(ng68k_read16(0x00001286u) == (uint16_t)(CCR_X | CCR_N | CCR_C));
+    CHECK(g_ng_m68k.usp == 0x00001306u);
+    CHECK(g_ng_m68k.a[7] == 0x000001EAu);
 
     return 0;
 }
