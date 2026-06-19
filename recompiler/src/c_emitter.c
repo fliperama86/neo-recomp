@@ -2408,15 +2408,6 @@ static int emit_instr(FILE *out,
         }
         break;
     case NG_M68K_CMPI:
-        if (instr->form == NG_M68K_FORM_IMM_TO_DREG && instr->size == 1u) {
-            fprintf(out,
-                    "    ng_set_nz8((uint8_t)((g_ng_m68k.d[%u] & 0x00FFu) - 0x%02Xu));\n",
-                    instr->reg, instr->immediate & 0xFFu);
-            fprintf(out,
-                    "    if ((uint8_t)(g_ng_m68k.d[%u] & 0x00FFu) < 0x%02Xu) g_ng_m68k.sr |= NG_CCR_C;\n",
-                    instr->reg, instr->immediate & 0xFFu);
-            return 1;
-        }
         if (emit_cmpi_generic(out, instr)) {
             return 1;
         }

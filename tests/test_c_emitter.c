@@ -350,7 +350,8 @@ int main(void) {
         CHECK(strstr(text, "ng68k_write32(0x00001014u, g_ng_m68k.a[6]);") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = (g_ng_m68k.d[0] & 0xFFFFFF00u) | 0x7Fu;") != NULL);
         CHECK(strstr(text, "ng68k_write8(0x00001018u, (uint8_t)(g_ng_m68k.d[0] & 0x00FFu));") != NULL);
-        CHECK(strstr(text, "ng_set_nz8((uint8_t)((g_ng_m68k.d[0] & 0x00FFu) - 0x7Fu));") != NULL);
+        CHECK(strstr(text, "uint8_t ng_src = (uint8_t)(0x7Fu); uint8_t ng_dst = (uint8_t)((uint8_t)(g_ng_m68k.d[0] & 0xFFu)); uint8_t ng_result = (uint8_t)(ng_dst - ng_src);") != NULL);
+        CHECK(strstr(text, "if (((ng_dst ^ ng_src) & (ng_dst ^ ng_result) & 0x00000080u) != 0) g_ng_m68k.sr |= NG_CCR_V;") != NULL);
         CHECK(strstr(text, "ng68k_write8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962), (uint8_t)(ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962)) & 0x0Fu));") != NULL);
         CHECK(strstr(text, "ng_set_nz8(ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962)));") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[4] = (g_ng_m68k.d[4] & 0xFFFFFF00u) | ng68k_read8((uint32_t)(g_ng_m68k.a[6] + (int32_t)3962));") != NULL);

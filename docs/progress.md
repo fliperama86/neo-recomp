@@ -252,6 +252,7 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generated-exec coverage for `CMPI.B #imm,Dn` signed-overflow flag behavior, proving `$80 - $01` sets `V`, clears `N/Z/C`, and preserves `X`. Removed the byte data-register special emission/oracle paths so `CMPI` uses the shared full compare flag logic.
 - local: Tightened the post-decode validator fallback so out-of-range or
   otherwise unhandled mnemonic enum values are rejected instead of silently
   accepted. `test_m68k_validate` covered an unknown enum value red first.
