@@ -845,6 +845,7 @@ int main(void) {
         CHECK(strstr(text, "/* $000000: BRA $000006 */") != NULL);
         CHECK(strstr(text, "ng_generated_call(0x00000006u);") != NULL);
         CHECK(strstr(text, "/* $000002: DC.W $15C0 */") == NULL);
+        CHECK(strstr(text, "ng_log_dispatch_miss(0x00000000u);") == NULL);
         CHECK(strstr(text, "ng_log_dispatch_miss(0x00000002u);") == NULL);
 
         ng_program_rom_free(&rom);

@@ -1,5 +1,6 @@
 #include "c_emitter.h"
 #include "m68k_decode.h"
+#include "m68k_validate.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +39,7 @@ static int read_file(FILE *f, char *out, size_t out_size) {
 int main(void) {
     enum { ROM_SIZE = 64u };
     char text[32768];
-    unsigned recognized = 0;
+    unsigned valid = 0;
     unsigned unknown = 0;
 
     for (uint32_t op = 0; op <= 0xFFFFu; ++op) {
@@ -62,7 +63,11 @@ int main(void) {
             ng_program_rom_free(&rom);
             continue;
         }
-        ++recognized;
+        if (!ng_m68k_validate(&instr)) {
+            ng_program_rom_free(&rom);
+            continue;
+        }
+        ++valid;
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0u;
@@ -88,7 +93,7 @@ int main(void) {
         ng_program_rom_free(&rom);
     }
 
-    CHECK(recognized > 0);
+    CHECK(valid > 0);
     CHECK(unknown > 0);
     return 0;
 }

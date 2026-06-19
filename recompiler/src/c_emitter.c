@@ -2457,7 +2457,10 @@ static int emit_instr(FILE *out,
         break;
     case NG_M68K_BRA:
         ng_c_label_for_addr(instr->target, target_label, (unsigned)sizeof(target_label));
-        return emit_branch_condition(out, instr, target_label, instr->target);
+        if (emit_branch_condition(out, instr, target_label, instr->target)) {
+            return 0;
+        }
+        break;
     case NG_M68K_BCC:
         ng_c_label_for_addr(instr->target, target_label, (unsigned)sizeof(target_label));
         return emit_branch_condition(out, instr, target_label, instr->target);
