@@ -1,6 +1,7 @@
 #include "dispatch_audit.h"
 
 #include "m68k_analyze.h"
+#include "m68k_validate.h"
 
 #include <string.h>
 
@@ -21,14 +22,29 @@ static int instr_is_direct_target(const NgM68kInstr *instr) {
     }
     return instr->src.mode == NG_M68K_EA_ABS_W ||
            instr->src.mode == NG_M68K_EA_ABS_L ||
-           instr->src.mode == NG_M68K_EA_PC_DISP ||
-           instr->src.mode == NG_M68K_EA_PC_INDEX;
+           instr->src.mode == NG_M68K_EA_PC_DISP;
 }
 
 static int instr_is_dispatch(const NgM68kInstr *instr) {
     return instr->mnemonic == NG_M68K_JSR ||
            instr->mnemonic == NG_M68K_BSR ||
            instr->mnemonic == NG_M68K_JMP;
+}
+
+static int instr_stops_scan(const NgM68kInstr *instr) {
+    switch (instr->mnemonic) {
+    case NG_M68K_BRA:
+    case NG_M68K_ILLEGAL:
+    case NG_M68K_JMP:
+    case NG_M68K_RTE:
+    case NG_M68K_RTR:
+    case NG_M68K_RTS:
+    case NG_M68K_STOP:
+    case NG_M68K_TRAP:
+        return 1;
+    default:
+        return 0;
+    }
 }
 
 static int addr_seen(const uint32_t *seen, uint32_t count, uint32_t addr) {
@@ -133,6 +149,12 @@ static void audit_scan_from(const NgProgramRom *rom,
         if (!ng_m68k_decode(rom, pc, &instr)) {
             return;
         }
+        if (instr.byte_length == 0u ||
+            !ng_m68k_validate(&instr) ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID) {
+            return;
+        }
 
         if (!addr_seen(seen, *seen_count, pc)) {
             if (*seen_count < NG_DISPATCH_AUDIT_MAX_SEEN) {
@@ -152,10 +174,7 @@ static void audit_scan_from(const NgProgramRom *rom,
             }
         }
 
-        if (instr.byte_length == 0u ||
-            instr.mnemonic == NG_M68K_JMP ||
-            instr.mnemonic == NG_M68K_RTS ||
-            instr.mnemonic == NG_M68K_STOP) {
+        if (instr_stops_scan(&instr)) {
             return;
         }
 

@@ -114,8 +114,7 @@ static int is_direct_function_target(const NgM68kInstr *instr) {
     }
     return instr->src.mode == NG_M68K_EA_ABS_W ||
            instr->src.mode == NG_M68K_EA_ABS_L ||
-           instr->src.mode == NG_M68K_EA_PC_DISP ||
-           instr->src.mode == NG_M68K_EA_PC_INDEX;
+           instr->src.mode == NG_M68K_EA_PC_DISP;
 }
 
 static int is_branch_target_candidate(const NgM68kInstr *instr) {

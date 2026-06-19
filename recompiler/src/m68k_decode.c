@@ -960,8 +960,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
             if (out->src.mode == NG_M68K_EA_AIND) {
                 out->form = NG_M68K_FORM_AREG_INDIRECT;
                 out->reg = out->src.reg;
-            } else if (out->src.mode == NG_M68K_EA_PC_DISP ||
-                       out->src.mode == NG_M68K_EA_PC_INDEX) {
+            } else if (out->src.mode == NG_M68K_EA_PC_DISP) {
                 out->form = NG_M68K_FORM_PC_RELATIVE;
                 out->target = out->src.absolute_addr;
             } else if (out->src.mode == NG_M68K_EA_ABS_W ||

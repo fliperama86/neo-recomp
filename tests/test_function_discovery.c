@@ -117,6 +117,24 @@ int main(void) {
         NgProgramRom rom = make_rom(0x20u);
         CHECK(rom.data != NULL);
 
+        write16(&rom, 0x10u, 0x4EBBu); /* JSR (4,PC,D0.W), runtime target */
+        write16(&rom, 0x12u, 0x0004u);
+        write16(&rom, 0x14u, 0x4E75u); /* continuation */
+        write16(&rom, 0x16u, 0x4E75u); /* PC-index base, not a static target */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x10u, &discovery));
+        CHECK(discovery.count == 2u);
+        CHECK(discovery.addrs[0] == 0x10u);
+        CHECK(discovery.addrs[1] == 0x14u);
+        CHECK(!ng_function_discovery_contains(&discovery, 0x16u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x20u);
+        CHECK(rom.data != NULL);
+
         write16(&rom, 0x00u, 0x4E72u); /* STOP #$2000 */
         write16(&rom, 0x02u, 0x2000u);
         write16(&rom, 0x04u, 0x4E75u); /* continuation after interrupt RTE */

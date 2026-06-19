@@ -1468,6 +1468,25 @@ int main(void) {
     }
 
     {
+        const unsigned char bytes[] = { 0x4E, 0xBB, 0x00, 0x04 };
+        char text[64];
+        CHECK(decode_one(bytes, sizeof(bytes), 0x005FB0u, &instr));
+        CHECK(instr.mnemonic == NG_M68K_JSR);
+        CHECK(instr.byte_length == 4);
+        CHECK(instr.form == NG_M68K_FORM_NONE);
+        CHECK(instr.target == 0);
+        CHECK(instr.src.mode == NG_M68K_EA_PC_INDEX);
+        CHECK(instr.src.reg == 3);
+        CHECK(instr.src.index_reg == 0);
+        CHECK(!instr.src.index_is_addr);
+        CHECK(!instr.src.index_is_long);
+        CHECK(instr.src.displacement == 4);
+        CHECK(instr.src.absolute_addr == 0x005FB6u);
+        ng_m68k_format(&instr, text, (unsigned)sizeof(text));
+        CHECK(strcmp(text, "JSR ($005FB6,PC,D0.W)") == 0);
+    }
+
+    {
         const unsigned char bytes[] = { 0x20, 0x39, 0x00, 0x10, 0xFE, 0x80 };
         CHECK(decode_one(bytes, sizeof(bytes), 0x000812u, &instr));
         CHECK(instr.mnemonic == NG_M68K_MOVE);

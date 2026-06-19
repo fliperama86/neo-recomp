@@ -1126,9 +1126,9 @@ static int validate_control_transfer(const NgM68kInstr *instr) {
     }
 
     if (instr->src.mode == NG_M68K_EA_PC_INDEX) {
-        return instr->form == NG_M68K_FORM_PC_RELATIVE &&
+        return instr->form == NG_M68K_FORM_NONE &&
                instr->reg == 0u &&
-               instr->target == instr->src.absolute_addr &&
+               instr->target == 0u &&
                instr->displacement == 0;
     }
 

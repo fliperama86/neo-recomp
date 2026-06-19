@@ -600,8 +600,9 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: JSR (A0) */") != NULL);
+        CHECK(strstr(text, "uint32_t ng_target = (uint32_t)(g_ng_m68k.a[0]);") != NULL);
         CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x00000002u);") != NULL);
-        CHECK(strstr(text, "ng_generated_call(g_ng_m68k.a[0]);") != NULL);
+        CHECK(strstr(text, "ng_generated_call(ng_target);") != NULL);
         CHECK(strstr(text, "/* $000002: JMP ($4,A0) */") != NULL);
         CHECK(strstr(text, "ng_generated_call((uint32_t)(g_ng_m68k.a[0] + (int32_t)4));") != NULL);
 
@@ -817,6 +818,59 @@ int main(void) {
         CHECK(diagnostics.first_unsupported_addr == 0x00000000u);
         CHECK(strstr(text, "/* $000000: DC.W $15C0 */") != NULL);
         CHECK(strstr(text, "ng_log_dispatch_miss(0x00000000u);") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x08u);
+        NgEmitDiagnostics diagnostics;
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x6004u); /* BRA $000006 */
+        write16(&rom, 0x02u, 0x15C0u); /* unreachable unknown/data */
+        write16(&rom, 0x06u, 0x4E75u); /* RTS */
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+        discovery.addrs[discovery.count++] = 0x00000006u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c_checked(out, &rom, &discovery, &diagnostics));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(diagnostics.unsupported_count == 0u);
+        CHECK(diagnostics.decode_error_count == 0u);
+        CHECK(strstr(text, "/* $000000: BRA $000006 */") != NULL);
+        CHECK(strstr(text, "ng_generated_call(0x00000006u);") != NULL);
+        CHECK(strstr(text, "/* $000002: DC.W $15C0 */") == NULL);
+        CHECK(strstr(text, "ng_log_dispatch_miss(0x00000002u);") == NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x06u);
+        NgEmitDiagnostics diagnostics;
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x4EB9u); /* JSR $000000 */
+        write32(&rom, 0x02u, 0x00000000u);
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c_checked(out, &rom, &discovery, &diagnostics));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(diagnostics.unsupported_count == 0u);
+        CHECK(diagnostics.decode_error_count == 0u);
+        CHECK(strstr(text, "/* $000000: JSR $000000 */") != NULL);
+        CHECK(strstr(text, "ng_generated_call(0x00000000u);") != NULL);
+        CHECK(strstr(text, "ng_log_dispatch_miss(0x00000006u);") == NULL);
 
         ng_program_rom_free(&rom);
     }

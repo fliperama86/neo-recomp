@@ -2511,18 +2511,24 @@ static int emit_instr(FILE *out,
         }
         break;
     case NG_M68K_JSR:
-        emit_push_return_address(out, instr->addr + instr->byte_length);
         if (instr->src.mode != NG_M68K_EA_NONE &&
             instr->form != NG_M68K_FORM_ABS &&
             instr->form != NG_M68K_FORM_PC_RELATIVE) {
             char addr_expr[256];
             if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
-                fprintf(out, "    if (ng_service_trace(%s, ng_trace_sr)) return;\n", addr_expr);
-                fprintf(out, "    ng_generated_call(%s);\n", addr_expr);
-                fprintf(out, "    return;\n");
+                fprintf(out, "    { uint32_t ng_target = (uint32_t)(%s);\n",
+                        addr_expr);
+                fprintf(out, "      g_ng_m68k.a[7] -= 4u;\n");
+                fprintf(out, "      ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+                        (instr->addr + instr->byte_length) & 0x00FFFFFFu);
+                fprintf(out, "      if (ng_service_trace(ng_target, ng_trace_sr)) return;\n");
+                fprintf(out, "      ng_generated_call(ng_target);\n");
+                fprintf(out, "      return;\n");
+                fprintf(out, "    }\n");
                 return 0;
             }
         }
+        emit_push_return_address(out, instr->addr + instr->byte_length);
         fprintf(out, "    if (ng_service_trace(0x%08Xu, ng_trace_sr)) return;\n",
                 instr->target & 0x00FFFFFFu);
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
@@ -2619,7 +2625,10 @@ static void emit_function_body(FILE *out,
         }
         if (!ng_m68k_validate(&instr) ||
             instr.byte_length == 0 ||
+            instr.mnemonic == NG_M68K_BRA ||
+            instr.mnemonic == NG_M68K_BSR ||
             instr.mnemonic == NG_M68K_JMP ||
+            instr.mnemonic == NG_M68K_JSR ||
             instr.mnemonic == NG_M68K_RTS ||
             instr.mnemonic == NG_M68K_STOP ||
             instr.mnemonic == NG_M68K_ILLEGAL ||
