@@ -11,6 +11,15 @@
     } \
 } while (0)
 
+static uint32_t g_external_dispatch_addr;
+static uint32_t g_external_dispatch_count;
+
+static int record_external_dispatch(uint32_t addr) {
+    g_external_dispatch_addr = addr;
+    ++g_external_dispatch_count;
+    return 1;
+}
+
 int main(void) {
     uint8_t level = 0;
     uint8_t vector = 0;
@@ -27,6 +36,28 @@ int main(void) {
     ng_neogeo_reset_runtime();
     ng_m68k_clear_interrupt_level();
     CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+
+    ng_neogeo_set_external_dispatch(record_external_dispatch);
+    ng_call_by_address(0x01C00444u);
+    CHECK(g_external_dispatch_count == 1u);
+    CHECK(g_external_dispatch_addr == 0x00C00444u);
+    ng_neogeo_reset_runtime();
+    ng_call_by_address(0x00C004C2u);
+    CHECK(g_external_dispatch_count == 2u);
+    CHECK(g_external_dispatch_addr == 0x00C004C2u);
+    ng_neogeo_set_external_dispatch(NULL);
+
+    CHECK(ng68k_read8(NG_NEO_REG_DIPSW) == 0xFFu);
+    CHECK(ng68k_read8(0x00310001u) == 0xFFu);
+    CHECK(ng_neogeo_watchdog_kicks() == 0u);
+    ng68k_write8(NG_NEO_REG_DIPSW, 0x00u);
+    CHECK(ng_neogeo_watchdog_kicks() == 1u);
+    ng68k_write8(0x00310001u, 0xA5u);
+    CHECK(ng_neogeo_watchdog_kicks() == 2u);
+    CHECK(ng68k_read8(NG_NEO_REG_DIPSW) == 0xFFu);
+    ng_neogeo_reset_runtime();
+    CHECK(ng_neogeo_watchdog_kicks() == 0u);
+    CHECK(ng68k_read8(NG_NEO_REG_DIPSW) == 0xFFu);
 
     ng_neogeo_set_program_rom(program_rom, (uint32_t)sizeof(program_rom));
     CHECK(ng68k_read8(0x000000u) == 0x12u);

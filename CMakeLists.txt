@@ -40,14 +40,25 @@ target_include_directories(neo-recomp PRIVATE
 )
 target_link_libraries(neo-recomp PRIVATE neo_recompiler_core neo_runtime)
 
+add_executable(generate-bios-recomp
+    tools/generate_bios_recomp.c
+)
+target_include_directories(generate-bios-recomp PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/recompiler/src"
+)
+target_link_libraries(generate-bios-recomp PRIVATE neo_recompiler_core)
+
 if(MSVC)
     target_compile_options(neo_runtime PRIVATE /W4)
     target_compile_options(neo_recompiler_core PRIVATE /W4)
     target_compile_options(neo-recomp PRIVATE /W4)
+    target_compile_options(generate-bios-recomp PRIVATE /W4)
 else()
     target_compile_options(neo_runtime PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(neo_recompiler_core PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(neo-recomp PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(generate-bios-recomp PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 add_subdirectory(tests)

@@ -13,9 +13,12 @@
 } while (0)
 
 int ng_generated_smoke_run(const char *neo_path);
+int ng_generated_smoke_run_with_bios(const char *neo_path,
+                                     const char *bios_path);
 
 static uint32_t g_called_addr;
 static uint16_t g_seen_cart_jump;
+static uint32_t g_seen_bios_long;
 static uint32_t g_seen_ssp;
 static uint32_t g_seen_sp;
 static uint16_t g_seen_sr;
@@ -23,6 +26,7 @@ static uint16_t g_seen_sr;
 void ng_generated_call(uint32_t addr) {
     g_called_addr = addr & 0x00FFFFFFu;
     g_seen_cart_jump = ng68k_read16(0x00000122u);
+    g_seen_bios_long = ng68k_read32(0x00C00000u);
     g_seen_ssp = g_ng_m68k.ssp;
     g_seen_sp = g_ng_m68k.a[7];
     g_seen_sr = g_ng_m68k.sr;
@@ -76,18 +80,48 @@ static int write_synthetic_neo(const char *path) {
     return fclose(out) == 0;
 }
 
+static int write_synthetic_bios(const char *path) {
+    const uint8_t bios[] = {
+        0xB2u, 0xA1u, 0xD4u, 0xC3u,
+        0xF6u, 0xE5u, 0x18u, 0x07u,
+    };
+    FILE *out = fopen(path, "wb");
+    if (!out) {
+        return 0;
+    }
+    if (fwrite(bios, 1, sizeof(bios), out) != sizeof(bios)) {
+        fclose(out);
+        return 0;
+    }
+    return fclose(out) == 0;
+}
+
 int main(void) {
     const char *path = "generated-smoke-harness-test.neo";
+    const char *bios_path = "generated-smoke-harness-test.sp1";
     remove(path);
+    remove(bios_path);
     CHECK(write_synthetic_neo(path));
+    CHECK(write_synthetic_bios(bios_path));
 
     CHECK(ng_generated_smoke_run(path) == 0);
     CHECK(g_called_addr == 0x00000200u);
     CHECK(g_seen_cart_jump == 0x4EF9u);
+    CHECK(g_seen_bios_long == 0xFFFFFFFFu);
     CHECK(g_seen_ssp == 0x0010F300u);
     CHECK(g_seen_sp == 0x0010F300u);
     CHECK(g_seen_sr == 0x2700u);
 
+    CHECK(ng_generated_smoke_run_with_bios(path, bios_path) == 0);
+    CHECK(g_called_addr == 0x00000200u);
+    CHECK(g_seen_cart_jump == 0x4EF9u);
+    CHECK(g_seen_bios_long == 0xA1B2C3D4u);
+    CHECK(g_seen_ssp == 0x0010F300u);
+    CHECK(g_seen_sp == 0x0010F300u);
+    CHECK(g_seen_sr == 0x2700u);
+    CHECK(ng68k_read32(0x00C00000u) == 0xFFFFFFFFu);
+
     remove(path);
+    remove(bios_path);
     return 0;
 }

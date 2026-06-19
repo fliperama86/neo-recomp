@@ -11,7 +11,7 @@ project orientation; update this file after each meaningful green slice.
 - Branch: `main`
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
-- Current test status: 10/10 passing
+- Current test status: 11/11 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
@@ -98,9 +98,58 @@ dispatch miss at $C00444
 returned pc=$C00444 sr=$2004 sp=$0010F300
 ```
 
-So static CPU recompilation reaches executable cartridge code and the next
-frontier is now the runtime/BIOS fallback at `$C00444`, not a generated-C or
-static P-ROM dispatch gap.
+So static CPU recompilation reaches executable cartridge code without BIOS and
+the non-BIOS frontier is the expected runtime/BIOS fallback at `$C00444`, not a
+generated-C or static P-ROM dispatch gap.
+
+The BIOS-backed smoke path now has a small BIOS recompilation tool plus a
+runtime external-dispatch hook. Users must provide their own BIOS; local testing
+used a MiSTer `sp-s2.sp1` dumped in word-swapped form, so the helper defaults to
+word-swapping it into 68000 byte order:
+
+```sh
+./build/generate-bios-recomp \
+  ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1 \
+  0xC00444,0xC004C2 \
+  build/bios_recomp.c
+
+cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
+  -c build/mslug_recomp.c -o build/mslug_recomp.o
+cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
+  -Dng_generated_call=ng_bios_generated_call \
+  -c build/bios_recomp.c -o build/bios_recomp.o
+cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
+  -DNG_GENERATED_SMOKE_HAS_BIOS \
+  -c tools/generated_smoke_harness.c \
+  -o build/generated_smoke_harness_bios.o
+cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
+  -c runtime/src/neogeo_runtime.c -o build/neogeo_runtime.o
+cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
+  -c recompiler/src/p_rom.c -o build/p_rom.o
+cc build/generated_smoke_harness_bios.o build/mslug_recomp.o \
+  build/bios_recomp.o build/neogeo_runtime.o build/p_rom.o \
+  -o build/mslug_bios_smoke_harness
+./build/mslug_bios_smoke_harness --bios \
+  ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1 \
+  ~/Documents/Games/Mister/NEOGEO/mslug.neo
+```
+
+The first BIOS-backed frontier was the DIP switch/watchdog register:
+
+```text
+starting cart entry $0007CC ssp=$0010F300
+ng68k_write8 miss at $300001 value=$FF
+```
+
+The runtime now handles `$300001` as the active-low DIP switch read and watchdog
+kick write. After that slice, the same BIOS-backed smoke no longer reports a
+bus miss within a short timeout. Sampling shows it spinning in the BIOS wait
+loop at `$C1870C`/`$C18714`, which sets `$10FE8C` and waits for an interrupt
+handler to clear it. The local BIOS discovery still reports
+`BIOS candidates: 1024 (truncated)`, so this remains a checkpoint slice rather
+than a complete BIOS recompilation. It proves generated cartridge code can
+dispatch into generated BIOS code and reach the first interrupt/VBlank runtime
+scheduling problem, not a CPU recompiler dispatch gap.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.

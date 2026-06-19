@@ -5,10 +5,13 @@
 
 extern NgM68kState g_ng_m68k;
 
+typedef int (*NgExternalDispatchHandler)(uint32_t addr);
+
 #define NG_NEO_IRQACK_RESET  0x0001u
 #define NG_NEO_IRQACK_TIMER  0x0002u
 #define NG_NEO_IRQACK_VBLANK 0x0004u
 
+#define NG_NEO_REG_DIPSW     0x00300001u
 #define NG_NEO_REG_LSPCMODE  0x003C0006u
 #define NG_NEO_REG_TIMERHIGH 0x003C0008u
 #define NG_NEO_REG_TIMERLOW  0x003C000Au
@@ -41,6 +44,7 @@ void ng68k_write16(uint32_t addr, uint16_t value);
 void ng68k_write32(uint32_t addr, uint32_t value);
 
 void ng_call_by_address(uint32_t addr);
+void ng_neogeo_set_external_dispatch(NgExternalDispatchHandler handler);
 void ng_log_dispatch_miss(uint32_t addr);
 void ng_m68k_reset_devices(void);
 void ng_m68k_stop_until_interrupt(uint16_t sr);
@@ -60,6 +64,7 @@ void ng_neogeo_begin_vblank(void);
 void ng_neogeo_advance_timer(uint32_t pixel_ticks);
 void ng_neogeo_advance_scanline(void);
 void ng_neogeo_advance_frame(void);
+uint32_t ng_neogeo_watchdog_kicks(void);
 uint16_t ng_neogeo_lspc_mode(void);
 uint16_t ng_neogeo_timer_stop(void);
 uint32_t ng_neogeo_timer_reload(void);
