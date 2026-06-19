@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `BCHG`/`BCLR`/`BSET` bit operations
+  against the Motorola/NXP Programmer's Reference Manual. The validator now
+  distinguishes dynamic Dn bit-number forms from static immediate-bit forms,
+  enforces byte-vs-long destination sizes and exact source-EA instruction
+  lengths, rejects oversized immediate bit numbers and stray source fields,
+  and keeps altering bit ops constrained to data-alterable destinations.
+  `test_m68k_validate` covered the failures first.
 - local: Fact-checked MC68000 word-form `CHK`, `MULU`/`MULS`, and
   `DIVU`/`DIVS` source/destination metadata against the Motorola/NXP
   Programmer's Reference Manual. The validator now rejects malformed

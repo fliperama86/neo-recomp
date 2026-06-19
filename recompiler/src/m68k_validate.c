@@ -144,6 +144,67 @@ static int validate_btst(const NgM68kInstr *instr) {
     return 1;
 }
 
+static int bit_alterable_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
+    switch (ea->mode) {
+    case NG_M68K_EA_DREG:
+    case NG_M68K_EA_AIND:
+    case NG_M68K_EA_APOST:
+    case NG_M68K_EA_APRE:
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    case NG_M68K_EA_ADISP:
+    case NG_M68K_EA_AINDEX:
+        if (ea->reg >= 8u) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_W:
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_L:
+        *out_ext = 4u;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int validate_altering_bit_op(const NgM68kInstr *instr) {
+    uint8_t ext_len = 0u;
+
+    if (!ea_is_data_alterable(&instr->dst) ||
+        !bit_alterable_ext_length(&instr->dst, &ext_len)) {
+        return 0;
+    }
+    if (instr->dst.mode == NG_M68K_EA_DREG) {
+        if (instr->size != 4u) {
+            return 0;
+        }
+    } else if (instr->size != 1u) {
+        return 0;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_DREG) {
+        return instr->src.reg < 8u &&
+               instr->src_reg == instr->src.reg &&
+               instr->immediate == 0u &&
+               instr->byte_length == (uint8_t)(2u + ext_len);
+    }
+
+    if (instr->src.mode == NG_M68K_EA_NONE) {
+        return instr->src.reg == 0u &&
+               instr->src_reg == 0u &&
+               instr->immediate <= 0xFFu &&
+               instr->byte_length == (uint8_t)(4u + ext_len);
+    }
+
+    return 0;
+}
+
 static int valid_scc_length(uint8_t byte_length) {
     return byte_length == 2u || byte_length == 4u || byte_length == 6u;
 }
@@ -451,10 +512,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_BCHG:
     case NG_M68K_BCLR:
     case NG_M68K_BSET:
-        return (instr->dst.mode == NG_M68K_EA_DREG ?
-                    instr->size == 4u :
-                    instr->size == 1u) &&
-               ea_is_data_alterable(&instr->dst);
+        return validate_altering_bit_op(instr);
     case NG_M68K_ADDQ:
     case NG_M68K_SUBQ:
         if (instr->immediate < 1u || instr->immediate > 8u) {
