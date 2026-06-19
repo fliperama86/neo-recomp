@@ -80,6 +80,28 @@ fallbacks instead of missing P-ROM discovery. The RAM-loaded callback at
 `games/mslug.toml` as a runtime-computed dispatch site, so it remains visible in
 the audit without failing the static P-ROM dispatch-gap check.
 
+The generated executable checkpoint uses the reusable smoke harness:
+
+```sh
+cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
+  tools/generated_smoke_harness.c build/mslug_recomp.c \
+  runtime/src/neogeo_runtime.c recompiler/src/p_rom.c \
+  -o build/mslug_smoke_harness
+./build/mslug_smoke_harness ~/Documents/Games/Mister/NEOGEO/mslug.neo
+```
+
+Current result:
+
+```text
+starting cart entry $0007CC ssp=$0010F300
+dispatch miss at $C00444
+returned pc=$C00444 sr=$2004 sp=$0010F300
+```
+
+So static CPU recompilation reaches executable cartridge code and the next
+frontier is now the runtime/BIOS fallback at `$C00444`, not a generated-C or
+static P-ROM dispatch gap.
+
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
 
@@ -1258,9 +1280,9 @@ Use this loop:
 
 Immediate next slice:
 
-- Move from static CPU recompilation smoke to a small executable checkpoint:
-  wire the generated Metal Slug C into a host harness or runner path far enough
-  to enter cartridge code and observe the first runtime fallback/hardware miss.
+- Decide whether to stop the CPU-only scope here or start runtime fallback work:
+  the executable Metal Slug checkpoint now reaches BIOS/system-ROM dispatch
+  `$C00444`.
 - Keep NeoGeo timer/VBlank integration queued until the current CPU dispatch
   backlog is narrower.
 
