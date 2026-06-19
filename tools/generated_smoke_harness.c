@@ -437,6 +437,8 @@ static int ng_generated_smoke_write_snapshot_summary(const char *dir) {
     fprintf(f, "port=$%02X\n", ng_neogeo_port_output());
     fprintf(f, "wram_nonzero=%u\n", ng_neogeo_work_ram_nonzero_bytes());
     fprintf(f, "wram_sum=$%08X\n", ng_neogeo_work_ram_checksum());
+    fprintf(f, "palette_nonzero=%u\n", ng_neogeo_palette_ram_nonzero_bytes());
+    fprintf(f, "palette_sum=$%08X\n", ng_neogeo_palette_ram_checksum());
     fprintf(f, "vram_nonzero=%u\n", ng_neogeo_vram_nonzero_words());
     fprintf(f, "vram_sum=$%08X\n", ng_neogeo_vram_checksum());
     fprintf(f, "recent_loop=%u\n", ng_generated_smoke_recent_loop_period());
@@ -537,7 +539,8 @@ static void ng_generated_smoke_print_summary(void) {
             "sp=$%08X polls=%u watchdog=%u vblank=%u frame=%u timer_irq=%u "
             "irqack=%u irq_pending=$%04X scanline=%u sound=$%02X "
             "port=$%02X wram_nonzero=%u "
-            "wram_sum=$%08X vram_nonzero=%u vram_sum=$%08X recent_loop=%u\n",
+            "wram_sum=$%08X palette_nonzero=%u palette_sum=$%08X "
+            "vram_nonzero=%u vram_sum=$%08X recent_loop=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             (unsigned long long)ng_generated_smoke_cart_dispatch_count(),
             (unsigned long long)ng_generated_smoke_bios_dispatch_count(),
@@ -559,6 +562,8 @@ static void ng_generated_smoke_print_summary(void) {
             ng_neogeo_port_output(),
             ng_neogeo_work_ram_nonzero_bytes(),
             ng_neogeo_work_ram_checksum(),
+            ng_neogeo_palette_ram_nonzero_bytes(),
+            ng_neogeo_palette_ram_checksum(),
             ng_neogeo_vram_nonzero_words(),
             ng_neogeo_vram_checksum(),
             recent_loop_period);

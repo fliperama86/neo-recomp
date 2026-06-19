@@ -604,6 +604,24 @@ uint32_t ng_neogeo_work_ram_checksum(void) {
     return sum;
 }
 
+uint32_t ng_neogeo_palette_ram_nonzero_bytes(void) {
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < sizeof(g_ng_neogeo_palette_ram); ++i) {
+        if (g_ng_neogeo_palette_ram[i] != 0u) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+uint32_t ng_neogeo_palette_ram_checksum(void) {
+    uint32_t sum = 0;
+    for (uint32_t i = 0; i < sizeof(g_ng_neogeo_palette_ram); ++i) {
+        sum += g_ng_neogeo_palette_ram[i];
+    }
+    return sum;
+}
+
 uint32_t ng_neogeo_vram_nonzero_words(void) {
     uint32_t count = 0;
     for (uint32_t i = 0; i < (uint32_t)(sizeof(g_ng_neogeo_vram) /

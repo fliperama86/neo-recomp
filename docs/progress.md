@@ -212,10 +212,10 @@ wall-clock timeout, and it gets far enough to write headless VRAM:
 ```text
 starting cart entry $0007CC ssp=$0010F300
 returned pc=$C11646 sr=$2100 sp=$0010F2EE
-smoke summary: dispatches=500000 cart=13547 bios=486453 unique=288 hot_overflow=0 last=$C00438 pc=$C11646 sr=$2100 sp=$0010F2EE polls=2655844 watchdog=13587 vblank=10060 frame=10060 timer_irq=0 irqack=9290 irq_pending=$0004 scanline=4 sound=$03 port=$00 wram_nonzero=606 wram_sum=$0000FB79 vram_nonzero=2304 vram_sum=$019C9E00 recent_loop=0
+smoke summary: dispatches=500000 cart=13547 bios=486453 unique=288 hot_overflow=0 last=$C00438 pc=$C11646 sr=$2100 sp=$0010F2EE polls=2655844 watchdog=13587 vblank=10060 frame=10060 timer_irq=0 irqack=9290 irq_pending=$0004 scanline=4 sound=$03 port=$00 wram_nonzero=606 wram_sum=$0000FB79 palette_nonzero=0 palette_sum=$00000000 vram_nonzero=2304 vram_sum=$019C9E00 recent_loop=0
 dispatch hot: unique=288 overflow=0 top0=$C18500:74304 top1=$C184FC:18578 top2=$C184F8:18577 top3=$C184F4:18573 top4=$C1866C:18570
 smoke budget reached at $C11646 after 500000 dispatches
-progress oracle: ok budgets=10000,50000,100000,500000 final_pc=$C11646 cart=13547 bios=486453 unique=288 polls=2655844 vblank=10060 frame=10060 scanline=4 irqack=9290 watchdog=13587 wram_nonzero=606 wram_sum=$0000FB79 vram_nonzero=2304 vram_sum=$019C9E00 final_recent_loop=0 max_recent_loop=50
+progress oracle: ok budgets=10000,50000,100000,500000 final_pc=$C11646 cart=13547 bios=486453 unique=288 polls=2655844 vblank=10060 frame=10060 scanline=4 irqack=9290 watchdog=13587 wram_nonzero=606 wram_sum=$0000FB79 palette_nonzero=0 palette_sum=$00000000 vram_nonzero=2304 vram_sum=$019C9E00 final_recent_loop=0 max_recent_loop=50
 ```
 
 That is the first controlled "keeps running headless" checkpoint: no dispatch
@@ -250,14 +250,22 @@ The visualizer writes dependency-free PPM diagnostics under
 color hashes, a nonzero-VRAM mask/tint, approximate palette swatches, and a
 short text report. These are intentionally not accurate Neo Geo rendering yet;
 they are a bridge from headless numeric counters to inspectable artifacts.
+Both the 500k and 5M snapshots still have `palette_nonzero=0`, so the next
+display-facing runtime question is why the current path reaches VRAM writes
+before any palette writes.
+
+This snapshot/debug-render path is also the cleanest seam for a real SDL host:
+an SDL app can stay optional (no mandatory CI dependency), reuse the same
+runtime state/snapshot surfaces first, and later replace the diagnostic PPM
+view with an interactive host loop once the video/input boundaries are clearer.
 
 A manual single-budget deep probe also reaches its guard without a dispatch or
 bus miss:
 
 ```text
-smoke summary: dispatches=5000000 cart=943807 bios=4056193 unique=369 hot_overflow=0 last=$C116A4 pc=$C116C8 sr=$2108 sp=$0010F2B2 polls=23700433 watchdog=19149 vblank=89774 frame=89774 timer_irq=0 irqack=77854 irq_pending=$0004 scanline=97 sound=$04 port=$00 wram_nonzero=20380 wram_sum=$004BE705 vram_nonzero=2304 vram_sum=$01A0C140 recent_loop=0
+smoke summary: dispatches=5000000 cart=943807 bios=4056193 unique=369 hot_overflow=0 last=$C116A4 pc=$C116C8 sr=$2108 sp=$0010F2B2 polls=23700433 watchdog=19149 vblank=89774 frame=89774 timer_irq=0 irqack=77854 irq_pending=$0004 scanline=97 sound=$04 port=$00 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 vram_nonzero=2304 vram_sum=$01A0C140 recent_loop=0
 dispatch hot: unique=369 overflow=0 top0=$C18500:622816 top1=$C184FC:155706 top2=$C184F8:155705 top3=$C184F4:155701 top4=$C1866C:155698
-progress oracle: ok budgets=5000000 final_pc=$C116C8 cart=943807 bios=4056193 unique=369 polls=23700433 vblank=89774 frame=89774 scanline=97 irqack=77854 watchdog=19149 wram_nonzero=20380 wram_sum=$004BE705 vram_nonzero=2304 vram_sum=$01A0C140 final_recent_loop=0 max_recent_loop=0
+progress oracle: ok budgets=5000000 final_pc=$C116C8 cart=943807 bios=4056193 unique=369 polls=23700433 vblank=89774 frame=89774 scanline=97 irqack=77854 watchdog=19149 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 vram_nonzero=2304 vram_sum=$01A0C140 final_recent_loop=0 max_recent_loop=0
 ```
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as

@@ -110,7 +110,9 @@ summary_re = re.compile(
     r"irqack=(?P<irqack>\d+) irq_pending=\$(?P<irq_pending>[0-9A-Fa-f]+) "
     r"scanline=(?P<scanline>\d+) sound=\$(?P<sound>[0-9A-Fa-f]+) "
     r"port=\$(?P<port>[0-9A-Fa-f]+) wram_nonzero=(?P<wram_nonzero>\d+) "
-    r"wram_sum=\$(?P<wram_sum>[0-9A-Fa-f]+) vram_nonzero=(?P<vram_nonzero>\d+) "
+    r"wram_sum=\$(?P<wram_sum>[0-9A-Fa-f]+) "
+    r"palette_nonzero=(?P<palette_nonzero>\d+) palette_sum=\$(?P<palette_sum>[0-9A-Fa-f]+) "
+    r"vram_nonzero=(?P<vram_nonzero>\d+) "
     r"vram_sum=\$(?P<vram_sum>[0-9A-Fa-f]+) recent_loop=(?P<recent_loop>\d+)"
 )
 
@@ -139,7 +141,7 @@ for budget in budgets:
         print(f"missing smoke summary at budget {budget}", file=sys.stderr)
         raise SystemExit(1)
     summary = {
-        k: int(v, 16) if k in {"last", "pc", "sr", "sp", "sound", "port", "irq_pending", "wram_sum", "vram_sum"} else int(v)
+        k: int(v, 16) if k in {"last", "pc", "sr", "sp", "sound", "port", "irq_pending", "wram_sum", "palette_sum", "vram_sum"} else int(v)
         for k, v in summary_match.groupdict().items()
     }
     if summary["dispatches"] != budget:
@@ -189,7 +191,8 @@ print(
     f"polls={final['polls']} vblank={final['vblank']} frame={final['frame']} "
     f"scanline={final['scanline']} irqack={final['irqack']} "
     f"watchdog={final['watchdog']} wram_nonzero={final['wram_nonzero']} "
-    f"wram_sum=${final['wram_sum']:08X} vram_nonzero={final['vram_nonzero']} "
+    f"wram_sum=${final['wram_sum']:08X} palette_nonzero={final['palette_nonzero']} "
+    f"palette_sum=${final['palette_sum']:08X} vram_nonzero={final['vram_nonzero']} "
     f"vram_sum=${final['vram_sum']:08X} "
     f"final_recent_loop={final['recent_loop']} max_recent_loop={max_recent_loop}"
 )

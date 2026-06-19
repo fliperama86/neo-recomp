@@ -91,6 +91,8 @@ uint32_t ng_neogeo_irq_ack_writes(void);
 uint16_t ng_neogeo_irq_pending(void);
 uint32_t ng_neogeo_work_ram_nonzero_bytes(void);
 uint32_t ng_neogeo_work_ram_checksum(void);
+uint32_t ng_neogeo_palette_ram_nonzero_bytes(void);
+uint32_t ng_neogeo_palette_ram_checksum(void);
 uint32_t ng_neogeo_vram_nonzero_words(void);
 uint32_t ng_neogeo_vram_checksum(void);
 int ng_neogeo_copy_work_ram(uint8_t *out, uint32_t out_size);

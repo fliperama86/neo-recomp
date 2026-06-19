@@ -43,6 +43,8 @@ int main(void) {
     CHECK(ng_neogeo_frame_count() == 0u);
     CHECK(ng_neogeo_work_ram_nonzero_bytes() == 0u);
     CHECK(ng_neogeo_work_ram_checksum() == 0u);
+    CHECK(ng_neogeo_palette_ram_nonzero_bytes() == 0u);
+    CHECK(ng_neogeo_palette_ram_checksum() == 0u);
     CHECK(ng_neogeo_vram_nonzero_words() == 0u);
     CHECK(ng_neogeo_vram_checksum() == 0u);
 
@@ -203,12 +205,18 @@ int main(void) {
     ng68k_write16(0x00400000u, 0x1234u);
     CHECK(ng68k_read16(0x00400000u) == 0x1234u);
     CHECK(ng68k_read16(0x00402000u) == 0x1234u);
+    CHECK(ng_neogeo_palette_ram_nonzero_bytes() == 2u);
+    CHECK(ng_neogeo_palette_ram_checksum() == 0x46u);
     ng68k_write8(0x00400003u, 0x5Au);
     CHECK(ng68k_read16(0x00400002u) == 0x5A5Au);
+    CHECK(ng_neogeo_palette_ram_nonzero_bytes() == 4u);
+    CHECK(ng_neogeo_palette_ram_checksum() == 0xFAu);
     ng68k_write8(NG_NEO_REG_PALBANK1, 0x00u);
     CHECK(ng68k_read16(0x00400000u) == 0x0000u);
     ng68k_write16(0x00400000u, 0xBEEFu);
     CHECK(ng68k_read16(0x00400000u) == 0xBEEFu);
+    CHECK(ng_neogeo_palette_ram_nonzero_bytes() == 6u);
+    CHECK(ng_neogeo_palette_ram_checksum() == 0x02A7u);
     ng68k_write8(0x003B001Fu, 0x00u);
     CHECK(ng68k_read16(0x00400000u) == 0x1234u);
     ng68k_write8(NG_NEO_REG_PALBANK1, 0x00u);
@@ -227,6 +235,8 @@ int main(void) {
     free(palette_dump);
     ng_neogeo_reset_runtime();
     CHECK(ng68k_read16(0x00400000u) == 0x0000u);
+    CHECK(ng_neogeo_palette_ram_nonzero_bytes() == 0u);
+    CHECK(ng_neogeo_palette_ram_checksum() == 0u);
 
     ng68k_write16(0x00D00000u, 0x1111u);
     CHECK(ng68k_read16(0x00D00000u) == 0x0000u);
