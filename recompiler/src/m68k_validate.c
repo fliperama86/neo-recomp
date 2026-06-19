@@ -1212,14 +1212,26 @@ static int validate_exg(const NgM68kInstr *instr) {
 
     if (ea_is_exact_register(&instr->src, NG_M68K_EA_DREG) &&
         ea_is_exact_register(&instr->dst, NG_M68K_EA_DREG)) {
-        return 1;
+        uint16_t expected_opcode =
+            (uint16_t)(0xC140u | ((uint16_t)instr->src.reg << 9) |
+                       instr->dst.reg);
+        return instr->opcode == expected_opcode;
     }
     if (ea_is_exact_register(&instr->src, NG_M68K_EA_AREG) &&
         ea_is_exact_register(&instr->dst, NG_M68K_EA_AREG)) {
-        return 1;
+        uint16_t expected_opcode =
+            (uint16_t)(0xC148u | ((uint16_t)instr->src.reg << 9) |
+                       instr->dst.reg);
+        return instr->opcode == expected_opcode;
     }
-    return ea_is_exact_register(&instr->src, NG_M68K_EA_DREG) &&
-           ea_is_exact_register(&instr->dst, NG_M68K_EA_AREG);
+    if (ea_is_exact_register(&instr->src, NG_M68K_EA_DREG) &&
+        ea_is_exact_register(&instr->dst, NG_M68K_EA_AREG)) {
+        uint16_t expected_opcode =
+            (uint16_t)(0xC188u | ((uint16_t)instr->src.reg << 9) |
+                       instr->dst.reg);
+        return instr->opcode == expected_opcode;
+    }
+    return 0;
 }
 
 static int valid_sign_extended_byte(uint32_t value) {
