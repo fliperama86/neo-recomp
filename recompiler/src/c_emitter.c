@@ -2146,6 +2146,11 @@ static int emit_instr(FILE *out,
                         instr->reg, instr->reg, instr->immediate & 0xFFu);
                 fprintf(out, "    ng_set_nz8((uint8_t)(g_ng_m68k.d[%u] & 0x00FFu));\n",
                         instr->reg);
+            } else if (instr->size == 4u) {
+                fprintf(out, "    g_ng_m68k.d[%u] = 0x%08Xu;\n",
+                        instr->reg, instr->immediate);
+                fprintf(out, "    ng_set_nz32(g_ng_m68k.d[%u]);\n",
+                        instr->reg);
             } else {
                 fprintf(out,
                         "    g_ng_m68k.d[%u] = (g_ng_m68k.d[%u] & 0xFFFF0000u) | 0x%04Xu;\n",

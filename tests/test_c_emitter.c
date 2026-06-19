@@ -498,6 +498,9 @@ int main(void) {
         CHECK(strstr(text, "{ uint32_t ng_tmp = g_ng_m68k.d[0]; g_ng_m68k.d[0] = g_ng_m68k.d[1]; g_ng_m68k.d[1] = ng_tmp; }") != NULL);
         CHECK(strstr(text, "/* $00012A: LEA ($10,A0),A3 */") != NULL);
         CHECK(strstr(text, "g_ng_m68k.a[3] = (uint32_t)((uint32_t)(g_ng_m68k.a[0] + (int32_t)16));") != NULL);
+        CHECK(strstr(text, "/* $00012E: MOVE.L #$14,D7 */") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.d[7] = 0x00000014u;") != NULL);
+        CHECK(strstr(text, "ng_set_nz32(g_ng_m68k.d[7]);") != NULL);
         CHECK(strstr(text, "/* $000134: DIVU.W #$4,D7 */") != NULL);
         CHECK(strstr(text, "uint32_t ng_dividend = g_ng_m68k.d[7]; uint32_t ng_quotient = ng_dividend / ng_divisor;") != NULL);
         CHECK(strstr(text, "/* $00013A: DIVS.W #$FFFE,D7 */") != NULL);

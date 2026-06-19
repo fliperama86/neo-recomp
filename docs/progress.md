@@ -117,7 +117,7 @@ Covered by executable generated-C validation:
   subtract/extend-add paths and register-count-zero shift/rotate cases
 - data movement:
   - `MOVEQ`
-  - `MOVE.B/W #imm,Dn`
+  - `MOVE.B/W/L #imm,Dn`
   - `MOVE.W #imm,abs`
   - `MOVE.B #imm,abs`
   - `MOVE.B Dn,abs`
@@ -210,6 +210,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added generated-exec and static emitter coverage for
+  `MOVE.L #imm,Dn`. This caught an immediate-to-data-register emission path
+  that decoded as long but wrote only the low word; generated code now writes
+  the full 32-bit immediate and applies long-sized `MOVE` `N/Z/V/C` flag
+  behavior while preserving `X`.
 - local: Fact-checked MC68000 signed divide overflow against the Motorola/NXP
   Programmer's Reference Manual. The generated-exec oracle and fixture now
   cover `DIVS.W #$FFFF,D0` with dividend `$80000000`, verifying that quotient
