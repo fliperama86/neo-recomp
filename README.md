@@ -159,6 +159,15 @@ To save inspectable CPU-visible state from the final budget, set
 `work_ram.bin` (64 KiB), `palette_ram.bin` (16 KiB), `vram_be.bin` (64K
 big-endian VRAM words), and `summary.txt`.
 
+Those raw dumps can be turned into dependency-free debug images:
+
+```sh
+tools/render_snapshot_debug.py build/mslug_snapshot
+```
+
+This writes PPMs under `build/mslug_snapshot/debug_images/`. They are visual
+diagnostics, not accurate Neo Geo rendering yet.
+
 ## Decoder Slice
 
 The first decoder milestone is intentionally tiny: decode enough of the Metal

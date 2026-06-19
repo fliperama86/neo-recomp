@@ -239,7 +239,17 @@ NG_MSLUG_SNAPSHOT_DIR=build/mslug_snapshot scripts/run_mslug_headless.sh
 That produces `work_ram.bin` (64 KiB), `palette_ram.bin` (16 KiB),
 `vram_be.bin` (64K big-endian VRAM words), and `summary.txt`. The current
 500k snapshot summary matches the smoke output above and gives us concrete
-artifacts to feed a later minimal visualizer/debug viewer.
+artifacts to feed a minimal visualizer/debug viewer:
+
+```sh
+tools/render_snapshot_debug.py build/mslug_snapshot
+```
+
+The visualizer writes dependency-free PPM diagnostics under
+`build/mslug_snapshot/debug_images/`: grayscale work RAM bytes, raw VRAM-word
+color hashes, a nonzero-VRAM mask/tint, approximate palette swatches, and a
+short text report. These are intentionally not accurate Neo Geo rendering yet;
+they are a bridge from headless numeric counters to inspectable artifacts.
 
 A manual single-budget deep probe also reaches its guard without a dispatch or
 bus miss:
@@ -1208,6 +1218,9 @@ and `V` are only trusted where generated-exec tests cover them.
   plus optional `NG_MSLUG_SNAPSHOT_DIR` support in the Metal Slug smoke. The
   final-budget snapshot writes raw CPU-visible RAM/palette/VRAM artifacts and a
   text summary without adding renderer/input/sound complexity yet.
+- local: Added `tools/render_snapshot_debug.py`, a no-dependency offline
+  snapshot visualizer that converts the raw work RAM / palette RAM / VRAM dumps
+  into PPM debug images. This is diagnostic only and not a full video renderer.
 - local: Connected the LSPC timer model to NTSC frame/scanline advancement:
   runtime tests now cover 384-pixel scanlines, 264-scanline frame wrap,
   VBlank requests on frame start/wrap, and timer interrupts firing from

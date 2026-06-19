@@ -132,3 +132,14 @@ add_test(NAME test_generated_smoke_harness COMMAND test_generated_smoke_harness)
 add_test(NAME test_generated_smoke_trampoline COMMAND test_generated_smoke_trampoline)
 add_test(NAME test_opcode_sweep COMMAND test_opcode_sweep)
 add_test(NAME test_generated_exec COMMAND test_generated_exec)
+
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME test_snapshot_debug
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/test_snapshot_debug.py"
+                "${CMAKE_SOURCE_DIR}"
+                "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+endif()
