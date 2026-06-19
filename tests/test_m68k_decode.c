@@ -39,8 +39,14 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0x0007CCu, &instr));
         CHECK(instr.mnemonic == NG_M68K_LEA);
         CHECK(instr.byte_length == 4);
+        CHECK(instr.size == 4);
         CHECK(instr.reg == 0);
         CHECK(instr.target == 0x000008F2u);
+        CHECK(instr.src.mode == NG_M68K_EA_PC_DISP);
+        CHECK(instr.src.displacement == 0x0124);
+        CHECK(instr.src.absolute_addr == 0x000008F2u);
+        CHECK(instr.dst.mode == NG_M68K_EA_AREG);
+        CHECK(instr.dst.reg == 0);
     }
 
     {

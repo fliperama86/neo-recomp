@@ -218,8 +218,10 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                instr->dst.mode == NG_M68K_EA_NONE &&
                ea_is_control(&instr->src);
     case NG_M68K_LEA:
-        return instr->src.mode != NG_M68K_EA_NONE ?
-            ea_is_control(&instr->src) : instr->byte_length >= 4u;
+        return instr->byte_length >= 2u &&
+               instr->size == 4u &&
+               ea_is_control(&instr->src) &&
+               instr->dst.mode == NG_M68K_EA_AREG;
     case NG_M68K_MOVE:
         return valid_size(instr->size) &&
                instr->src.mode != NG_M68K_EA_NONE &&

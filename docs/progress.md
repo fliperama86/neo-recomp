@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `LEA` metadata against the Motorola/NXP Programmer's
+  Reference Manual. `LEA (d16,PC),An` decode now records the long-sized
+  control source and address-register destination, and the validator now
+  rejects malformed `LEA` shapes with missing sources, non-long sizes, or
+  non-address-register destinations. Tests in `test_m68k_decode` and
+  `test_m68k_validate` covered the failures first.
 - local: Fact-checked control-transfer source forms against the Motorola/NXP
   Programmer's Reference Manual. The post-decode validator now rejects stray
   destination operands on `JMP`/`JSR`, enforces long-sized `PEA` effective

@@ -974,9 +974,16 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
     }
     if ((op & 0xF1FFu) == 0x41FAu) {
         out->mnemonic = NG_M68K_LEA;
+        out->size = NG_M68K_SIZE_LONG;
         out->byte_length = 4;
         out->reg = (uint8_t)((op >> 9) & 7u);
-        out->target = addr + 2u + (int32_t)sign16(ng_program_rom_read16(rom, addr + 2u));
+        out->displacement = sign16(ng_program_rom_read16(rom, addr + 2u));
+        out->target = (uint32_t)((int32_t)(addr + 2u) + (int32_t)out->displacement);
+        out->src.mode = NG_M68K_EA_PC_DISP;
+        out->src.displacement = out->displacement;
+        out->src.absolute_addr = out->target;
+        out->dst.mode = NG_M68K_EA_AREG;
+        out->dst.reg = out->reg;
         return finish_decode(rom, addr, out);
     }
     if ((op & 0xF1C0u) == 0x4180u) {
@@ -1025,9 +1032,14 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
     }
     if ((op & 0xF1FFu) == 0x41F9u) {
         out->mnemonic = NG_M68K_LEA;
+        out->size = NG_M68K_SIZE_LONG;
         out->byte_length = 6;
         out->reg = (uint8_t)((op >> 9) & 7u);
         out->target = ng_program_rom_read32(rom, addr + 2u);
+        out->src.mode = NG_M68K_EA_ABS_L;
+        out->src.absolute_addr = out->target;
+        out->dst.mode = NG_M68K_EA_AREG;
+        out->dst.reg = out->reg;
         return finish_decode(rom, addr, out);
     }
     if (op == 0x207Bu) {

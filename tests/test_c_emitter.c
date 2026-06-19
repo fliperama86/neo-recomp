@@ -339,7 +339,7 @@ int main(void) {
         CHECK(read_file(out, text, sizeof(text)));
         fclose(out);
 
-        CHECK(strstr(text, "g_ng_m68k.a[0] = 0x00000008u;") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[0] = (uint32_t)(0x00000008u);") != NULL);
         CHECK(strstr(text, "ng68k_write32(0x00001000u, g_ng_m68k.a[0]);") != NULL);
         CHECK(strstr(text, "ng68k_write16(0x003C000Cu, 0x0007u);") != NULL);
         CHECK(strstr(text, "ng68k_write8(0x0010FD80u, 0x80u);") != NULL);
