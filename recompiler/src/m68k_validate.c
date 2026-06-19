@@ -1527,30 +1527,38 @@ static int validate_shift_rotate(const NgM68kInstr *instr) {
     if (instr->dst.mode == NG_M68K_EA_DREG) {
         if (!valid_size(instr->size) ||
             instr->byte_length != 2u ||
-            instr->immediate > 8u ||
-            instr->dst.reg >= 8u ||
+            !ea_simple_register_payload(&instr->dst) ||
             instr->reg != instr->dst.reg ||
-            instr->condition != 0u) {
+            instr->condition != 0u ||
+            instr->form != NG_M68K_FORM_NONE ||
+            instr->target != 0u ||
+            instr->absolute_addr != 0u ||
+            instr->displacement != 0) {
             return 0;
         }
         if (instr->src.mode != NG_M68K_EA_NONE) {
             return instr->src.mode == NG_M68K_EA_DREG &&
-                   instr->src.reg < 8u &&
+                   ea_simple_register_payload(&instr->src) &&
                    instr->src_reg == instr->src.reg &&
                    instr->immediate == 0u;
         }
-        return instr->src_reg == 0u &&
+        return ea_is_empty(&instr->src) &&
+               instr->src_reg == 0u &&
                instr->immediate >= 1u &&
                instr->immediate <= 8u;
     }
 
-    return instr->src.mode == NG_M68K_EA_NONE &&
+    return ea_is_empty(&instr->src) &&
            instr->size == 2u &&
            instr->immediate == 1u &&
            instr->src_reg == 0u &&
            instr->reg == 0u &&
            instr->condition == 0u &&
-           memory_alterable_ext_length(&instr->dst, &ext_len) &&
+           instr->form == NG_M68K_FORM_NONE &&
+           instr->target == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0 &&
+           exact_memory_alterable_ext_length(&instr->dst, &ext_len) &&
            instr->byte_length == (uint8_t)(2u + ext_len);
 }
 

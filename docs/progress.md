@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 shift/rotate register-count, immediate-count,
+  and memory one-bit forms against the Motorola/NXP Programmer's Reference
+  Manual. The validator now rejects malformed Dn count/destination payloads,
+  malformed memory-alterable EA payloads, and stray form/target/absolute/
+  displacement metadata while preserving byte/word/long Dn forms and
+  word-only one-bit memory forms. `test_m68k_validate` covered malformed
+  Dn, source-count, absolute-word, absolute-long, and top-level metadata red
+  first.
 - local: Fact-checked MC68000 `Scc <ea>` byte-sized data-alterable
   destinations against the Motorola/NXP Programmer's Reference Manual. The
   validator now requires exact destination EA payloads for Dn, displacement,
