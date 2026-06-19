@@ -259,6 +259,15 @@ int main(void) {
     instr.byte_length = 4u;
     instr.size = 4u;
     instr.src.mode = NG_M68K_EA_ADISP;
+    instr.dst.reg = 1u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_PEA;
+    instr.opcode = 0x4868u;
+    instr.byte_length = 4u;
+    instr.size = 4u;
+    instr.src.mode = NG_M68K_EA_ADISP;
     instr.target = 0x100u;
     CHECK(!ng_m68k_validate(&instr));
 

@@ -1143,7 +1143,7 @@ static int validate_pea(const NgM68kInstr *instr) {
     uint8_t ea_field = 0u;
 
     return instr->size == 4u &&
-           instr->dst.mode == NG_M68K_EA_NONE &&
+           ea_is_empty(&instr->dst) &&
            instr->immediate == 0u &&
            instr->src_reg == 0u &&
            instr->reg == 0u &&
