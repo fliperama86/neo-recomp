@@ -168,8 +168,9 @@ Covered by executable generated-C validation:
     `EOR.B/W/L Dn,<ea>` paths covered so far by data-register and
     postincrement memory destinations
   - `MULU.W <ea>,Dn` and `MULS.W <ea>,Dn` covered so far by immediate sources
-  - `DIVU.W <ea>,Dn` and `DIVS.W <ea>,Dn` covered so far by immediate sources
-    and divide-by-zero exception-vector emission
+  - `DIVU.W <ea>,Dn` and `DIVS.W <ea>,Dn` covered so far by immediate sources,
+    divide-by-zero exception-vector emission, and a signed quotient-overflow
+    case that leaves the destination operand unchanged
   - `EXG` register exchanges covered so far by data-register pairs
   - `ANDI.B #imm,(d16,An)`
   - generic `ANDI.B/W/L #imm,<ea>` paths covered so far by Dn,
@@ -209,6 +210,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 signed divide overflow against the Motorola/NXP
+  Programmer's Reference Manual. The generated-exec oracle and fixture now
+  cover `DIVS.W #$FFFF,D0` with dividend `$80000000`, verifying that quotient
+  overflow sets `V`, clears `C`, preserves `X`, and leaves the destination
+  operand unaffected; emitted C now uses a 64-bit intermediate so the overflow
+  case is detected before any host signed-division undefined behavior.
 - local: Fact-checked MC68000 register-count-zero shift/rotate condition-code
   behavior against the Motorola/NXP Programmer's Reference Manual. The
   generated-exec oracle and fixture now cover `LSL.W Dn,Dm`, `ROL.W Dn,Dm`,

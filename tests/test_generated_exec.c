@@ -911,9 +911,9 @@ static int oracle_exec(const uint8_t *program,
                     if (quotient & 0x8000u) state->sr |= CCR_N;
                 }
             } else {
-                int32_t dividend = (int32_t)state->d[dst_reg];
-                int16_t divisor = (int16_t)src;
-                int32_t quotient = dividend / divisor;
+                int64_t dividend = (int32_t)state->d[dst_reg];
+                int64_t divisor = (int16_t)src;
+                int64_t quotient = dividend / divisor;
                 int16_t remainder = (int16_t)(dividend % divisor);
                 if (quotient < -32768 || quotient > 32767) {
                     state->sr |= CCR_V;
@@ -2885,6 +2885,32 @@ int main(void) {
     CHECK(ng68k_read16(0x000001A0u) == 0x2018u); /* LSL count 0: X preserved, C/V/Z clear, N set */
     CHECK(ng68k_read16(0x000001A2u) == 0x2018u); /* ROL count 0: X preserved, C/V/Z clear, N set */
     CHECK(ng68k_read16(0x000001A4u) == 0x2019u); /* ROXL count 0: C mirrors preserved X */
+
+    memset(&expected_state, 0, sizeof(expected_state));
+    memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.sr = SR_S;
+    expected_state.a[7] = 0x000001F0u;
+    expected_state.ssp = expected_state.a[7];
+    CHECK(oracle_exec(program, (uint32_t)sizeof(program), 0x00000700u,
+                      &expected_state, expected_bus, 0));
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.sr = SR_S;
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_ng_m68k.ssp = g_ng_m68k.a[7];
+    g_dispatch_miss_count = 0;
+
+    ng_generated_call(0x00000700u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.d[0] == expected_state.d[0]);
+    CHECK(g_ng_m68k.d[0] == 0x80000000u);
+    CHECK(g_ng_m68k.sr == expected_state.sr);
+    CHECK(ng68k_read16(0x000001A6u) == bus_read16(expected_bus, 0x000001A6u));
+    CHECK((ng68k_read16(0x000001A6u) & CCR_X) != 0);
+    CHECK((ng68k_read16(0x000001A6u) & CCR_V) != 0);
+    CHECK((ng68k_read16(0x000001A6u) & CCR_C) == 0);
 
     return 0;
 }

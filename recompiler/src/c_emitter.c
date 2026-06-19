@@ -1677,7 +1677,7 @@ static int emit_divide(FILE *out, const NgM68kInstr *instr) {
         fprintf(out, "        ng_generated_call(ng_vector_pc);\n");
         fprintf(out, "        return;\n");
         fprintf(out, "      }\n");
-        fprintf(out, "      int32_t ng_dividend = (int32_t)g_ng_m68k.d[%u]; int32_t ng_quotient = ng_dividend / ng_divisor; int16_t ng_remainder = (int16_t)(ng_dividend %% ng_divisor);\n",
+        fprintf(out, "      int64_t ng_dividend = (int32_t)g_ng_m68k.d[%u]; int64_t ng_divisor64 = ng_divisor; int64_t ng_quotient = ng_dividend / ng_divisor64; int16_t ng_remainder = (int16_t)(ng_dividend %% ng_divisor64);\n",
                 instr->dst.reg);
         fprintf(out, "      g_ng_m68k.sr = (uint16_t)(g_ng_m68k.sr & 0xFFF0u);\n");
         fprintf(out, "      if (ng_quotient < -32768 || ng_quotient > 32767) { g_ng_m68k.sr |= NG_CCR_V; }\n");

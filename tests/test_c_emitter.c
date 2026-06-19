@@ -501,7 +501,7 @@ int main(void) {
         CHECK(strstr(text, "/* $000134: DIVU.W #$4,D7 */") != NULL);
         CHECK(strstr(text, "uint32_t ng_dividend = g_ng_m68k.d[7]; uint32_t ng_quotient = ng_dividend / ng_divisor;") != NULL);
         CHECK(strstr(text, "/* $00013A: DIVS.W #$FFFE,D7 */") != NULL);
-        CHECK(strstr(text, "int32_t ng_dividend = (int32_t)g_ng_m68k.d[7]; int32_t ng_quotient = ng_dividend / ng_divisor;") != NULL);
+        CHECK(strstr(text, "int64_t ng_dividend = (int32_t)g_ng_m68k.d[7]; int64_t ng_divisor64 = ng_divisor; int64_t ng_quotient = ng_dividend / ng_divisor64;") != NULL);
         CHECK(strstr(text, "/* $00013E: LSL.W #1,D7 */") != NULL);
         CHECK(strstr(text, "uint8_t ng_count = 1u; uint32_t ng_result = g_ng_m68k.d[7] & 0x0000FFFFu;") != NULL);
         CHECK(strstr(text, "/* $000148: MOVEM.L #$0003,(A4) */") != NULL);
