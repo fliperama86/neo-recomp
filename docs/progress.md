@@ -128,8 +128,9 @@ Covered by executable generated-C validation:
     address-register sources, including `MOVEA.W` sign-extension with CCR
     preserved
   - `MOVE.L An,abs`
-  - generic `LEA <ea>,An` control-address loads covered so far by PC-relative
-    and displacement sources
+  - generic `LEA <ea>,An` control-address loads covered so far by PC-relative,
+    PC-index, and displacement sources, including extension-word PC base and
+    word-index sign-extension behavior
   - `MOVEM.W/L` register-list transfers covered so far by long Dn masks to/from
     address-indirect memory, word memory-to-register sign extension into both
     data and address registers, postincrement memory-to-register self-load
@@ -233,6 +234,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `LEA` PC-index effective-address semantics.
+  Generated-exec now covers `LEA (d8,PC,D0.W),A2`, proving the extension-word
+  PC base plus word index calculation and condition-code preservation.
 - local: Fact-checked `PEA` effective-address push semantics. Generated-exec
   now covers `PEA (d16,PC)`, proving the pushed long uses the extension-word
   PC-relative base and leaves condition codes unchanged.
