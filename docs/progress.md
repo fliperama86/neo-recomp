@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `Scc`/`DBcc` validation so opcode condition bits
+  and effective-address/register fields must match the decoded byte
+  destination or DBcc counter metadata. `test_m68k_validate` covered
+  mismatched condition and register/EA opcode metadata red first.
 - local: Tightened `EXT`/`SWAP` validation so opcode class, size bit,
   and register bits must match the decoded data-register metadata
   (`$488n` for `EXT.W`, `$48Cn` for `EXT.L`, `$484n` for `SWAP`).

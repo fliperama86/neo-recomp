@@ -1285,8 +1285,46 @@ static int validate_ext_swap(const NgM68kInstr *instr) {
            instr->opcode == (uint16_t)(0x4840u | instr->reg);
 }
 
+static int ea_opcode_field(const NgM68kEa *ea, uint8_t *out_field) {
+    switch (ea->mode) {
+    case NG_M68K_EA_DREG:
+        if (ea->reg >= 8u) return 0;
+        *out_field = ea->reg;
+        return 1;
+    case NG_M68K_EA_AIND:
+        if (ea->reg >= 8u) return 0;
+        *out_field = (uint8_t)(0x10u | ea->reg);
+        return 1;
+    case NG_M68K_EA_APOST:
+        if (ea->reg >= 8u) return 0;
+        *out_field = (uint8_t)(0x18u | ea->reg);
+        return 1;
+    case NG_M68K_EA_APRE:
+        if (ea->reg >= 8u) return 0;
+        *out_field = (uint8_t)(0x20u | ea->reg);
+        return 1;
+    case NG_M68K_EA_ADISP:
+        if (ea->reg >= 8u) return 0;
+        *out_field = (uint8_t)(0x28u | ea->reg);
+        return 1;
+    case NG_M68K_EA_AINDEX:
+        if (ea->reg >= 8u) return 0;
+        *out_field = (uint8_t)(0x30u | ea->reg);
+        return 1;
+    case NG_M68K_EA_ABS_W:
+        *out_field = 0x38u;
+        return 1;
+    case NG_M68K_EA_ABS_L:
+        *out_field = 0x39u;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static int validate_scc(const NgM68kInstr *instr) {
     uint8_t ext_len = 0u;
+    uint8_t ea_field = 0u;
 
     return instr->size == 1u &&
            instr->condition <= 15u &&
@@ -1299,7 +1337,11 @@ static int validate_scc(const NgM68kInstr *instr) {
            instr->displacement == 0 &&
            ea_is_empty(&instr->src) &&
            exact_data_alterable_ext_length(&instr->dst, &ext_len) &&
-           instr->byte_length == (uint8_t)(2u + ext_len);
+           ea_opcode_field(&instr->dst, &ea_field) &&
+           instr->byte_length == (uint8_t)(2u + ext_len) &&
+           instr->opcode == (uint16_t)(0x50C0u |
+                                       ((uint16_t)instr->condition << 8) |
+                                       ea_field);
 }
 
 static int validate_dbcc(const NgM68kInstr *instr) {
@@ -1315,7 +1357,10 @@ static int validate_dbcc(const NgM68kInstr *instr) {
            instr->form == NG_M68K_FORM_NONE &&
            instr->absolute_addr == 0u &&
            no_ea_fields(instr) &&
-           instr->target == expected_target;
+           instr->target == expected_target &&
+           instr->opcode == (uint16_t)(0x50C8u |
+                                       ((uint16_t)instr->condition << 8) |
+                                       instr->reg);
 }
 
 static int validate_ea_to_dreg_binary(const NgM68kInstr *instr,

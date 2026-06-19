@@ -3367,12 +3367,33 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_SCC;
+    instr.opcode = 0x55C2u;
     instr.byte_length = 2u;
     instr.size = 1u;
     instr.condition = 5u;
     instr.dst.mode = NG_M68K_EA_DREG;
     instr.dst.reg = 2u;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_SCC;
+    instr.opcode = 0x54C2u;
+    instr.byte_length = 2u;
+    instr.size = 1u;
+    instr.condition = 5u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.dst.reg = 2u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_SCC;
+    instr.opcode = 0x55C3u;
+    instr.byte_length = 2u;
+    instr.size = 1u;
+    instr.condition = 5u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.dst.reg = 2u;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_SCC;
@@ -3386,6 +3407,7 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_SCC;
+    instr.opcode = 0x55EAu;
     instr.byte_length = 4u;
     instr.size = 1u;
     instr.condition = 5u;
@@ -3492,6 +3514,7 @@ int main(void) {
     memset(&instr, 0, sizeof(instr));
     instr.addr = 0x110u;
     instr.mnemonic = NG_M68K_DBCC;
+    instr.opcode = 0x5FCFu;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.condition = 15u;
@@ -3499,6 +3522,30 @@ int main(void) {
     instr.displacement = -18;
     instr.target = 0x100u;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x110u;
+    instr.mnemonic = NG_M68K_DBCC;
+    instr.opcode = 0x5ECFu;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.condition = 15u;
+    instr.reg = 7u;
+    instr.displacement = -18;
+    instr.target = 0x100u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x110u;
+    instr.mnemonic = NG_M68K_DBCC;
+    instr.opcode = 0x5FCEu;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.condition = 15u;
+    instr.reg = 7u;
+    instr.displacement = -18;
+    instr.target = 0x100u;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.addr = 0x110u;
