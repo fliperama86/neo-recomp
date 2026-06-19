@@ -201,7 +201,8 @@ Covered by executable generated-C validation:
   - `TST.B (d16,An)`
   - generic `TST.B/W/L <ea>` paths covered so far by data-register and
     postincrement sources
-  - `TAS <ea>` covered so far by absolute byte memory destinations
+  - `TAS <ea>` covered so far by absolute byte memory and data-register
+    destinations, including test-before-set flag behavior with `X` preserved
   - `CLR.B/W/L abs`
   - `CLR.B/W/L Dn`
   - generic `CLR.B/W/L <ea>` paths covered so far by `(d16,An)` and `(An)+`
@@ -229,6 +230,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `TAS` test-before-set semantics. Generated-exec now
+  covers `TAS D0`, proving flags are computed from the original byte, bit 7 is
+  set in the data-register byte afterward, `V/C` are cleared, and `X` is
+  preserved.
 - local: Fact-checked `NBCD` byte-only BCD negate and predecrement addressing.
   Generated-exec now covers `NBCD -(A7)`, proving byte-sized stack-pointer
   predecrement by two, decimal borrow into `X/C`, sticky-`Z` clearing on a
