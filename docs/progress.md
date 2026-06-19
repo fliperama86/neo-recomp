@@ -252,6 +252,13 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `MOVE SR,<ea>`, `MOVE <ea>,SR`, and
+  `MOVE <ea>,CCR` against the Motorola/NXP Programmer's Reference Manual
+  data/data-alterable EA tables. The validator now requires exact source or
+  destination EA payloads, immediate width, PC-relative extension-word base,
+  instruction length, and no stray top-level metadata while still rejecting the
+  MC68010+ `MOVE CCR,<ea>` direction. `test_m68k_validate` covered malformed
+  status-register move metadata red first.
 - local: Tightened exact control-source metadata for `JMP`, `JSR`,
   `PEA`, and `LEA`. The validator now checks control EA payloads,
   PC-relative extension-word bases, index displacement ranges, and decoded

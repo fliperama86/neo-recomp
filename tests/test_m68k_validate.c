@@ -225,6 +225,23 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_SR;
+    instr.byte_length = 2u;
+    instr.size = 2u;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    instr.dst.reg = 3u;
+    instr.dst.index_reg = 1u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVE_SR;
+    instr.byte_length = 6u;
+    instr.size = 2u;
+    instr.dst.mode = NG_M68K_EA_ABS_L;
+    instr.dst.absolute_addr = 0x123456u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVE_SR;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.dst.mode = NG_M68K_EA_DREG;
@@ -242,12 +259,35 @@ int main(void) {
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.mnemonic = NG_M68K_MOVE_CCR;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.src.mode = NG_M68K_EA_PC_DISP;
+    instr.src.reg = 2u;
+    instr.src.displacement = 4;
+    instr.src.absolute_addr = 0x106u;
+    CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.addr = 0x100u;
+    instr.mnemonic = NG_M68K_MOVE_CCR;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.src.mode = NG_M68K_EA_PC_DISP;
+    instr.src.reg = 2u;
+    instr.src.displacement = 4;
+    instr.src.absolute_addr = 0x108u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_CCR;
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.src.mode = NG_M68K_EA_IMM;
-    instr.src.immediate = 0x001Bu;
-    CHECK(ng_m68k_validate(&instr));
+    instr.src.reg = 4u;
+    instr.src.immediate = 0x10000u;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_MOVE_CCR;
@@ -262,6 +302,7 @@ int main(void) {
     instr.byte_length = 4u;
     instr.size = 2u;
     instr.src.mode = NG_M68K_EA_PC_DISP;
+    instr.src.reg = 2u;
     instr.src.displacement = 2;
     instr.src.absolute_addr = 4u;
     CHECK(ng_m68k_validate(&instr));
@@ -271,6 +312,7 @@ int main(void) {
     instr.byte_length = 2u;
     instr.size = 2u;
     instr.src.mode = NG_M68K_EA_IMM;
+    instr.src.reg = 4u;
     instr.src.immediate = 0x2700u;
     CHECK(!ng_m68k_validate(&instr));
 

@@ -564,6 +564,68 @@ static int move_destination_ext_length(const NgM68kEa *ea, uint8_t *out_ext) {
     }
 }
 
+static int exact_data_source_ext_length(const NgM68kInstr *instr,
+                                        uint8_t *out_ext) {
+    const NgM68kEa *ea = &instr->src;
+    uint32_t ext_addr = instr->addr + 2u;
+
+    switch (ea->mode) {
+    case NG_M68K_EA_DREG:
+    case NG_M68K_EA_AIND:
+    case NG_M68K_EA_APOST:
+    case NG_M68K_EA_APRE:
+        if (!ea_simple_register_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 0u;
+        return 1;
+    case NG_M68K_EA_ADISP:
+        if (!ea_address_displacement_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_AINDEX:
+        if (!ea_address_index_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_W:
+        if (!ea_abs_word_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_ABS_L:
+        if (!ea_abs_long_payload(ea)) {
+            return 0;
+        }
+        *out_ext = 4u;
+        return 1;
+    case NG_M68K_EA_PC_DISP:
+        if (!ea_pc_displacement_payload(ea, ext_addr)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_PC_INDEX:
+        if (!ea_pc_index_payload(ea, ext_addr)) {
+            return 0;
+        }
+        *out_ext = 2u;
+        return 1;
+    case NG_M68K_EA_IMM:
+        if (!ea_immediate_payload(ea, instr->size)) {
+            return 0;
+        }
+        *out_ext = instr->size == 4u ? 4u : 2u;
+        return valid_size(instr->size);
+    default:
+        return 0;
+    }
+}
+
 static int validate_move_legacy_fields(const NgM68kInstr *instr) {
     if (instr->src.mode == NG_M68K_EA_AREG &&
         (instr->dst.mode == NG_M68K_EA_ABS_W ||
@@ -824,14 +886,17 @@ static int validate_move_sr_ccr(const NgM68kInstr *instr) {
         instr->src_reg != 0u ||
         instr->reg != 0u ||
         instr->condition != 0u ||
-        instr->form != NG_M68K_FORM_NONE) {
+        instr->form != NG_M68K_FORM_NONE ||
+        instr->target != 0u ||
+        instr->absolute_addr != 0u ||
+        instr->displacement != 0) {
         return 0;
     }
 
     if (instr->dst.mode != NG_M68K_EA_NONE) {
         if (instr->mnemonic != NG_M68K_MOVE_SR ||
             instr->src.mode != NG_M68K_EA_NONE ||
-            !data_alterable_ext_length(&instr->dst, &ext_len)) {
+            !move_destination_ext_length(&instr->dst, &ext_len)) {
             return 0;
         }
         return instr->byte_length == (uint8_t)(2u + ext_len);
@@ -841,7 +906,7 @@ static int validate_move_sr_ccr(const NgM68kInstr *instr) {
         return 0;
     }
 
-    if (!data_source_ext_length(&instr->src, instr->size, &ext_len)) {
+    if (!exact_data_source_ext_length(instr, &ext_len)) {
         return 0;
     }
     return instr->byte_length == (uint8_t)(2u + ext_len);
