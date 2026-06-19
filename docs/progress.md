@@ -192,8 +192,10 @@ Covered by executable generated-C validation:
   - `MULU.W <ea>,Dn` and `MULS.W <ea>,Dn` covered so far by immediate sources
   - `DIVU.W <ea>,Dn` and `DIVS.W <ea>,Dn` covered so far by immediate sources,
     divide-by-zero exception-vector emission, signed and unsigned
-    quotient-overflow cases that leave the destination operand unchanged, and
-    required `X/V/C` behavior on overflow
+    quotient-overflow cases that leave the destination operand unchanged,
+    successful quotient/remainder packing for unsigned zero/bit-15 quotients
+    and signed negative/zero quotients, and required `N/Z/X/V/C` behavior on
+    those covered divide paths
   - `EXG` register exchanges covered for data-register, address-register, and
     data-register/address-register pairs, with CCR preserved
   - `ANDI.B #imm,(d16,An)`
@@ -240,6 +242,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked successful `DIVU.W`/`DIVS.W` word-form semantics against
+  the Motorola/NXP Programmer's Reference Manual. Generated-exec now covers
+  unsigned zero quotients, unsigned quotients with bit 15 set, signed negative
+  quotient/remainder packing, and signed zero quotients, verifying
+  upper-word remainder/lower-word quotient storage plus `X` preservation,
+  `C/V` clearing, and quotient-derived `N/Z`.
 - local: Added a deterministic generated-exec `DBcc` taken-branch matrix,
   fact-checked against the Motorola/NXP Programmer's Reference Manual. The
   fixture now covers all 16 predicates across all 16 `N/Z/V/C` combinations
