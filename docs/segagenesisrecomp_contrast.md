@@ -25,7 +25,7 @@ set of patterns to adapt deliberately.
 | Runtime model | Small runtime API boundary only; no real NeoGeo bus yet. | Full runner with Genesis bus, VDP/audio/input, cooperative fibers, VBlank integration, traces, and optional enhancements. | Our runtime needs an equivalent NeoGeo bus/interrupt loop, but only after CPU-visible semantics are stable. |
 | `RTS`/subroutine model | Current generated code now uses stack-backed return dispatch: `JSR`/`BSR` push return PC, `RTS` pops PC and dispatches. | Uses C calls for known `JSR` plus explicit return push/pop and special propagation for stack-skip idioms like `addq.l #4,sp; rts`. | Keep our stack-backed model for architectural correctness; later add tests for stack-skip idioms instead of relying on host call return. |
 | Supervisor/user stacks | Active `SSP`/`USP` switching is now covered for full-SR writes, exception entry, `STOP`, and `RTE`. | Runtime state comments assume `A7 = SSP` and `USP` is a separate shadow; good enough for Genesis game paths, not a complete user-mode model. | Do **not** copy this simplification; keep the official MC68000 stack model. |
-| Interrupts/STOP | Runtime-approved `STOP` wake, instruction-boundary interrupts, and a basic IPL/level-7-edge runtime controller are covered; NeoGeo IRQ sources remain open. | Runtime has cooperative VBlank and STOP yield hooks, but many semantics are tuned to Genesis/Sonic. | Use it as a design reference for runtime scheduling, not as a 68000 spec oracle. |
+| Interrupts/STOP | Runtime-approved `STOP` wake, instruction-boundary interrupts, a basic IPL/level-7-edge runtime controller, and cartridge VBlank/timer/reset-pending source APIs are covered; memory-mapped scheduling remains open. | Runtime has cooperative VBlank and STOP yield hooks, but many semantics are tuned to Genesis/Sonic. | Use it as a design reference for runtime scheduling, not as a 68000 spec oracle. |
 | Cycle timing | Missing. | Emits estimated per-instruction cycles and uses a cycle accumulator for VBlank/audio timing. | Add only after semantic correctness; make cycle estimates separately testable. |
 | Game config | Current `--game` is accepted but not actually parsed into discovery/runtime metadata. | TOML config drives output prefix, disassembly discovery files, RAM layout, jump tables, protected ranges, code-address oracles, and per-game hooks. | `neo-recomp` should parse `games/*.toml` for real metadata before serious real-ROM smoke work. |
 | Tracking docs | Added `docs/68k_correctness_tracker.md`; progress and finish plan exist. | Has `COVERAGE.md`, `PRINCIPLES.md`, debug docs, and generated dispatch audits. | Keep our tracker, and add machine-generated audits as implementation catches up. |
@@ -86,9 +86,9 @@ set of patterns to adapt deliberately.
 
 These reinforce items already in `68k_correctness_tracker.md`:
 
-1. Add **NeoGeo interrupt source integration** beyond the current
-   runtime-supplied polling/basic IPL controller: VBlank/IRQ sources and
-   interrupt priority.
+1. Add **memory-mapped IRQACK / timer scheduling** beyond the current
+   runtime-supplied polling/basic IPL/source APIs: register writes, VBlank/timer
+   scheduling, and interrupt priority.
 2. Add **codegen diagnostics/fail-on-unsupported** before the next serious
    real-ROM smoke loop.
 3. Add **game TOML parsing** so `--game` drives real metadata instead of being a

@@ -206,6 +206,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added NeoGeo cartridge interrupt source APIs for VBlank, timer, and
+  reset-pending IRQs. Runtime tests verify cartridge autovector levels 1/2/3,
+  source priority, and IRQACK-style clearing bits.
 - local: Added a default runtime IPL controller with
   `ng_m68k_set_interrupt_level()`, `ng_m68k_clear_interrupt_level()`, and
   mask-aware `ng_m68k_take_interrupt()`. Unit coverage verifies ordinary mask

@@ -7,6 +7,7 @@ NgM68kState g_ng_m68k;
 static uint8_t g_ng_m68k_interrupt_level;
 static uint8_t g_ng_m68k_interrupt_vector;
 static uint8_t g_ng_m68k_level7_edge;
+static uint16_t g_ng_neogeo_irq_pending;
 
 uint8_t ng68k_read8(uint32_t addr) {
     fprintf(stderr, "ng68k_read8 miss at $%06X\n", addr & 0xFFFFFFu);
@@ -67,6 +68,39 @@ void ng_m68k_clear_interrupt_level(void) {
     g_ng_m68k_interrupt_level = 0;
     g_ng_m68k_interrupt_vector = 0;
     g_ng_m68k_level7_edge = 0;
+}
+
+static void ng_neogeo_refresh_interrupt_level(void) {
+    if (g_ng_neogeo_irq_pending & NG_NEO_IRQACK_RESET) {
+        ng_m68k_set_interrupt_level(3, 27);
+    } else if (g_ng_neogeo_irq_pending & NG_NEO_IRQACK_TIMER) {
+        ng_m68k_set_interrupt_level(2, 26);
+    } else if (g_ng_neogeo_irq_pending & NG_NEO_IRQACK_VBLANK) {
+        ng_m68k_set_interrupt_level(1, 25);
+    } else {
+        ng_m68k_clear_interrupt_level();
+    }
+}
+
+void ng_neogeo_request_vblank_interrupt(void) {
+    g_ng_neogeo_irq_pending |= NG_NEO_IRQACK_VBLANK;
+    ng_neogeo_refresh_interrupt_level();
+}
+
+void ng_neogeo_request_timer_interrupt(void) {
+    g_ng_neogeo_irq_pending |= NG_NEO_IRQACK_TIMER;
+    ng_neogeo_refresh_interrupt_level();
+}
+
+void ng_neogeo_request_reset_interrupt(void) {
+    g_ng_neogeo_irq_pending |= NG_NEO_IRQACK_RESET;
+    ng_neogeo_refresh_interrupt_level();
+}
+
+void ng_neogeo_ack_interrupts(uint16_t ack_mask) {
+    g_ng_neogeo_irq_pending = (uint16_t)(g_ng_neogeo_irq_pending &
+                                         (uint16_t)~(ack_mask & 0x0007u));
+    ng_neogeo_refresh_interrupt_level();
 }
 
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {

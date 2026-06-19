@@ -47,5 +47,32 @@ int main(void) {
     ng_m68k_clear_interrupt_level();
     CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
 
+    ng_neogeo_request_vblank_interrupt();
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 1);
+    CHECK(vector == 25);
+    CHECK(!ng_m68k_take_interrupt(1, &level, &vector));
+    ng_neogeo_ack_interrupts(NG_NEO_IRQACK_VBLANK);
+    CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+
+    ng_neogeo_request_vblank_interrupt();
+    ng_neogeo_request_timer_interrupt();
+    CHECK(ng_m68k_take_interrupt(1, &level, &vector));
+    CHECK(level == 2);
+    CHECK(vector == 26);
+    ng_neogeo_ack_interrupts(NG_NEO_IRQACK_TIMER);
+    CHECK(ng_m68k_take_interrupt(0, &level, &vector));
+    CHECK(level == 1);
+    CHECK(vector == 25);
+    ng_neogeo_ack_interrupts(NG_NEO_IRQACK_VBLANK);
+    CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+
+    ng_neogeo_request_reset_interrupt();
+    CHECK(ng_m68k_take_interrupt(2, &level, &vector));
+    CHECK(level == 3);
+    CHECK(vector == 27);
+    ng_neogeo_ack_interrupts(NG_NEO_IRQACK_RESET);
+    CHECK(!ng_m68k_take_interrupt(0, &level, &vector));
+
     return 0;
 }
