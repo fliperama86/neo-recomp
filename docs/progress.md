@@ -169,7 +169,8 @@ Covered by executable generated-C validation:
     word-source sign-extension, `ADDA`/`SUBA` CCR preservation, and `CMPA`
     preserving `X` while updating `N/Z/V/C`
   - `CMPM.B/W/L (Ay)+,(Ax)+` covered so far by word postincrement memory
-    comparisons
+    comparisons plus byte compares where source `A7` postincrements by two
+    for stack-pointer alignment while preserving `X`
   - `CHK.W <ea>,Dn` covered so far by immediate in-range checks, with failed
     checks vectoring through the CHK exception path in emitted C
   - `ADDX/SUBX.B/W/L` register and predecrement-memory forms, covered so far
@@ -226,6 +227,9 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `CMPM` postincrement addressing. Generated-exec now
+  covers `CMPM.B (A7)+,(A0)+`, including the stack-pointer byte
+  postincrement-by-two rule and `X` preservation while `N/V/C` are set.
 - local: Fact-checked `ADDA.W`/`SUBA.W`/`CMPA.W` word-source semantics.
   Generated-exec now covers sign-extended immediate word sources,
   `ADDA`/`SUBA` leaving CCR untouched, and `CMPA` preserving `X` while
