@@ -53,6 +53,13 @@ static int ea_is_data(const NgM68kEa *ea) {
     }
 }
 
+static int ea_is_move_source(const NgM68kEa *ea, uint8_t size) {
+    if (ea->mode == NG_M68K_EA_AREG) {
+        return size != 1u;
+    }
+    return ea_is_data(ea);
+}
+
 static int ea_is_movem_reg_to_mem(const NgM68kEa *ea) {
     switch (ea->mode) {
     case NG_M68K_EA_AIND:
@@ -224,7 +231,7 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                instr->dst.mode == NG_M68K_EA_AREG;
     case NG_M68K_MOVE:
         return valid_size(instr->size) &&
-               instr->src.mode != NG_M68K_EA_NONE &&
+               ea_is_move_source(&instr->src, instr->size) &&
                ea_is_data_alterable(&instr->dst);
     case NG_M68K_MOVEA:
         return valid_word_or_long(instr->size) &&

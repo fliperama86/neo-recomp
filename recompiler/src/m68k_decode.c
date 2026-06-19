@@ -213,6 +213,11 @@ static int decode_move(const NgProgramRom *rom, uint32_t addr, uint16_t op, NgM6
         out->byte_length = 2;
         return 1;
     }
+    if (src_mode == 1u && size == NG_M68K_SIZE_BYTE) {
+        out->mnemonic = NG_M68K_UNKNOWN;
+        out->byte_length = 2;
+        return 1;
+    }
     if (dst_mode != 1u && !is_data_alterable_ea(dst_mode, dst_reg)) {
         out->mnemonic = NG_M68K_UNKNOWN;
         out->byte_length = 2;

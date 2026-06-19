@@ -114,6 +114,22 @@ int main(void) {
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVE;
+    instr.byte_length = 2u;
+    instr.size = 2u;
+    instr.src.mode = NG_M68K_EA_AREG;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_MOVE;
+    instr.byte_length = 2u;
+    instr.size = 1u;
+    instr.src.mode = NG_M68K_EA_AREG;
+    instr.dst.mode = NG_M68K_EA_DREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_BCC;
     instr.byte_length = 2u;
     instr.condition = 16u;

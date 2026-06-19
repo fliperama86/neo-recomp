@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked `MOVE <ea>,<ea>` source legality against the
+  Motorola/NXP Programmer's Reference Manual. Byte-sized `MOVE An,<ea>` is now
+  rejected in decode as `UNKNOWN`, while `MOVE.W An,Dn` remains legal; the
+  validator also rejects synthetic byte `MOVE` address-register sources and
+  allows word/long address-register sources. `test_m68k_decode` and
+  `test_m68k_validate` covered the failures first.
 - local: Fact-checked `LEA` metadata against the Motorola/NXP Programmer's
   Reference Manual. `LEA (d16,PC),An` decode now records the long-sized
   control source and address-register destination, and the validator now
