@@ -252,6 +252,10 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `ORI`/`ANDI`/`EORI #imm,CCR/SR` validation so
+  those no-EA forms now reject stray decoded register, form, address, or
+  displacement metadata in addition to their existing exact size/immediate
+  checks. `test_m68k_validate` covered malformed top-level fields red first.
 - local: Fact-checked MC68000 `MOVEM` direction-specific EA classes
   against the Motorola/NXP Programmer's Reference Manual. The validator now
   requires exact register-to-memory control/predecrement destination payloads,

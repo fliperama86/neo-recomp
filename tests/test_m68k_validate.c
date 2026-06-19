@@ -3392,6 +3392,22 @@ int main(void) {
     CHECK(ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ORI_TO_CCR;
+    instr.byte_length = 4u;
+    instr.size = 1u;
+    instr.immediate = 0x1Fu;
+    instr.reg = 1u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ORI_TO_CCR;
+    instr.byte_length = 4u;
+    instr.size = 1u;
+    instr.immediate = 0x1Fu;
+    instr.form = NG_M68K_FORM_DREG;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ANDI_TO_CCR;
     instr.byte_length = 4u;
     instr.size = 2u;
@@ -3411,6 +3427,22 @@ int main(void) {
     instr.size = 2u;
     instr.immediate = 0x2700u;
     CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ORI_TO_SR;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.immediate = 0x2700u;
+    instr.absolute_addr = 0x100u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ORI_TO_SR;
+    instr.byte_length = 4u;
+    instr.size = 2u;
+    instr.immediate = 0x2700u;
+    instr.displacement = 2;
+    CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ANDI_TO_SR;

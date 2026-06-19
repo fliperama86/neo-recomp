@@ -1521,7 +1521,7 @@ static int validate_word_data_to_dreg(const NgM68kInstr *instr) {
 }
 
 static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
-    if (instr->byte_length != 4u || !no_ea_operands(instr)) {
+    if (instr->byte_length != 4u || !valid_control_immediate_fields(instr)) {
         return 0;
     }
 
