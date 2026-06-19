@@ -211,8 +211,12 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
         return validate_branch(instr);
     case NG_M68K_JMP:
     case NG_M68K_JSR:
+        return instr->dst.mode == NG_M68K_EA_NONE &&
+               ea_is_control(&instr->src);
     case NG_M68K_PEA:
-        return ea_is_control(&instr->src);
+        return instr->size == 4u &&
+               instr->dst.mode == NG_M68K_EA_NONE &&
+               ea_is_control(&instr->src);
     case NG_M68K_LEA:
         return instr->src.mode != NG_M68K_EA_NONE ?
             ea_is_control(&instr->src) : instr->byte_length >= 4u;

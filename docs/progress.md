@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked control-transfer source forms against the Motorola/NXP
+  Programmer's Reference Manual. The post-decode validator now rejects stray
+  destination operands on `JMP`/`JSR`, enforces long-sized `PEA` effective
+  address pushes, and keeps all three instructions constrained to control
+  source addressing; `test_m68k_validate` covered valid and invalid shapes
+  first.
 - local: Fact-checked register-only instruction metadata against the
   Motorola/NXP Programmer's Reference Manual. `MOVEQ` decode now records the
   architectural long-sized result, and the post-decode validator now rejects
