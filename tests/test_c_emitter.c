@@ -52,7 +52,7 @@ int main(void) {
     char symbol[32];
     NgFunctionDiscovery discovery;
     FILE *out;
-    char text[32768];
+    char text[65536];
 
     ng_c_symbol_for_addr(0x000007CCu, symbol, (unsigned)sizeof(symbol));
     CHECK(strcmp(symbol, "ng_func_0007CC") == 0);
@@ -88,6 +88,7 @@ int main(void) {
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
+        discovery.addrs[discovery.count++] = 0x0000000Au;
         discovery.addrs[discovery.count++] = 0x00000020u;
         discovery.addrs[discovery.count++] = 0x00000030u;
 
@@ -102,8 +103,13 @@ int main(void) {
         CHECK(strstr(text, "/* $000002: ADD.W D0,D0 */") != NULL);
         CHECK(strstr(text, "uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src;") != NULL);
         CHECK(strstr(text, "if (ng_full > 0x0000FFFFu) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);
+        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x0000000Au);") != NULL);
         CHECK(strstr(text, "ng_generated_call(0x00000020u);") != NULL);
+        CHECK(strstr(text, "/* $00000A: JMP $000030 */") != NULL);
         CHECK(strstr(text, "ng_generated_call(0x00000030u);") != NULL);
+        CHECK(strstr(text, "uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]);") != NULL);
+        CHECK(strstr(text, "ng_generated_call(ng_pc);") != NULL);
+        CHECK(strstr(text, "g_ng_m68k.a[7] += 4u;") != NULL);
         CHECK(strstr(text, "return;") != NULL);
 
         ng_program_rom_free(&rom);
@@ -113,7 +119,7 @@ int main(void) {
         NgProgramRom rom = make_rom(0x1C4u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x41FAu); /* LEA $000008,A0 */
-        write16(&rom, 0x02u, 0x0004u);
+        write16(&rom, 0x02u, 0x0006u);
         write16(&rom, 0x04u, 0x23C8u); /* MOVE.L A0,$001000 */
         write32(&rom, 0x06u, 0x00001000u);
         write16(&rom, 0x0Au, 0x33FCu); /* MOVE.W #$0007,$003C000C */
@@ -521,6 +527,33 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x10u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x6100u); /* BSR $000006 */
+        write16(&rom, 0x02u, 0x0004u);
+        write16(&rom, 0x04u, 0x4E75u); /* RTS */
+        write16(&rom, 0x06u, 0x4E75u); /* RTS */
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+        discovery.addrs[discovery.count++] = 0x00000004u;
+        discovery.addrs[discovery.count++] = 0x00000006u;
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c(out, &rom, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "/* $000000: BSR $000006 */") != NULL);
+        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x00000004u);") != NULL);
+        CHECK(strstr(text, "ng_generated_call(0x00000006u);") != NULL);
+        CHECK(strstr(text, "/* $000004: RTS */") != NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x08u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x4E90u); /* JSR (A0) */
@@ -529,6 +562,7 @@ int main(void) {
 
         ng_function_discovery_init(&discovery);
         discovery.addrs[discovery.count++] = 0x00000000u;
+        discovery.addrs[discovery.count++] = 0x00000002u;
 
         out = tmpfile();
         CHECK(out != NULL);
@@ -537,6 +571,7 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: JSR (A0) */") != NULL);
+        CHECK(strstr(text, "ng68k_write32(g_ng_m68k.a[7], 0x00000002u);") != NULL);
         CHECK(strstr(text, "ng_generated_call(g_ng_m68k.a[0]);") != NULL);
         CHECK(strstr(text, "/* $000002: JMP ($4,A0) */") != NULL);
         CHECK(strstr(text, "ng_generated_call((uint32_t)(g_ng_m68k.a[0] + (int32_t)4));") != NULL);

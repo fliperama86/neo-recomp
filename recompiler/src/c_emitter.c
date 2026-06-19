@@ -140,6 +140,12 @@ static void emit_exception_vector_call(FILE *out,
     fprintf(out, "    return;\n");
 }
 
+static void emit_push_return_address(FILE *out, uint32_t return_pc) {
+    fprintf(out, "    g_ng_m68k.a[7] -= 4u;\n");
+    fprintf(out, "    ng68k_write32(g_ng_m68k.a[7], 0x%08Xu);\n",
+            return_pc & 0x00FFFFFFu);
+}
+
 static const char *ng_read_fn_for_size(uint8_t size) {
     if (size == 4u) {
         return "ng68k_read32";
@@ -1894,6 +1900,10 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_RTS:
+        fprintf(out, "    { uint32_t ng_pc = ng68k_read32(g_ng_m68k.a[7]);\n");
+        fprintf(out, "      g_ng_m68k.a[7] += 4u;\n");
+        fprintf(out, "      ng_generated_call(ng_pc);\n");
+        fprintf(out, "    }\n");
         fprintf(out, "    return;\n");
         return 0;
     case NG_M68K_LINK:
@@ -2353,20 +2363,25 @@ static int emit_instr(FILE *out, const NgM68kInstr *instr) {
         }
         break;
     case NG_M68K_JSR:
+        emit_push_return_address(out, instr->addr + instr->byte_length);
         if (instr->src.mode != NG_M68K_EA_NONE &&
             instr->form != NG_M68K_FORM_ABS &&
             instr->form != NG_M68K_FORM_PC_RELATIVE) {
             char addr_expr[256];
             if (emit_ea_address_value(&instr->src, addr_expr, (unsigned)sizeof(addr_expr))) {
                 fprintf(out, "    ng_generated_call(%s);\n", addr_expr);
-                return 1;
+                fprintf(out, "    return;\n");
+                return 0;
             }
         }
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
-        return 1;
+        fprintf(out, "    return;\n");
+        return 0;
     case NG_M68K_BSR:
+        emit_push_return_address(out, instr->addr + instr->byte_length);
         fprintf(out, "    ng_generated_call(0x%08Xu);\n", instr->target & 0x00FFFFFFu);
-        return 1;
+        fprintf(out, "    return;\n");
+        return 0;
     case NG_M68K_JMP:
         if (instr->src.mode != NG_M68K_EA_NONE &&
             instr->form != NG_M68K_FORM_ABS &&

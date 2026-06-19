@@ -355,6 +355,12 @@ static int oracle_exec(const uint8_t *program,
         uint16_t op = program_read16(program, size, pc);
 
         if (op == 0x4E75u) {
+            pc = bus_read32(bus, state->a[7]);
+            state->a[7] += 4u;
+            continue;
+        }
+        if (op == 0x4E72u) {
+            state->sr = program_read16(program, size, pc + 2u);
             return 1;
         }
         if ((op & 0xFFF8u) == 0x4E50u) {
@@ -1395,10 +1401,9 @@ static int oracle_exec(const uint8_t *program,
         }
         if (op == 0x4EB9u) {
             uint32_t target = program_read32(program, size, pc + 2u);
-            if (!oracle_exec(program, size, target, state, bus, depth + 1u)) {
-                return 0;
-            }
-            pc += 6u;
+            state->a[7] -= 4u;
+            bus_write32(bus, state->a[7], pc + 6u);
+            pc = target;
             continue;
         }
         if (op == 0x4EF9u) {
@@ -1529,7 +1534,7 @@ static int oracle_exec(const uint8_t *program,
         if ((op & 0xF1FFu) == 0x41FAu) {
             uint8_t reg = (uint8_t)((op >> 9) & 7u);
             int16_t disp = (int16_t)program_read16(program, size, pc + 2u);
-            state->a[reg] = (uint32_t)((int32_t)(pc + 4u) + (int32_t)disp);
+            state->a[reg] = (uint32_t)((int32_t)(pc + 2u) + (int32_t)disp);
             pc += 4u;
             continue;
         }
@@ -1567,7 +1572,7 @@ static int oracle_exec(const uint8_t *program,
         if ((op & 0xF1FFu) == 0x41FAu) {
             uint8_t reg = (uint8_t)((op >> 9) & 7u);
             int16_t disp = (int16_t)program_read16(program, size, pc + 2u);
-            state->a[reg] = (uint32_t)((int32_t)(pc + 4u) + (int32_t)disp);
+            state->a[reg] = (uint32_t)((int32_t)(pc + 2u) + (int32_t)disp);
             pc += 4u;
             continue;
         }
@@ -1922,6 +1927,10 @@ void ng_log_dispatch_miss(uint32_t addr) {
     g_last_dispatch_miss = addr & 0x00FFFFFFu;
 }
 
+void ng_m68k_stop_until_interrupt(uint16_t sr) {
+    (void)sr;
+}
+
 int main(void) {
     uint8_t program[NG_EXEC_FIXTURE_SIZE];
     NgM68kState expected_state;
@@ -1930,6 +1939,7 @@ int main(void) {
     ng_exec_fixture_fill(program, (uint32_t)sizeof(program));
     memset(&expected_state, 0, sizeof(expected_state));
     memset(expected_bus, 0, sizeof(expected_bus));
+    expected_state.a[7] = 0x000001F0u;
     bus_write8(expected_bus, 0x100Cu, 0xAAu);
     bus_write32(expected_bus, 0x1010u, 0x12345678u);
     bus_write8(expected_bus, 0x101Au, 0xAFu);
@@ -1942,6 +1952,7 @@ int main(void) {
 
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
     memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.a[7] = 0x000001F0u;
     ng68k_write8(0x100Cu, 0xAAu);
     ng68k_write32(0x1010u, 0x12345678u);
     ng68k_write8(0x101Au, 0xAFu);
@@ -2027,6 +2038,20 @@ int main(void) {
     ng_generated_call(0x00DEADu);
     CHECK(g_dispatch_miss_count == 1);
     CHECK(g_last_dispatch_miss == 0x00DEADu);
+
+    memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+    memset(g_bus, 0, sizeof(g_bus));
+    g_ng_m68k.a[7] = 0x000001F0u;
+    g_dispatch_miss_count = 0;
+    g_last_dispatch_miss = 0;
+
+    ng_generated_call(0x000002D0u);
+
+    CHECK(g_dispatch_miss_count == 0);
+    CHECK(g_ng_m68k.a[7] == 0x000001F0u);
+    CHECK(g_ng_m68k.sr == 0x2700u);
+    CHECK(ng68k_read32(0x000001ECu) == 0x000002DCu);
+    CHECK(ng68k_read32(0x00001000u) == 0x000002DCu);
 
     return 0;
 }

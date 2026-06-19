@@ -40,7 +40,7 @@ int main(void) {
         CHECK(instr.mnemonic == NG_M68K_LEA);
         CHECK(instr.byte_length == 4);
         CHECK(instr.reg == 0);
-        CHECK(instr.target == 0x000008F4u);
+        CHECK(instr.target == 0x000008F2u);
     }
 
     {
@@ -57,6 +57,16 @@ int main(void) {
         CHECK(instr.dst.reg == 3);
         ng_m68k_format(&instr, text, (unsigned)sizeof(text));
         CHECK(strcmp(text, "LEA ($10,A0),A3") == 0);
+    }
+
+    {
+        const unsigned char truncated_move[] = { 0x20, 0x3C };
+        CHECK(!decode_one(truncated_move, sizeof(truncated_move), 0, &instr));
+    }
+
+    {
+        const unsigned char truncated_stop[] = { 0x4E, 0x72 };
+        CHECK(!decode_one(truncated_stop, sizeof(truncated_stop), 0, &instr));
     }
 
     {
