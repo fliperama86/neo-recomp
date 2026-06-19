@@ -241,8 +241,13 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_MOVE_USP:
         return validate_move_usp(instr);
     case NG_M68K_LINK:
+        return instr->byte_length == 4u &&
+               instr->reg < 8u &&
+               no_ea_operands(instr);
     case NG_M68K_UNLK:
-        return instr->reg < 8u;
+        return instr->byte_length == 2u &&
+               instr->reg < 8u &&
+               no_ea_operands(instr);
     case NG_M68K_MOVEP:
         return valid_word_or_long(instr->size) &&
                ((instr->src.mode == NG_M68K_EA_DREG &&
@@ -354,10 +359,15 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
                ea_is_data(&instr->src) &&
                instr->dst.mode == NG_M68K_EA_DREG;
     case NG_M68K_EXT:
-        return (instr->size == 2u || instr->size == 4u) &&
+        return instr->byte_length == 2u &&
+               (instr->size == 2u || instr->size == 4u) &&
+               instr->src.mode == NG_M68K_EA_NONE &&
                instr->dst.mode == NG_M68K_EA_DREG;
     case NG_M68K_SWAP:
-        return instr->dst.mode == NG_M68K_EA_DREG;
+        return instr->byte_length == 2u &&
+               instr->size == 4u &&
+               instr->src.mode == NG_M68K_EA_NONE &&
+               instr->dst.mode == NG_M68K_EA_DREG;
     case NG_M68K_SCC:
         return instr->condition <= 15u &&
                instr->size == 1u &&
@@ -380,7 +390,10 @@ int ng_m68k_validate(const NgM68kInstr *instr) {
     case NG_M68K_SBCD:
         return instr->size == 1u && valid_extend_pair(instr);
     case NG_M68K_MOVEQ:
-        return instr->reg < 8u;
+        return instr->byte_length == 2u &&
+               instr->size == 4u &&
+               instr->reg < 8u &&
+               no_ea_operands(instr);
     default:
         return 1;
     }

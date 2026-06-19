@@ -252,6 +252,12 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked register-only instruction metadata against the
+  Motorola/NXP Programmer's Reference Manual. `MOVEQ` decode now records the
+  architectural long-sized result, and the post-decode validator now rejects
+  malformed `MOVEQ`, `EXT`, `SWAP`, `LINK`, and `UNLK` instruction shapes
+  with bad sizes, lengths, or stray operands; `test_m68k_decode` and
+  `test_m68k_validate` covered the failures first.
 - local: Fact-checked unary RMW instruction sizes against the Motorola/NXP
   Programmer's Reference Manual. The post-decode validator now rejects
   malformed generic unary sizes for `CLR`/`NEG`/`NEGX`/`NOT` and enforces the

@@ -1184,6 +1184,7 @@ int main(void) {
         CHECK(decode_one(bytes, sizeof(bytes), 0, &instr));
         CHECK(instr.mnemonic == NG_M68K_MOVEQ);
         CHECK(instr.byte_length == 2);
+        CHECK(instr.size == 4);
         CHECK(instr.reg == 0);
         CHECK((int32_t)instr.immediate == -128);
     }

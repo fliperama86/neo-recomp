@@ -966,6 +966,7 @@ int ng_m68k_decode(const NgProgramRom *rom, uint32_t addr, NgM68kInstr *out) {
     }
     if ((op & 0xF100u) == 0x7000u) {
         out->mnemonic = NG_M68K_MOVEQ;
+        out->size = NG_M68K_SIZE_LONG;
         out->byte_length = 2;
         out->reg = (uint8_t)((op >> 9) & 7u);
         out->immediate = (uint32_t)(int32_t)sign8((uint8_t)(op & 0xFFu));
