@@ -3644,17 +3644,60 @@ int main(void) {
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ILLEGAL;
+    instr.opcode = 0x4AFCu;
     instr.byte_length = 2u;
     CHECK(ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ILLEGAL;
+    instr.opcode = 0xA123u;
+    instr.byte_length = 2u;
+    instr.immediate = 10u;
+    CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ILLEGAL;
+    instr.opcode = 0xF456u;
+    instr.byte_length = 2u;
+    instr.immediate = 11u;
+    CHECK(ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ILLEGAL;
+    instr.opcode = 0x4AFCu;
+    instr.byte_length = 2u;
+    instr.immediate = 10u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ILLEGAL;
+    instr.opcode = 0xA123u;
+    instr.byte_length = 2u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ILLEGAL;
+    instr.opcode = 0xA123u;
+    instr.byte_length = 2u;
+    instr.immediate = 11u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ILLEGAL;
+    instr.opcode = 0x4E71u;
+    instr.byte_length = 2u;
+    CHECK(!ng_m68k_validate(&instr));
+
+    memset(&instr, 0, sizeof(instr));
+    instr.mnemonic = NG_M68K_ILLEGAL;
+    instr.opcode = 0x4AFCu;
     instr.byte_length = 2u;
     instr.form = NG_M68K_FORM_DREG;
     CHECK(!ng_m68k_validate(&instr));
 
     memset(&instr, 0, sizeof(instr));
     instr.mnemonic = NG_M68K_ILLEGAL;
+    instr.opcode = 0x4AFCu;
     instr.byte_length = 4u;
     CHECK(!ng_m68k_validate(&instr));
 

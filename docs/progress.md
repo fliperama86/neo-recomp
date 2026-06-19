@@ -252,6 +252,11 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Tightened `ILLEGAL`/A-line/F-line validation so the decoded
+  emulator-exception vector now has to match the opcode class: `$4AFC`
+  uses vector 4 metadata, A-line opcodes use vector 10 metadata, and
+  F-line opcodes use vector 11 metadata. `test_m68k_validate` covered
+  mismatched opcode/vector metadata red first.
 - local: Tightened fixed no-operand system/control validation so `NOP`,
   `RESET`, `RTE`, `RTR`, `RTS`, and `TRAPV` now require their exact
   MC68000 opcode words instead of accepting a mismatched opcode attached to
