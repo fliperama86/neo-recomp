@@ -252,6 +252,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Fact-checked MC68000 `CHK.W`, `MULU.W`/`MULS.W`, and
+  `DIVU.W`/`DIVS.W` word data-source-to-data-register forms against the
+  Motorola/NXP Programmer's Reference Manual source EA tables. The validator
+  now requires exact source EA payloads, PC-relative extension-word bases,
+  word immediate widths, Dn destination/register consistency, instruction
+  length, and no stray legacy fields. `test_m68k_validate` covered malformed
+  immediate, PC-relative, indexed-source, destination-register, and legacy-form
+  metadata red first.
 - local: Fact-checked MC68000 `MOVEA`, `ADDA`, `SUBA`, and `CMPA`
   against the Motorola/NXP Programmer's Reference Manual word/long
   address-register-operation forms and all-addressing-mode source tables. The

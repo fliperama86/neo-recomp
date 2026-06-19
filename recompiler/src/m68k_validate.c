@@ -1222,28 +1222,6 @@ static int valid_immediate_width(uint8_t size, uint32_t immediate) {
     return size == 4u;
 }
 
-static int valid_word_data_source_length(const NgM68kEa *ea,
-                                         uint8_t byte_length) {
-    switch (ea->mode) {
-    case NG_M68K_EA_DREG:
-    case NG_M68K_EA_AIND:
-    case NG_M68K_EA_APOST:
-    case NG_M68K_EA_APRE:
-        return byte_length == 2u;
-    case NG_M68K_EA_ADISP:
-    case NG_M68K_EA_AINDEX:
-    case NG_M68K_EA_ABS_W:
-    case NG_M68K_EA_PC_DISP:
-    case NG_M68K_EA_PC_INDEX:
-    case NG_M68K_EA_IMM:
-        return byte_length == 4u;
-    case NG_M68K_EA_ABS_L:
-        return byte_length == 6u;
-    default:
-        return 0;
-    }
-}
-
 static int validate_address_reg_op_legacy_fields(const NgM68kInstr *instr) {
     if (instr->reg != instr->dst.reg ||
         instr->immediate != 0u ||
@@ -1305,13 +1283,21 @@ static int validate_immediate_to_ea(const NgM68kInstr *instr) {
 }
 
 static int validate_word_data_to_dreg(const NgM68kInstr *instr) {
+    uint8_t src_ext = 0u;
+
     return instr->size == 2u &&
-           valid_word_data_source_length(&instr->src, instr->byte_length) &&
+           exact_data_source_ext_length(instr, &src_ext) &&
            instr->immediate == 0u &&
            instr->src_reg == 0u &&
-           ea_is_data(&instr->src) &&
+           instr->condition == 0u &&
+           instr->form == NG_M68K_FORM_NONE &&
+           instr->target == 0u &&
+           instr->absolute_addr == 0u &&
+           instr->displacement == 0 &&
            instr->dst.mode == NG_M68K_EA_DREG &&
-           instr->dst.reg < 8u;
+           ea_simple_register_payload(&instr->dst) &&
+           instr->reg == instr->dst.reg &&
+           instr->byte_length == (uint8_t)(2u + src_ext);
 }
 
 static int validate_immediate_to_ccr_sr(const NgM68kInstr *instr) {
