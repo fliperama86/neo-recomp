@@ -34,32 +34,17 @@ def write_neo(path: Path) -> None:
     path.write_bytes(bytes(header) + p + bytes(s) + bytes(c))
 
 
-def write_converted_sprite_byte(out: bytearray, byte_offset: int, value: int) -> None:
-    raw_byte_for_swapped_byte = (0, 2, 1, 3)
-    out[(byte_offset & 0xFC) | raw_byte_for_swapped_byte[byte_offset & 3]] = value
-
-
 def encode_sprite_line(out: bytearray, y: int, pixels: list[int]) -> None:
-    # Encode a line in raw .neo C layout.  The renderer applies the same
-    # MiSTer sprite-load swizzle used by the core before decoding the CR bytes.
-    line = bytearray(8)
+    # Encode a line in the raw .neo/MAME C layout: left 8 pixels in the
+    # 0x40 plane block, right 8 pixels in the 0x00 block, LSB first.
     for x, color in enumerate(pixels):
-        bit = 7 - (x & 7)
-        chunk = 0 if x < 8 else 4
-        line[chunk + 0] |= ((color >> 2) & 1) << bit
-        line[chunk + 1] |= ((color >> 3) & 1) << bit
-        line[chunk + 2] |= ((color >> 0) & 1) << bit
-        line[chunk + 3] |= ((color >> 1) & 1) << bit
-
-    for word in range(4):
-        converted_word = y * 4 + word
-        source_word = (
-            ((converted_word ^ 1) & 1)
-            | ((converted_word >> 1) & 0x1E)
-            | (((converted_word & 2) ^ 2) << 4)
-        )
-        write_converted_sprite_byte(out, source_word * 2 + 0, line[word * 2 + 0])
-        write_converted_sprite_byte(out, source_word * 2 + 1, line[word * 2 + 1])
+        bit = x & 7
+        plane_base = 0x40 if x < 8 else 0x00
+        offset = plane_base + y * 4
+        out[offset + 0] |= ((color >> 0) & 1) << bit
+        out[offset + 2] |= ((color >> 1) & 1) << bit
+        out[offset + 1] |= ((color >> 2) & 1) << bit
+        out[offset + 3] |= ((color >> 3) & 1) << bit
 
 
 def write_snapshot(snapshot_dir: Path) -> None:

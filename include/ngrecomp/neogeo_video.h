@@ -55,9 +55,10 @@ void ng_neogeo_video_decode_4bpp_planar_line(uint16_t plane0,
 NgNeoSpriteMapEntry ng_neogeo_video_decode_sprite_map_entry(uint16_t tile_word,
                                                             uint16_t attr_word);
 
-/* Decode one 16-pixel line from the .neo C-region packed layout used by the
- * snapshot renderer. The routine returns color indices only; palette lookup,
- * auto-animation, shrink, and positioning are separate renderer concerns. */
+/* Decode one 16-pixel line from the .neo C-region layout (the same interleaved
+ * sprite region MAME loads with ROM_LOAD16_BYTE). The routine returns color
+ * indices only; palette lookup, auto-animation, shrink, and positioning are
+ * separate renderer concerns. */
 int ng_neogeo_video_decode_sprite_tile_line(const uint8_t *c_rom,
                                             uint32_t c_rom_size,
                                             uint32_t tile_index,

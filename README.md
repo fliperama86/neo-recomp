@@ -217,8 +217,9 @@ shrink masks, sticky-chain X stepping, the optional Neo Geo LO vertical zoom
 ROM, and snapshot-derived auto-animation state. `neo-render-snapshot` will
 auto-detect `000-lo.lo` or `ng-lo.rom` next to the `.neo` image; use
 `--lo-rom <path>` if the BIOS/LO file lives elsewhere. Line-buffer priority is
-not exact yet, but the C-region swizzle, sprite positioning/shrink, palette
-lookup, and fix overlay are isolated and covered by tests.
+not exact yet, but MAME-layout C-region sprite decode, sprite
+positioning/shrink, palette lookup, and fix overlay are isolated and covered by
+tests.
 
 If SDL2 is available through `pkg-config`, CMake also builds an optional
 interactive snapshot host:

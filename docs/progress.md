@@ -273,8 +273,8 @@ a tested full-container path for P/S/M/V1/V2/C regions: P is normalized for
 68000 recompilation, while S fix-layer and interleaved C sprite data are
 preserved for video decode/rendering work. A small `neo_video` helper library
 now covers the shared palette bit mapping, a generic 4bpp planar sprite-line
-decode primitive, native S/fix tile line decode, MiSTer/MAME `.neo` C-region
-sprite swizzle/decode, sprite-map entry decode, and deterministic renderers over
+decode primitive, native S/fix tile line decode, MAME-layout `.neo` C-region
+sprite decode, sprite-map entry decode, and deterministic renderers over
 snapshot VRAM/palette RAM. The corresponding `neo-render-snapshot` CLI writes a
 PPM from a headless snapshot and a user-provided `.neo` image:
 
@@ -311,12 +311,12 @@ build/neo-render-snapshot --mode frame --palette-bank auto \
   build/mslug_snapshot_render_path/frame_auto.ppm
 ```
 
-The renderer applies the same `.neo` C-region byte swizzle used by the MiSTer
-loader, builds a 96-sprite scanline active list from SCB3, draws SCB1-SCB4
-positioned sprites with the hardware horizontal shrink masks and sticky-chain X
-stepping, applies the optional LO vertical zoom ROM (`000-lo.lo`/`ng-lo.rom`)
-when available, substitutes auto-animation code bits from the snapshot frame
-counter/LSPC state, then overlays the visible 224-line fix layer.
+The renderer decodes MAME-layout `.neo` C-region sprite data, builds a
+96-sprite scanline active list from SCB3, draws SCB1-SCB4 positioned sprites
+with the hardware horizontal shrink masks and sticky-chain X stepping, applies
+the optional LO vertical zoom ROM (`000-lo.lo`/`ng-lo.rom`) when available,
+substitutes auto-animation code bits from the snapshot frame counter/LSPC state,
+then overlays the visible 224-line fix layer.
 `build/mslug_snapshot_render_path/frame_auto.png` is now a recognizable Metal
 Slug title/credits image from a headless CPU snapshot; the newer
 `build/mslug_snapshot_500k_current/frame_auto.png` renders an in-game
@@ -350,6 +350,17 @@ As a spot check, settling the current 500k Metal Slug snapshot from scanline
 to `build/mslug_snapshot_500k_current/frame_lo_auto.png`; that makes the
 remaining in-game offset/misalignment look like a renderer/modeling issue rather
 than just a mid-scanline snapshot artifact.
+
+The biggest remaining visible misalignment was then traced to sprite C-region
+decode, not SCB positioning: `.neo` stores the same interleaved C bytes that
+MAME loads with `ROM_LOAD16_BYTE`, so each 16x16 tile line must read the left
+8 pixels from the `$40+y*4` plane block, the right 8 pixels from `$00+y*4`, and
+consume plane bits LSB-first. The renderer no longer applies the earlier
+MiSTer-style byte/word swizzle in software. With this fix,
+`build/mslug_snapshot_500k_current/frame_mame_cdecode.png` has coherent Metal
+Slug vehicle/background art instead of chunk-misaligned sprite pieces, and
+`build/mslug_snapshot_next/frame_mame_cdecode.png` shows a much more complete
+title scene with building sprites and the running character.
 
 The optional SDL snapshot host now consumes the same renderer when passed a
 `.neo` image:
@@ -585,7 +596,7 @@ and `V` are only trusted where generated-exec tests cover them.
 
 - local: Added the first isolated video/rendering slice. `neo_video` now
   centralizes Neo Geo palette conversion, generic 4bpp planar line decode,
-  native S/fix tile-line decode, packed C-region sprite line decode, sprite-map
+  native S/fix tile-line decode, MAME-layout C-region sprite line decode, sprite-map
   entry decode, and fixed/sprite-atlas snapshot renderers. The dependency-free
   `neo-render-snapshot` tool combines a headless snapshot with `.neo` S/C
   regions and writes either a fix-layer PPM or diagnostic sprite-map atlas;

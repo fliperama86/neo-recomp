@@ -60,44 +60,20 @@ NgNeoSpriteMapEntry ng_neogeo_video_decode_sprite_map_entry(uint16_t tile_word,
     return entry;
 }
 
-static void ng_neogeo_video_decode_sprite_chunk(const uint8_t *chunk,
-                                                uint8_t *out_pixels) {
+static void ng_neogeo_video_decode_sprite_half(const uint8_t *tile,
+                                               uint32_t plane_base,
+                                               uint8_t y,
+                                               uint8_t *out_pixels) {
+    const uint8_t *planes = tile + plane_base + (uint32_t)y * 4u;
     for (uint8_t x = 0; x < 8u; ++x) {
-        uint8_t bit = (uint8_t)(7u - x);
-        /* .neo C data is the MiSTer/MAME interleaved sprite region.  After
-         * applying MiSTer's sprite load swizzle for one 8-pixel CR chunk, the
-         * four bytes are C2, C2, C1, C1: C1 carries color bits 0/1 and C2
-         * carries color bits 2/3. */
-        out_pixels[x] = (uint8_t)((((uint16_t)chunk[2] >> bit) & 1u) << 0 |
-                                  ((((uint16_t)chunk[3] >> bit) & 1u) << 1) |
-                                  ((((uint16_t)chunk[0] >> bit) & 1u) << 2) |
-                                  ((((uint16_t)chunk[1] >> bit) & 1u) << 3));
-    }
-}
-
-static uint8_t ng_neogeo_video_sprite_raw_byte_after_bswap(const uint8_t *tile,
-                                                           uint8_t byte_offset) {
-    static const uint8_t raw_byte_for_swapped_byte[4] = {0u, 2u, 1u, 3u};
-    return tile[(byte_offset & 0xFCu) |
-                raw_byte_for_swapped_byte[byte_offset & 0x03u]];
-}
-
-static void ng_neogeo_video_load_sprite_line(const uint8_t *tile,
-                                             uint8_t y,
-                                             uint8_t out_line[8]) {
-    for (uint8_t word = 0; word < 4u; ++word) {
-        uint8_t converted_word = (uint8_t)(y * 4u + word);
-        uint8_t source_word = (uint8_t)(((converted_word ^ 1u) & 1u) |
-                                        ((converted_word >> 1u) & 0x1Eu) |
-                                        (((converted_word & 2u) ^ 2u) << 4u));
-        out_line[word * 2u + 0u] =
-            ng_neogeo_video_sprite_raw_byte_after_bswap(
-                tile,
-                (uint8_t)(source_word * 2u + 0u));
-        out_line[word * 2u + 1u] =
-            ng_neogeo_video_sprite_raw_byte_after_bswap(
-                tile,
-                (uint8_t)(source_word * 2u + 1u));
+        /* .neo stores the same interleaved C-region bytes MAME loads with
+         * ROM_LOAD16_BYTE.  Each 16x16 tile has its left 8 pixels in the
+         * 0x40 plane block and its right 8 pixels in the 0x00 block; bits are
+         * consumed least-significant first on each plane byte. */
+        out_pixels[x] = (uint8_t)((((uint16_t)planes[0] >> x) & 1u) << 0 |
+                                  ((((uint16_t)planes[2] >> x) & 1u) << 1) |
+                                  ((((uint16_t)planes[1] >> x) & 1u) << 2) |
+                                  ((((uint16_t)planes[3] >> x) & 1u) << 3));
     }
 }
 
@@ -122,10 +98,9 @@ int ng_neogeo_video_decode_sprite_tile_line(const uint8_t *c_rom,
         return 0;
     }
 
-    uint8_t line[NG_NEO_SPRITE_TILE_BYTES / NG_NEO_SPRITE_TILE_PIXELS];
-    ng_neogeo_video_load_sprite_line(c_rom + tile_offset, y, line);
-    ng_neogeo_video_decode_sprite_chunk(line, out_pixels);
-    ng_neogeo_video_decode_sprite_chunk(line + 4u, out_pixels + 8u);
+    const uint8_t *tile = c_rom + tile_offset;
+    ng_neogeo_video_decode_sprite_half(tile, 0x40u, y, out_pixels);
+    ng_neogeo_video_decode_sprite_half(tile, 0x00u, y, out_pixels + 8u);
 
     if (hflip) {
         for (uint8_t i = 0; i < NG_NEO_SPRITE_TILE_PIXELS / 2u; ++i) {

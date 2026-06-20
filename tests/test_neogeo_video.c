@@ -70,40 +70,18 @@ static int test_fix_tile_line_decode(void) {
     return 0;
 }
 
-static void write_converted_sprite_byte(uint8_t *tile,
-                                        uint8_t byte_offset,
-                                        uint8_t value) {
-    static const uint8_t raw_byte_for_swapped_byte[4] = {0u, 2u, 1u, 3u};
-    tile[(byte_offset & 0xFCu) |
-         raw_byte_for_swapped_byte[byte_offset & 0x03u]] = value;
-}
-
 static void encode_sprite_line(uint8_t *tile,
                                uint8_t y,
                                const uint8_t pixels[16]) {
-    uint8_t line[8];
-    memset(line, 0, sizeof(line));
     for (uint8_t x = 0; x < 16u; ++x) {
-        uint8_t bit = (uint8_t)(7u - (x & 7u));
-        uint8_t *chunk = line + (x >= 8u ? 4u : 0u);
+        uint8_t bit = (uint8_t)(x & 7u);
+        uint32_t plane_base = x < 8u ? 0x40u : 0x00u;
+        uint8_t *planes = tile + plane_base + (uint32_t)y * 4u;
         uint8_t color = pixels[x] & 0x0Fu;
-        chunk[0] |= (uint8_t)(((color >> 2) & 1u) << bit);
-        chunk[1] |= (uint8_t)(((color >> 3) & 1u) << bit);
-        chunk[2] |= (uint8_t)(((color >> 0) & 1u) << bit);
-        chunk[3] |= (uint8_t)(((color >> 1) & 1u) << bit);
-    }
-
-    for (uint8_t word = 0; word < 4u; ++word) {
-        uint8_t converted_word = (uint8_t)(y * 4u + word);
-        uint8_t source_word = (uint8_t)(((converted_word ^ 1u) & 1u) |
-                                        ((converted_word >> 1u) & 0x1Eu) |
-                                        (((converted_word & 2u) ^ 2u) << 4u));
-        write_converted_sprite_byte(tile,
-                                    (uint8_t)(source_word * 2u + 0u),
-                                    line[word * 2u + 0u]);
-        write_converted_sprite_byte(tile,
-                                    (uint8_t)(source_word * 2u + 1u),
-                                    line[word * 2u + 1u]);
+        planes[0] |= (uint8_t)(((color >> 0) & 1u) << bit);
+        planes[2] |= (uint8_t)(((color >> 1) & 1u) << bit);
+        planes[1] |= (uint8_t)(((color >> 2) & 1u) << bit);
+        planes[3] |= (uint8_t)(((color >> 3) & 1u) << bit);
     }
 }
 
