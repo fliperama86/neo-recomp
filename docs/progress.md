@@ -273,10 +273,10 @@ a tested full-container path for P/S/M/V1/V2/C regions: P is normalized for
 68000 recompilation, while S fix-layer and interleaved C sprite data are
 preserved for video decode/rendering work. A small `neo_video` helper library
 now covers the shared palette bit mapping, a generic 4bpp planar sprite-line
-decode primitive, native S/fix tile line decode, and a deterministic 40x32
-fix-layer renderer over snapshot VRAM/palette RAM. The corresponding
-`neo-render-snapshot` CLI writes a PPM from a headless snapshot and a
-user-provided `.neo` image:
+decode primitive, native S/fix tile line decode, packed C-region sprite
+tile-line decode, sprite-map entry decode, and deterministic renderers over
+snapshot VRAM/palette RAM. The corresponding `neo-render-snapshot` CLI writes a
+PPM from a headless snapshot and a user-provided `.neo` image:
 
 ```sh
 build/neo-render-snapshot build/mslug_snapshot \
@@ -285,9 +285,20 @@ build/neo-render-snapshot build/mslug_snapshot \
 ```
 
 This is the first path that converts real snapshot VRAM + real cartridge S
-graphics + real palette RAM into host pixels. It intentionally renders only the
-fix layer so the sprite renderer can be brought up separately against the
-planar decode primitive and observed VRAM maps.
+graphics + real palette RAM into host pixels. It renders only the fix layer by
+default. The same tool can also render a diagnostic sprite-map atlas:
+
+```sh
+build/neo-render-snapshot --mode sprite-atlas \
+  --sprite-base-word 0x1000 --sprite-cols 32 --sprite-rows 16 \
+  build/mslug_snapshot ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  build/mslug_snapshot/sprite_atlas.ppm
+```
+
+The atlas uses real C-region sprite tile data, slow-VRAM sprite map entries,
+and snapshot palette RAM, but it does not position/layer sprites into a game
+frame yet. It is a staging artifact for the next step: reconstructing active
+sprite lists, X/Y/shrink parameters, and line-buffer priority.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
@@ -507,13 +518,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 - local: Added the first isolated video/rendering slice. `neo_video` now
   centralizes Neo Geo palette conversion, generic 4bpp planar line decode,
-  native S/fix tile-line decode, and a 40x32 fix-layer renderer. The new
-  dependency-free `neo-render-snapshot` tool combines a headless snapshot with
-  the `.neo` S region and writes a fix-layer PPM; synthetic C/Python tests cover
-  both the low-level video helpers and the snapshot-to-PPM tool. Local
-  validation is 15/15 tests passing, and the current Metal Slug snapshot renders
-  a deterministic full-screen fix-layer image, confirming the host pixel path is
-  wired even though sprites are not rendered yet.
+  native S/fix tile-line decode, packed C-region sprite line decode, sprite-map
+  entry decode, and fixed/sprite-atlas snapshot renderers. The dependency-free
+  `neo-render-snapshot` tool combines a headless snapshot with `.neo` S/C
+  regions and writes either a fix-layer PPM or diagnostic sprite-map atlas;
+  synthetic C/Python tests cover both the low-level video helpers and the
+  snapshot-to-PPM modes. Local validation is 15/15 tests passing, and the
+  current Metal Slug snapshot renders deterministic fix-layer and sprite-atlas
+  artifacts, confirming the host pixel path is wired even though sprites are
+  not positioned/layered into a frame yet.
 - local: Advanced the Metal Slug render-path discovery frontier from `$0670D2`
   through render/object state entries (`$03FE5A`, `$03A560`, `$03942E`,
   `$039A70`, `$04A1BA`, `$03A514`, `$039E54`, `$039450`, `$09A976`) to

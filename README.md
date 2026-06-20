@@ -182,6 +182,19 @@ It loads the user-provided `.neo` S region plus the snapshot VRAM/palette RAM
 and renders the CPU-visible 40x32 fix tile map. Sprites are intentionally not
 rendered yet.
 
+The same tool can render a diagnostic sprite-map atlas from slow VRAM entries
+and the cartridge C region:
+
+```sh
+build/neo-render-snapshot --mode sprite-atlas \
+  --sprite-base-word 0x1000 --sprite-cols 32 --sprite-rows 16 \
+  build/mslug_snapshot ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  build/mslug_snapshot/sprite_atlas.ppm
+```
+
+That atlas proves C-region sprite tile decode and sprite-map/palette plumbing,
+but it is not a positioned/layered game frame.
+
 If SDL2 is available through `pkg-config`, CMake also builds an optional
 interactive snapshot host:
 

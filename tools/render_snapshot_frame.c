@@ -13,6 +13,11 @@
 #define NG_RENDER_VRAM_BYTES 0x20000u
 #define NG_RENDER_VRAM_WORDS (NG_RENDER_VRAM_BYTES / 2u)
 
+typedef enum NgRenderMode {
+    NG_RENDER_MODE_FIX = 0,
+    NG_RENDER_MODE_SPRITE_ATLAS = 1
+} NgRenderMode;
+
 static int make_path(char *out, size_t out_size, const char *dir, const char *name) {
     size_t len = strlen(dir);
     const char *sep = len != 0u && (dir[len - 1u] == '/' || dir[len - 1u] == '\\') ? "" : "/";
@@ -118,29 +123,91 @@ static int write_ppm_argb(const char *path,
 
 static void usage(const char *argv0) {
     fprintf(stderr,
-            "usage: %s [--palette-bank 0|1] <snapshot-dir> <game.neo> <out.ppm>\n"
+            "usage: %s [options] <snapshot-dir> <game.neo> <out.ppm>\n"
             "\n"
-            "Renders the CPU-visible 40x32 Neo Geo fix layer from a headless\n"
-            "snapshot and the cartridge S region. Sprites are not rendered yet.\n",
+            "Options:\n"
+            "  --mode fix|sprite-atlas      render mode (default: fix)\n"
+            "  --palette-bank 0|1           palette RAM bank (default: 0)\n"
+            "  --sprite-base-word <addr>    atlas VRAM word base (default: 0)\n"
+            "  --sprite-cols <n>            atlas columns (default: 32)\n"
+            "  --sprite-rows <n>            atlas rows (default: 32)\n"
+            "\n"
+            "fix renders the CPU-visible 40x32 fix tile map from the snapshot\n"
+            "and cartridge S region. sprite-atlas renders slow-VRAM sprite-map\n"
+            "entries as a diagnostic atlas using the cartridge C region; it is\n"
+            "not a positioned/layered sprite frame yet.\n",
             argv0);
 }
 
+static int parse_u32_option(const char *text, uint32_t max_value, uint32_t *out) {
+    char *end = NULL;
+    unsigned long parsed = strtoul(text, &end, 0);
+    if (!end || *end != '\0' || parsed > (unsigned long)max_value) {
+        return 0;
+    }
+    *out = (uint32_t)parsed;
+    return 1;
+}
+
 int main(int argc, char **argv) {
+    NgRenderMode mode = NG_RENDER_MODE_FIX;
     uint32_t palette_bank = 0;
+    uint32_t sprite_base_word = 0;
+    uint32_t sprite_cols = 32;
+    uint32_t sprite_rows = 32;
     int argi = 1;
-    if (argc > 1 && strcmp(argv[argi], "--palette-bank") == 0) {
-        if (argc <= argi + 1) {
+
+    while (argi < argc && strncmp(argv[argi], "--", 2) == 0) {
+        const char *option = argv[argi++];
+        if (strcmp(option, "--mode") == 0) {
+            if (argc <= argi) {
+                usage(argv[0]);
+                return 2;
+            }
+            if (strcmp(argv[argi], "fix") == 0) {
+                mode = NG_RENDER_MODE_FIX;
+            } else if (strcmp(argv[argi], "sprite-atlas") == 0) {
+                mode = NG_RENDER_MODE_SPRITE_ATLAS;
+            } else {
+                fprintf(stderr, "mode must be fix or sprite-atlas\n");
+                return 2;
+            }
+            ++argi;
+        } else if (strcmp(option, "--palette-bank") == 0) {
+            if (argc <= argi ||
+                !parse_u32_option(argv[argi], 1u, &palette_bank)) {
+                fprintf(stderr, "palette bank must be 0 or 1\n");
+                return 2;
+            }
+            ++argi;
+        } else if (strcmp(option, "--sprite-base-word") == 0) {
+            if (argc <= argi ||
+                !parse_u32_option(argv[argi], NG_RENDER_VRAM_WORDS - 1u, &sprite_base_word)) {
+                fprintf(stderr, "sprite base word must be a VRAM word address\n");
+                return 2;
+            }
+            ++argi;
+        } else if (strcmp(option, "--sprite-cols") == 0) {
+            if (argc <= argi ||
+                !parse_u32_option(argv[argi], 256u, &sprite_cols) ||
+                sprite_cols == 0u) {
+                fprintf(stderr, "sprite cols must be 1..256\n");
+                return 2;
+            }
+            ++argi;
+        } else if (strcmp(option, "--sprite-rows") == 0) {
+            if (argc <= argi ||
+                !parse_u32_option(argv[argi], 256u, &sprite_rows) ||
+                sprite_rows == 0u) {
+                fprintf(stderr, "sprite rows must be 1..256\n");
+                return 2;
+            }
+            ++argi;
+        } else {
+            fprintf(stderr, "unknown option: %s\n", option);
             usage(argv[0]);
             return 2;
         }
-        char *end = NULL;
-        unsigned long parsed = strtoul(argv[argi + 1], &end, 0);
-        if (!end || *end != '\0' || parsed > 1ul) {
-            fprintf(stderr, "palette bank must be 0 or 1\n");
-            return 2;
-        }
-        palette_bank = (uint32_t)parsed;
-        argi += 2;
     }
 
     if (argc - argi != 3) {
@@ -152,9 +219,27 @@ int main(int argc, char **argv) {
     const char *neo_path = argv[argi + 1];
     const char *out_path = argv[argi + 2];
 
+    uint32_t out_width = NG_NEO_FIX_FRAME_WIDTH;
+    uint32_t out_height = NG_NEO_FIX_FRAME_HEIGHT;
+    if (mode == NG_RENDER_MODE_SPRITE_ATLAS) {
+        if (sprite_cols > UINT32_MAX / NG_NEO_SPRITE_TILE_PIXELS ||
+            sprite_rows > UINT32_MAX / NG_NEO_SPRITE_TILE_PIXELS) {
+            fprintf(stderr, "sprite atlas dimensions are too large\n");
+            return 2;
+        }
+        out_width = sprite_cols * NG_NEO_SPRITE_TILE_PIXELS;
+        out_height = sprite_rows * NG_NEO_SPRITE_TILE_PIXELS;
+    }
+    if (out_width == 0u || out_height == 0u ||
+        (size_t)out_width > SIZE_MAX / (size_t)out_height ||
+        (size_t)out_width * (size_t)out_height > SIZE_MAX / sizeof(uint32_t)) {
+        fprintf(stderr, "render dimensions are too large\n");
+        return 2;
+    }
+
     uint16_t *palette_words = (uint16_t *)calloc(NG_RENDER_PALETTE_WORDS, sizeof(uint16_t));
     uint16_t *vram_words = (uint16_t *)calloc(NG_RENDER_VRAM_WORDS, sizeof(uint16_t));
-    uint32_t *pixels = (uint32_t *)calloc(NG_NEO_FIX_FRAME_WIDTH * NG_NEO_FIX_FRAME_HEIGHT,
+    uint32_t *pixels = (uint32_t *)calloc((size_t)out_width * (size_t)out_height,
                                           sizeof(uint32_t));
     if (!palette_words || !vram_words || !pixels) {
         fprintf(stderr, "failed to allocate render buffers\n");
@@ -170,22 +255,39 @@ int main(int argc, char **argv) {
              ng_neo_rom_image_load(&image, neo_path);
     if (ok) {
         uint32_t palette_word_offset = palette_bank * NG_NEO_PALETTE_COLORS_PER_BANK;
-        ok = ng_neogeo_video_render_fix_layer_argb(
-                 image.s.data,
-                 image.s.size,
-                 vram_words,
-                 NG_RENDER_VRAM_WORDS,
-                 palette_words + palette_word_offset,
-                 NG_NEO_PALETTE_COLORS_PER_BANK,
-                 pixels,
-                 NG_NEO_FIX_FRAME_WIDTH,
-                 NG_NEO_FIX_FRAME_HEIGHT,
-                 NG_NEO_FIX_FRAME_WIDTH) &&
-             write_ppm_argb(out_path,
-                            pixels,
-                            NG_NEO_FIX_FRAME_WIDTH,
-                            NG_NEO_FIX_FRAME_HEIGHT,
-                            NG_NEO_FIX_FRAME_WIDTH);
+        if (mode == NG_RENDER_MODE_FIX) {
+            ok = ng_neogeo_video_render_fix_layer_argb(
+                image.s.data,
+                image.s.size,
+                vram_words,
+                NG_RENDER_VRAM_WORDS,
+                palette_words + palette_word_offset,
+                NG_NEO_PALETTE_COLORS_PER_BANK,
+                pixels,
+                out_width,
+                out_height,
+                out_width);
+        } else {
+            ok = ng_neogeo_video_render_sprite_map_atlas_argb(
+                image.c.data,
+                image.c.size,
+                vram_words,
+                NG_RENDER_VRAM_WORDS,
+                sprite_base_word,
+                palette_words + palette_word_offset,
+                NG_NEO_PALETTE_COLORS_PER_BANK,
+                pixels,
+                sprite_cols,
+                sprite_rows,
+                out_width,
+                out_height,
+                out_width);
+        }
+        ok = ok && write_ppm_argb(out_path,
+                                  pixels,
+                                  out_width,
+                                  out_height,
+                                  out_width);
     }
 
     ng_neo_rom_image_free(&image);

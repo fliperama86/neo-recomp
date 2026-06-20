@@ -70,6 +70,70 @@ static int test_fix_tile_line_decode(void) {
     return 0;
 }
 
+static void encode_sprite_line(uint8_t *line, const uint8_t pixels[16]) {
+    memset(line, 0, 8);
+    for (uint8_t x = 0; x < 16u; ++x) {
+        uint8_t bit = (uint8_t)(7u - (x & 7u));
+        uint8_t *chunk = line + (x >= 8u ? 4u : 0u);
+        uint8_t color = pixels[x] & 0x0Fu;
+        chunk[0] |= (uint8_t)(((color >> 3) & 1u) << bit);
+        chunk[1] |= (uint8_t)(((color >> 2) & 1u) << bit);
+        chunk[2] |= (uint8_t)(((color >> 1) & 1u) << bit);
+        chunk[3] |= (uint8_t)(((color >> 0) & 1u) << bit);
+    }
+}
+
+static int test_sprite_tile_line_decode(void) {
+    uint8_t c_rom[NG_NEO_SPRITE_TILE_BYTES];
+    memset(c_rom, 0, sizeof(c_rom));
+    uint8_t source[NG_NEO_SPRITE_TILE_PIXELS];
+    for (uint8_t i = 0; i < NG_NEO_SPRITE_TILE_PIXELS; ++i) {
+        source[i] = i;
+    }
+    encode_sprite_line(c_rom + 3u * 8u, source);
+
+    uint8_t pixels[NG_NEO_SPRITE_TILE_PIXELS];
+    CHECK(ng_neogeo_video_decode_sprite_tile_line(c_rom,
+                                                  sizeof(c_rom),
+                                                  0,
+                                                  3,
+                                                  0,
+                                                  pixels));
+    for (uint8_t i = 0; i < NG_NEO_SPRITE_TILE_PIXELS; ++i) {
+        CHECK(pixels[i] == i);
+    }
+
+    CHECK(ng_neogeo_video_decode_sprite_tile_line(c_rom,
+                                                  sizeof(c_rom),
+                                                  0,
+                                                  3,
+                                                  1,
+                                                  pixels));
+    for (uint8_t i = 0; i < NG_NEO_SPRITE_TILE_PIXELS; ++i) {
+        CHECK(pixels[i] == (uint8_t)(NG_NEO_SPRITE_TILE_PIXELS - 1u - i));
+    }
+
+    CHECK(!ng_neogeo_video_decode_sprite_tile_line(c_rom,
+                                                   sizeof(c_rom),
+                                                   0,
+                                                   NG_NEO_SPRITE_TILE_PIXELS,
+                                                   0,
+                                                   pixels));
+    CHECK(!ng_neogeo_video_decode_sprite_tile_line(c_rom, 4, 0, 0, 0, pixels));
+    return 0;
+}
+
+static int test_sprite_map_decode(void) {
+    NgNeoSpriteMapEntry entry =
+        ng_neogeo_video_decode_sprite_map_entry(0x3456u, 0xABCDu);
+    CHECK(entry.tile_index == 0xC3456u);
+    CHECK(entry.palette == 0xABu);
+    CHECK(entry.auto_animation == 3u);
+    CHECK(entry.vflip == 0u);
+    CHECK(entry.hflip == 1u);
+    return 0;
+}
+
 static int test_fix_layer_render(void) {
     uint8_t s_rom[NG_NEO_FIX_TILE_BYTES];
     uint16_t *vram = (uint16_t *)calloc(0x10000u, sizeof(uint16_t));
@@ -104,10 +168,50 @@ static int test_fix_layer_render(void) {
     return 0;
 }
 
+static int test_sprite_map_atlas_render(void) {
+    uint8_t c_rom[NG_NEO_SPRITE_TILE_BYTES];
+    uint16_t vram[2] = {0, 0x0100u};
+    uint16_t palette[NG_NEO_PALETTE_COLORS_PER_BANK];
+    uint32_t frame[NG_NEO_SPRITE_TILE_PIXELS * NG_NEO_SPRITE_TILE_PIXELS];
+    memset(c_rom, 0, sizeof(c_rom));
+    memset(palette, 0, sizeof(palette));
+    memset(frame, 0, sizeof(frame));
+
+    uint8_t source[NG_NEO_SPRITE_TILE_PIXELS];
+    memset(source, 0, sizeof(source));
+    source[0] = 1u;
+    source[1] = 2u;
+    encode_sprite_line(c_rom, source);
+    palette[0x11u] = 0x4F00u;
+    palette[0x12u] = 0x20F0u;
+
+    CHECK(ng_neogeo_video_render_sprite_map_atlas_argb(
+        c_rom,
+        sizeof(c_rom),
+        vram,
+        2,
+        0,
+        palette,
+        NG_NEO_PALETTE_COLORS_PER_BANK,
+        frame,
+        1,
+        1,
+        NG_NEO_SPRITE_TILE_PIXELS,
+        NG_NEO_SPRITE_TILE_PIXELS,
+        NG_NEO_SPRITE_TILE_PIXELS));
+    CHECK(frame[0] == 0xFFFF0000u);
+    CHECK(frame[1] == 0xFF00FF00u);
+    CHECK(frame[2] == 0xFF000000u);
+    return 0;
+}
+
 int main(void) {
     if (test_palette_decode() != 0) return 1;
     if (test_planar_line_decode() != 0) return 1;
     if (test_fix_tile_line_decode() != 0) return 1;
+    if (test_sprite_tile_line_decode() != 0) return 1;
+    if (test_sprite_map_decode() != 0) return 1;
     if (test_fix_layer_render() != 0) return 1;
+    if (test_sprite_map_atlas_render() != 0) return 1;
     return 0;
 }

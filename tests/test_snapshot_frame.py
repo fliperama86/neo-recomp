@@ -20,16 +20,31 @@ def write_neo(path: Path) -> None:
     # Native fix layout: line 0 bytes are 0x10,0x18,0x00,0x08.
     # Low nibble is the first pixel in each pair for our renderer.
     s[0x10] = 0x21
+    c = bytearray(0x80)
+    encode_sprite_line(c, [1, 2] + [0] * 14)
     for offset, data in [
         (0x04, p),
         (0x08, bytes(s)),
         (0x0C, b""),
         (0x10, b""),
         (0x14, b""),
-        (0x18, b""),
+        (0x18, bytes(c)),
     ]:
         header[offset : offset + 4] = struct.pack("<I", len(data))
-    path.write_bytes(bytes(header) + p + bytes(s))
+    path.write_bytes(bytes(header) + p + bytes(s) + bytes(c))
+
+
+def encode_sprite_line(out: bytearray, pixels: list[int]) -> None:
+    # Packed C layout for one 16-pixel line: two 8-pixel CR chunks, each four
+    # bytes wide. Bits 7..0 are left-to-right; the four bytes hold color bits
+    # 3, 2, 1, 0 respectively.
+    for x, color in enumerate(pixels):
+        bit = 7 - (x & 7)
+        chunk = 0 if x < 8 else 4
+        out[chunk + 0] |= ((color >> 3) & 1) << bit
+        out[chunk + 1] |= ((color >> 2) & 1) << bit
+        out[chunk + 2] |= ((color >> 1) & 1) << bit
+        out[chunk + 3] |= ((color >> 0) & 1) << bit
 
 
 def write_snapshot(snapshot_dir: Path) -> None:
@@ -45,6 +60,8 @@ def write_snapshot(snapshot_dir: Path) -> None:
     vram = bytearray(VRAM_BYTES)
     word_offset = FIX_BASE * 2
     vram[word_offset : word_offset + 2] = bytes.fromhex("1000")
+    vram[0:2] = bytes.fromhex("0000")
+    vram[2:4] = bytes.fromhex("0100")
     (snapshot_dir / "vram_be.bin").write_bytes(bytes(vram))
 
 
@@ -66,6 +83,7 @@ def main() -> int:
     snapshot_dir = work_dir / "snapshot"
     neo_path = work_dir / "synthetic.neo"
     out_path = work_dir / "fix.ppm"
+    sprite_out_path = work_dir / "sprite_atlas.ppm"
     work_dir.mkdir(parents=True, exist_ok=True)
     write_neo(neo_path)
     write_snapshot(snapshot_dir)
@@ -76,6 +94,27 @@ def main() -> int:
     )
     width, height, pixels = read_ppm(out_path)
     assert (width, height) == (320, 256)
+    assert pixels[0:3] == bytes((255, 0, 0))
+    assert pixels[3:6] == bytes((0, 255, 0))
+    assert pixels[6:9] == bytes((0, 0, 0))
+
+    subprocess.run(
+        [
+            str(render_tool),
+            "--mode",
+            "sprite-atlas",
+            "--sprite-cols",
+            "1",
+            "--sprite-rows",
+            "1",
+            str(snapshot_dir),
+            str(neo_path),
+            str(sprite_out_path),
+        ],
+        check=True,
+    )
+    width, height, pixels = read_ppm(sprite_out_path)
+    assert (width, height) == (16, 16)
     assert pixels[0:3] == bytes((255, 0, 0))
     assert pixels[3:6] == bytes((0, 255, 0))
     assert pixels[6:9] == bytes((0, 0, 0))
