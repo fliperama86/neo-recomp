@@ -1,6 +1,6 @@
 # Progress Tracker
 
-Last updated: 2026-06-19
+Last updated: 2026-06-20
 
 This is the live working document for `neo-recomp`. Keep the README focused on
 project orientation; update this file after each meaningful green slice.
@@ -67,8 +67,8 @@ headless budgets. Generated cart C still compiles, and the static dispatch audit
 is clean:
 
 ```text
-function candidates: 29571
-dispatch audit: sites=4143 missing_direct=0 external_direct=15 computed=0 runtime_computed=42 jump_tables=1
+function candidates: 31014
+dispatch audit: sites=4504 missing_direct=0 external_direct=15 computed=0 runtime_computed=42 jump_tables=1
 BIOS candidates: 32768 (truncated)
 ```
 
@@ -246,15 +246,18 @@ callback records, a focused object-init callback run around `$0478FC`, the
 two-level `$04A09A` ROM target tables, neighboring object callback runs, the
 `$060420` object callback variants, a small `$08DEC2` mini-vector, the
 fixed-size `$078218` projectile/spawn setup records, the `$057714` four-way
-projectile branch table, and narrow state-handler entries needed by the newly
-reached render path. That moves the 5M frontier through `$03C776`, `$088BBC`,
-`$088B3E`, `$03C7AA`, `$04791C`, `$09911E`, `$08DC5A`, `$060420`, `$08DD26`,
-`$078272`, `$0573A2`, and `$060B7A`; the current CPU-side blocker is:
+projectile branch table, two more banked 10-byte callback-record runs, the
+`$0E8470` intro/player-select callback variants, and narrow state-handler
+entries needed by the newly reached render path. That moves the 5M frontier
+through `$03C776`, `$088BBC`, `$088B3E`, `$03C7AA`, `$04791C`, `$09911E`,
+`$08DC5A`, `$060420`, `$08DD26`, `$078272`, `$0573A2`, `$060B7A`, `$0670D2`,
+`$03FE5A`, `$03A560`, `$03942E`, `$039A70`, `$04A1BA`, `$03A514`, `$039E54`,
+`$039450`, and `$09A976`; the current CPU-side blocker is:
 
 ```text
-dispatch miss at $0670D2
-smoke summary: dispatches=1541841 cart=1401585 bios=140256 unique=3118 last=$0670D2 pc=$0670D2 vblank=2100 frame=2100 irqack=2105 mslug_sync=$01000000000101 wram_nonzero=29196 palette_nonzero=12213 palette_writes=42050 palette_nonzero_writes=21205 palette_peak_nonzero=12215 vram_nonzero=8107 recent_loop=0
-instruction watch: ... $05C9E0:cart_video_active=598 $05CA02:cart_video_jsr_render=598 $05B400:cart_render_worker=1196 ...
+dispatch miss at $0572BE
+smoke summary: dispatches=1806913 cart=1659503 bios=147410 unique=3714 last=$0572BE pc=$0572BE vblank=2237 frame=2237 irqack=2242 mslug_sync=$01000000000001 wram_nonzero=29239 palette_nonzero=12230 palette_writes=42200 palette_nonzero_writes=21352 palette_peak_nonzero=12238 vram_nonzero=8102 recent_loop=0
+instruction watch: ... $05C9E0:cart_video_active=666 $05CA02:cart_video_jsr_render=666 $05B400:cart_render_worker=1332 ...
 ```
 
 The smoke still prints repeated `$FFFFFF`/`$F30001` read misses shortly before
@@ -491,15 +494,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
-- local: Advanced the Metal Slug render-path discovery frontier through several
-  object/state callback layers: `$060420` variants, the unaligned `$08DEC2`
-  mini-vector, fixed-size `$078218` projectile/spawn code records, the
-  `$057714` four-way branch table, and narrow `$0573A2`/`$060B7A` state
-  entries. The static cart audit remains clean after raising its site storage
-  to 8192 (`sites=4143`, `computed=0`, `runtime_computed=42`), the 500k
-  checkpoint remains clean, and the 5M frontier advances to `$0670D2` after
-  1541841 dispatches with 12213 nonzero palette bytes, 8107 nonzero VRAM
-  words, and 1196 render-worker instruction-watch hits.
+- local: Advanced the Metal Slug render-path discovery frontier from `$0670D2`
+  through render/object state entries (`$03FE5A`, `$03A560`, `$03942E`,
+  `$039A70`, `$04A1BA`, `$03A514`, `$039E54`, `$039450`, `$09A976`) to
+  `$0572BE`. This added focused 10-byte banked callback-record metadata and
+  extended the `$0E8480` intro/player-select callback table back to `$0E8470`;
+  the static cart audit remains clean (`sites=4504`, `computed=0`,
+  `runtime_computed=42`), the 500k checkpoint remains clean, and the 5M probe
+  now reaches 1806913 dispatches with 12230 nonzero palette bytes, 8102
+  nonzero VRAM words, and 1332 render-worker instruction-watch hits.
 - local: Seeded additional Metal Slug render/object callback metadata: banked
   20-byte record families, representative uneven render data callbacks,
   focused object-init callback runs around `$0478FC`, `$08DC5A`, and `$09911E`,
@@ -1508,7 +1511,7 @@ Use this loop:
 
 Immediate next slice:
 
-- Resolve the current headless Metal Slug CPU frontier at `$0670D2` while
+- Resolve the current headless Metal Slug CPU frontier at `$0572BE` while
   keeping the runtime/hardware surface minimal.
 - Keep the next work isolated: classify the target as a missing callback/table
   seed, runtime-computed dispatch site, a generated-control-flow issue, or the

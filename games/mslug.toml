@@ -82,7 +82,15 @@ extra = [
   0x03240C,
   0x03364A,
   0x0336DC,
+  0x03942E,
+  0x039450,
+  0x039A70,
+  0x039E54,
+  0x03A514,
+  0x03A560,
+  0x03FE5A,
   0x0442E6,
+  0x04A1BA,
   0x051F94,
   0x0523FA,
   0x08FD68,
@@ -137,6 +145,7 @@ extra = [
   0x05EA96,
   0x060B7A,
   0x060B84,
+  0x0670D2,
   0x079298,
   0x05B5F8,
   0x05B5FC,
@@ -492,10 +501,11 @@ stride = 0x14
 format = "abs32"
 
 [[jump_table]]
-# Intro/player-select object init callbacks.  Runtime object creation stores
-# these long pointers into task state, so seed the table rather than chasing
-# each runtime dispatch miss by hand.
-start = 0x0E8480
+# Intro/player-select object init callbacks, including the four preceding
+# variants reached on the current render/object path.  Runtime object creation
+# stores these long pointers into task state, so seed the table rather than
+# chasing each runtime dispatch miss by hand.
+start = 0x0E8470
 end = 0x0E8524
 stride = 4
 format = "abs32"
@@ -594,9 +604,25 @@ stride = 0x0A
 format = "abs32"
 
 [[jump_table]]
+# Earlier banked callback records in the same 10-byte object/state record
+# family.  The callback longword is six bytes into each record.
+start = 0x2796E0
+end = 0x27973E
+stride = 0x0A
+format = "abs32"
+
+[[jump_table]]
 # Banked callback records for the state machine guarded around $0397A6.
 start = 0x2798DC
 end = 0x279926
+stride = 0x0A
+format = "abs32"
+
+[[jump_table]]
+# Fragmented sibling callback records before the $279AB0 run.  The same
+# 10-byte cadence contains $FFFFFFFF sentinel slots, which discovery ignores.
+start = 0x279A38
+end = 0x279AB0
 stride = 0x0A
 format = "abs32"
 
