@@ -557,13 +557,13 @@ static int emit_ea_address_value(const NgM68kEa *ea,
     case NG_M68K_EA_ABS_W:
     case NG_M68K_EA_ABS_L:
     case NG_M68K_EA_PC_DISP:
-        snprintf(expr, expr_size, "0x%08Xu", ea->absolute_addr & 0x00FFFFFFu);
+        snprintf(expr, expr_size, "0x%08Xu", ea->absolute_addr);
         return 1;
     case NG_M68K_EA_PC_INDEX: {
         char index_expr[64];
         ng_format_index_expr(ea, index_expr, (unsigned)sizeof(index_expr));
         snprintf(expr, expr_size, "(uint32_t)(0x%08Xu + %s)",
-                 ea->absolute_addr & 0x00FFFFFFu, index_expr);
+                 ea->absolute_addr, index_expr);
         return 1;
     }
     case NG_M68K_EA_NONE:
