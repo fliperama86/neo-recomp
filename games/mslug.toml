@@ -498,6 +498,58 @@ stride = 4
 format = "abs32"
 
 [[jump_table]]
+# Object init/state callbacks for the render path around the $0478FC family.
+# Seed this compact contiguous run rather than only the currently-hit state.
+start = 0x0E8180
+end = 0x0E81A0
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Contiguous object callback run around the $08DC5A state family.
+start = 0x0E8260
+end = 0x0E82A0
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Focused object callback variant run reached after the $04A09A target tables.
+start = 0x0E8324
+end = 0x0E833C
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Sprite/action callback targets reached by the two-level ROM lookup around
+# $04A09A.  The game selects one of four pointer tables, stores a target on the
+# stack while running setup code, then returns through `JMP (A0)`.
+start = 0x049D8A
+end = 0x049DCA
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Second $04A09A target table.
+start = 0x049E12
+end = 0x049E52
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Third $04A09A target table.
+start = 0x049E9A
+end = 0x049EDA
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Fourth $04A09A target table.
+start = 0x049F22
+end = 0x049F62
+stride = 4
+format = "abs32"
+
+[[jump_table]]
 # Banked mission/object callback records reached on the render path.  The
 # records are 10 bytes wide; the callback longword starts four bytes into each
 # record, so the metadata starts at the first callback field.
@@ -536,8 +588,58 @@ end = 0x279926
 stride = 0x0A
 format = "abs32"
 
+[[jump_table]]
+# Render/object data block callback reached after the 10-byte callback-record
+# clusters.  Several banked data blocks embed this same callback as an abs32
+# longword; seed one representative pointer rather than a one-off function.
+start = 0x27BB26
+end = 0x27BB2A
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Companion render/object callback from the same banked data blocks; keep this
+# as one representative abs32 until the uneven surrounding record layout is
+# classified.
+start = 0x27BC28
+end = 0x27BC2C
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Earlier banked render/object callback records in the same 20-byte family as
+# the $2EB820 run.  Split at the embedded direction/count marker so only the
+# callback longwords are seeded.
+start = 0x2EB6D0
+end = 0x2EB774
+stride = 0x14
+format = "abs32"
+
+[[jump_table]]
+# Reverse-order continuation of the previous 20-byte record run.
+start = 0x2EB778
+end = 0x2EB818
+stride = 0x14
+format = "abs32"
+
+[[jump_table]]
+# Banked render/object callback records.  These records are 20 bytes wide and
+# the callback longword is the first word in this aligned run.
+start = 0x2EB820
+end = 0x2EB8D4
+stride = 0x14
+format = "abs32"
+
+[[jump_table]]
+# Continuation of the same 20-byte render/object callback record family after
+# an alignment/sentinel gap.
+start = 0x2EB970
+end = 0x2EBA24
+stride = 0x14
+format = "abs32"
+
 [dispatch]
 # Callback target is loaded from RAM through A6 and dispatched via JSR (A0).
 # The additional sites are reached after seeding the VBlank handler and are
 # intentionally left as runtime-computed dispatch boundaries for now.
-runtime = [0x0006C8, 0x000FDE, 0x001F3C, 0x025DE0, 0x025EA8, 0x02841E, 0x028602, 0x028DD2, 0x02912A, 0x0335A4, 0x039600, 0x03962E, 0x039664, 0x0396A0, 0x0396C2, 0x0396F8, 0x039734, 0x039756, 0x039790, 0x0397CC, 0x0397F6, 0x03982A, 0x03985C, 0x039890, 0x043818, 0x043906, 0x043A02, 0x043AA4, 0x0443E0, 0x0446D6, 0x05032C, 0x05AA60, 0x05B542, 0x05B57C, 0x05B782, 0x05B988, 0x05BB50, 0x05BC92, 0x05BE5A, 0x05BF8A]
+runtime = [0x0006C8, 0x000FDE, 0x001F3C, 0x025DE0, 0x025EA8, 0x02841E, 0x028602, 0x028DD2, 0x02912A, 0x0335A4, 0x039600, 0x03962E, 0x039664, 0x0396A0, 0x0396C2, 0x0396F8, 0x039734, 0x039756, 0x039790, 0x0397CC, 0x0397F6, 0x03982A, 0x03985C, 0x039890, 0x043818, 0x043906, 0x043A02, 0x043AA4, 0x0443E0, 0x0446D6, 0x04A09A, 0x05032C, 0x05AA60, 0x05B542, 0x05B57C, 0x05B782, 0x05B988, 0x05BB50, 0x05BC92, 0x05BE5A, 0x05BF8A]

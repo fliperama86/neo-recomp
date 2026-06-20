@@ -67,8 +67,8 @@ headless budgets. Generated cart C still compiles, and the static dispatch audit
 is clean:
 
 ```text
-function candidates: 23518
-dispatch audit: sites=2933 missing_direct=0 external_direct=15 computed=0 runtime_computed=40 jump_tables=1
+function candidates: 26332
+dispatch audit: sites=3578 missing_direct=0 external_direct=15 computed=0 runtime_computed=41 jump_tables=1
 BIOS candidates: 32768 (truncated)
 ```
 
@@ -225,7 +225,7 @@ instruction watch: ... $05C9E0:cart_video_active=148 $05CA02:cart_video_jsr_rend
 ```
 
 A deeper 5M-budget probe no longer reaches the full guard; after adding
-several banked 10-byte callback-record tables, it advances to a new cart
+several banked 10-byte callback-record tables, it advanced to a new cart
 dispatch frontier after about 1.31M dispatches:
 
 ```text
@@ -237,8 +237,24 @@ instruction watch: ... $05C9E0:cart_video_active=535 $05CA02:cart_video_jsr_rend
 This is real progress toward headless game execution: the cart main loop, VBlank
 handler, input update, video gate, and render worker all execute repeatedly, and
 the final snapshot has nonzero work RAM, palette RAM, and VRAM. It is still not
-a frame renderer or boot/attract success oracle; the next CPU-side blocker is
-the missing generated/runtime dispatch target at `$03C776`.
+a frame renderer or boot/attract success oracle.
+
+The latest render-discovery slice seeds additional banked render/object
+callback records, a focused object-init callback run around `$0478FC`, the
+two-level `$04A09A` ROM target tables, and neighboring object callback runs.
+That moves the 5M frontier through `$03C776`, `$088BBC`, `$088B3E`, `$03C7AA`,
+`$04791C`, `$09911E`, and `$08DC5A`; the current CPU-side blocker is:
+
+```text
+dispatch miss at $060420
+smoke summary: dispatches=1370302 cart=1234434 bios=135868 unique=2596 last=$060420 pc=$060420 vblank=2016 frame=2016 irqack=2021 mslug_sync=$01000000000001 wram_nonzero=28892 palette_nonzero=12038 palette_writes=41930 palette_nonzero_writes=21085 palette_peak_nonzero=12038 vram_nonzero=7918 recent_loop=0
+instruction watch: ... $05C9E0:cart_video_active=556 $05CA02:cart_video_jsr_render=556 $05B400:cart_render_worker=1112 ...
+```
+
+The smoke still prints repeated `$FFFFFF`/`$F30001` read misses shortly before
+the deeper dispatch frontier, so the next slice should keep classifying whether
+that is harmless out-of-range probing, a stack/sentinel pattern, or the first
+runtime bus issue that must be modeled.
 
 This snapshot/debug-render path is also the cleanest seam for a real SDL host.
 When SDL2 is available through `pkg-config`, CMake builds the optional
@@ -469,6 +485,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Seeded additional Metal Slug render/object callback metadata: banked
+  20-byte record families, representative uneven render data callbacks,
+  focused object-init callback runs around `$0478FC`, `$08DC5A`, and `$09911E`,
+  plus the `$04A09A` two-level ROM target tables. The static cart audit remains
+  clean (`missing_direct=0`, `computed=0`, `runtime_computed=41`), the 500k
+  checkpoint remains clean, and the 5M frontier advances to `$060420` after
+  1370302 dispatches with 12038 nonzero palette bytes and 7918 nonzero VRAM
+  words.
 - local: Seeded banked Metal Slug 10-byte callback-record tables reached
   on the render path. This moved the 5M-budget frontier from `$03BEA0` through
   `$03A656`, `$039940`, `$03A1B8`, and `$03A35E` to `$03C776` after 1311342
@@ -1469,7 +1493,7 @@ Use this loop:
 
 Immediate next slice:
 
-- Resolve the current headless Metal Slug CPU frontier at `$03C776` while
+- Resolve the current headless Metal Slug CPU frontier at `$060420` while
   keeping the runtime/hardware surface minimal.
 - Keep the next work isolated: classify the target as a missing callback/table
   seed, runtime-computed dispatch site, or a real unsupported generated path
