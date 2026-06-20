@@ -246,7 +246,10 @@ scripts/mslug
 That wrapper defaults to `~/Documents/Games/Mister/NEOGEO/mslug.neo` and
 `~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. Use `scripts/mslug quick` for
 a shorter fast-forward, `scripts/mslug build` to build/link without launching,
-or pass custom paths after the command if needed. The underlying script
+or pass custom paths after the command if needed. The live host currently
+defaults to 1500 dispatches per refresh, which is the first locally observed
+full-speed-ish range; tune it with `scripts/mslug --dpf N` or the `+`/`-` keys
+while running. The underlying script
 recompiles Metal Slug, builds the user-provided BIOS slice, links a temporary
 `build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
 yet; it reuses the headless runtime model and current renderer, but it is a

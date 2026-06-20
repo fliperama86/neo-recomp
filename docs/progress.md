@@ -386,7 +386,9 @@ scripts/mslug
 
 The wrapper defaults to the local MiSTer-style Metal Slug and BIOS paths;
 `scripts/mslug quick` shortens startup, and `scripts/mslug build` only
-builds/links. The script uses the same Metal Slug recompilation and
+builds/links. The live host currently defaults to 1500 dispatches per refresh
+for a full-speed-ish local baseline, tunable via `scripts/mslug --dpf N` or the
+`+`/`-` keys while running. The script uses the same Metal Slug recompilation and
 user-provided BIOS slice as the headless smoke, then links
 `tools/sdl_live_host.c` with the generated cart/BIOS objects, runtime, video
 renderer, and shared dispatch trampoline. The host initializes the runtime,
