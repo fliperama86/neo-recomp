@@ -320,6 +320,21 @@ background/credits frame. This is still an offline snapshot renderer: sprite
 shrink and line-buffer priority are intentionally approximate, and there is no
 live SDL gameplay loop yet.
 
+The optional SDL snapshot host now consumes the same renderer when passed a
+`.neo` image:
+
+```sh
+cmake --build build --target neo-snapshot-viewer
+build/neo-snapshot-viewer build/mslug_snapshot_render_path \
+  ~/Documents/Games/Mister/NEOGEO/mslug.neo
+```
+
+It defaults to the sprite+fix frame view when a `.neo` path is present and can
+switch between diagnostic RAM/VRAM views and fix/sprite/frame modes with
+keyboard shortcuts. This is the first SDL surface showing actual game pixels,
+but it still reloads offline snapshots rather than driving the CPU/runtime in a
+live loop.
+
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
 

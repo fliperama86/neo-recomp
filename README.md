@@ -215,12 +215,14 @@ interactive snapshot host:
 
 ```sh
 cmake --build build --target neo-snapshot-viewer
-build/neo-snapshot-viewer build/mslug_snapshot
+build/neo-snapshot-viewer build/mslug_snapshot \
+  ~/Documents/Games/Mister/NEOGEO/mslug.neo
 ```
 
 Keys `1`-`4` switch between raw VRAM, nonzero VRAM, work RAM, and palette
-views; `r` reloads the snapshot. This is a host/viewer scaffold, not the final
-live emulator loop.
+views. With an optional `.neo` argument, keys `5`-`7` switch between fix,
+positioned sprites, and the sprite+fix game frame; `r` reloads the snapshot.
+This is a host/viewer scaffold, not the final live emulator loop.
 
 ## Decoder Slice
 

@@ -76,9 +76,13 @@ if(SDL2_FOUND)
     add_executable(neo-snapshot-viewer
         tools/sdl_snapshot_viewer.c
     )
+    target_include_directories(neo-snapshot-viewer PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/recompiler/src"
+    )
     target_link_libraries(neo-snapshot-viewer PRIVATE
         PkgConfig::SDL2
         neo_video
+        neo_recompiler_core
     )
 else()
     message(STATUS "SDL2 not found via pkg-config; skipping optional neo-snapshot-viewer target")
