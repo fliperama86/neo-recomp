@@ -58,6 +58,30 @@ static uint32_t g_ng_neogeo_interrupt_polls;
 static uint32_t g_ng_neogeo_auto_vblank_interval;
 static uint32_t g_ng_neogeo_auto_scanline_interval;
 static NgExternalDispatchHandler g_ng_external_dispatch_handler;
+static uint32_t g_ng_neogeo_read_miss_log_count;
+
+static void ng_neogeo_log_read_miss(uint32_t addr) {
+    if (g_ng_neogeo_read_miss_log_count < 32u) {
+        fprintf(stderr,
+                "ng68k_read8 miss at $%06X pc=$%06X sr=$%04X "
+                "a0=$%08X a1=$%08X a2=$%08X a3=$%08X "
+                "a4=$%08X a5=$%08X a6=$%08X a7=$%08X\n",
+                addr & 0x00FFFFFFu,
+                g_ng_m68k.pc & 0x00FFFFFFu,
+                g_ng_m68k.sr & 0xFFFFu,
+                g_ng_m68k.a[0],
+                g_ng_m68k.a[1],
+                g_ng_m68k.a[2],
+                g_ng_m68k.a[3],
+                g_ng_m68k.a[4],
+                g_ng_m68k.a[5],
+                g_ng_m68k.a[6],
+                g_ng_m68k.a[7]);
+    } else if (g_ng_neogeo_read_miss_log_count == 32u) {
+        fprintf(stderr, "ng68k_read8 miss logging suppressed after 32 entries\n");
+    }
+    ++g_ng_neogeo_read_miss_log_count;
+}
 
 static void ng_neogeo_reload_timer_counter(void) {
     g_ng_neogeo_timer_counter_value = g_ng_neogeo_timer_reload_value;
@@ -222,7 +246,7 @@ uint8_t ng68k_read8(uint32_t addr) {
         return rom_offset < g_ng_neogeo_system_rom_size && g_ng_neogeo_system_rom ?
             g_ng_neogeo_system_rom[rom_offset] : 0xFFu;
     }
-    fprintf(stderr, "ng68k_read8 miss at $%06X\n", addr & 0xFFFFFFu);
+    ng_neogeo_log_read_miss(addr);
     return 0xFF;
 }
 
@@ -450,6 +474,7 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_current_scanline = 0;
     g_ng_neogeo_frame_count = 0;
     g_ng_neogeo_interrupt_polls = 0;
+    g_ng_neogeo_read_miss_log_count = 0;
     g_ng_neogeo_watchdog_kicks = 0;
     g_ng_neogeo_port_output = 0;
     g_ng_neogeo_sound_command = 0;
