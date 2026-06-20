@@ -3,20 +3,81 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNNER="$ROOT/scripts/run_mslug_sdl.sh"
+HOST_BIN="$ROOT/build/mslug_sdl_host"
+DEFAULT_GAME="$HOME/Documents/Games/Mister/NEOGEO/mslug.neo"
+DEFAULT_BIOS="$HOME/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1"
+REBUILD=0
+: "${NG_MSLUG_SDL_FAST_FORWARD:=0}"
+export NG_MSLUG_SDL_FAST_FORWARD
 
 usage() {
   cat >&2 <<USAGE
-usage: scripts/mslug [quick|build|--ff N] [game.neo bios.rom [lo-rom]]
+usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N] [game.neo bios.rom [lo-rom]]
 
 Default paths:
   ~/Documents/Games/Mister/NEOGEO/mslug.neo
   ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1
 
 Examples:
-  scripts/mslug            # normal live SDL run
-  scripts/mslug quick      # faster startup
-  scripts/mslug build      # build/link only, do not launch
+  scripts/mslug            # launch cached host only, no pre-window fast-forward
+  scripts/mslug quick      # cached launch with 10k pre-window fast-forward
+  scripts/mslug build      # expensive build/relink only
+  scripts/mslug rebuild    # force build/relink, then launch
+  scripts/mslug attract    # cached launch with deeper 500k fast-forward
 USAGE
+}
+
+is_build_only() {
+  [[ "${NG_MSLUG_SDL_BUILD_ONLY:-0}" != "0" ]]
+}
+
+launch_cached_host() {
+  if (($# > 3)); then
+    usage
+    exit 2
+  fi
+
+  local game="${1:-$DEFAULT_GAME}"
+  local bios="${2:-$DEFAULT_BIOS}"
+  local lo_rom="${3:-}"
+  local fast_forward="${NG_MSLUG_SDL_FAST_FORWARD:-0}"
+  local dpf="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-1500}"
+  local scanline_poll="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
+  local scale="${NG_MSLUG_SDL_SCALE:-3}"
+  local max_refreshes="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
+
+  if [[ ! -x "$HOST_BIN" ]]; then
+    echo "cached host missing: $HOST_BIN" >&2
+    echo "run first: scripts/mslug build" >&2
+    exit 2
+  fi
+  if [[ ! -f "$game" ]]; then
+    echo "mslug .neo not found: $game" >&2
+    exit 2
+  fi
+  if [[ ! -f "$bios" ]]; then
+    echo "BIOS not found: $bios" >&2
+    exit 2
+  fi
+
+  local host_args=(
+    --fast-forward "$fast_forward"
+    --dispatches-per-refresh "$dpf"
+    --scanline-poll-interval "$scanline_poll"
+    --scale "$scale"
+  )
+  if [[ -n "$max_refreshes" ]]; then
+    host_args+=(--max-refreshes "$max_refreshes")
+  fi
+  host_args+=("$game" "$bios")
+  if [[ -n "$lo_rom" ]]; then
+    host_args+=("$lo_rom")
+  fi
+
+  printf '==> Launching cached Metal Slug host\n' >&2
+  printf '    fast-forward: %s dispatches\n' "$fast_forward" >&2
+  printf '    dispatches/refresh: %s\n' "$dpf" >&2
+  exec "$HOST_BIN" "${host_args[@]}"
 }
 
 declare -a args=()
@@ -25,10 +86,17 @@ while (($#)); do
     quick|--quick|-q)
       export NG_MSLUG_SDL_FAST_FORWARD=10000
       ;;
+    attract|--attract)
+      export NG_MSLUG_SDL_FAST_FORWARD=500000
+      ;;
     noff|--no-ff)
       export NG_MSLUG_SDL_FAST_FORWARD=0
       ;;
+    rebuild|--rebuild)
+      REBUILD=1
+      ;;
     build|--build|--build-only)
+      REBUILD=1
       export NG_MSLUG_SDL_BUILD_ONLY=1
       ;;
     --ff)
@@ -73,6 +141,17 @@ while (($#)); do
   esac
   shift
 done
+
+# The user-facing command should feel like "play": no hidden recompilation.
+# Use `scripts/mslug build` for the expensive generated-code pipeline, then
+# `scripts/mslug` for sub-second cached launches.
+if ((! REBUILD)) && ! is_build_only; then
+  if ((${#args[@]})); then
+    launch_cached_host "${args[@]}"
+  else
+    launch_cached_host
+  fi
+fi
 
 if ((${#args[@]})); then
   exec "$RUNNER" "${args[@]}"

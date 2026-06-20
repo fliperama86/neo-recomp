@@ -381,14 +381,21 @@ rather than driving the CPU/runtime in a live loop.
 There is now also a first live SDL host path:
 
 ```sh
-scripts/mslug
+scripts/mslug build
+./run.sh
 ```
 
-The wrapper defaults to the local MiSTer-style Metal Slug and BIOS paths;
-`scripts/mslug quick` shortens startup, and `scripts/mslug build` only
-builds/links. The live host currently defaults to 1500 dispatches per refresh
-for a full-speed-ish local baseline, tunable via `scripts/mslug --dpf N` or the
-`+`/`-` keys while running. The script uses the same Metal Slug recompilation and
+This mirrors the reference recomp-project split: the explicit build step owns
+expensive generated-code/relink work, while `./run.sh` only launches the cached
+`build/mslug_sdl_host` and tells you to build first if it is missing. Plain
+`./run.sh` uses no pre-window fast-forward so the window appears quickly;
+`./run.sh quick` uses a 10k-dispatch pre-window fast-forward, `./run.sh attract`
+uses the deeper 500k-dispatch pre-window fast-forward, and `scripts/mslug
+rebuild` forces a build and then launches. The wrapper defaults to the local
+MiSTer-style Metal Slug and BIOS paths. The live host currently defaults to 1500
+dispatches per refresh for a full-speed-ish local baseline, tunable via
+`./run.sh --dpf N` or the `+`/`-` keys while running. The script uses the same
+Metal Slug recompilation and
 user-provided BIOS slice as the headless smoke, then links
 `tools/sdl_live_host.c` with the generated cart/BIOS objects, runtime, video
 renderer, and shared dispatch trampoline. The host initializes the runtime,

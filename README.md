@@ -237,19 +237,26 @@ The viewer also auto-detects `000-lo.lo`/`ng-lo.rom` next to the `.neo`, or
 accepts it as an optional third path. This is still an offline snapshot viewer.
 
 For a first live SDL host that drives generated CPU/runtime state and renders
-the current framebuffer continuously, use:
+the current framebuffer continuously, build once, then run:
 
 ```sh
-scripts/mslug
+scripts/mslug build
+./run.sh
 ```
 
-That wrapper defaults to `~/Documents/Games/Mister/NEOGEO/mslug.neo` and
-`~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. Use `scripts/mslug quick` for
-a shorter fast-forward, `scripts/mslug build` to build/link without launching,
-or pass custom paths after the command if needed. The live host currently
+This follows the same split as the recomp reference projects: the explicit build
+step owns expensive generated-code/relink work, while `./run.sh` only launches
+the cached `build/mslug_sdl_host` and tells you to build first if it is missing.
+Plain `./run.sh` uses no pre-window fast-forward so the window appears quickly;
+use `./run.sh quick` for the 10k-dispatch pre-window fast-forward, `./run.sh
+attract` for the deeper 500k-dispatch pre-window fast-forward, or
+`scripts/mslug rebuild` to force a build and then launch. The wrapper defaults
+to `~/Documents/Games/Mister/NEOGEO/mslug.neo` and
+`~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. The live host currently
 defaults to 1500 dispatches per refresh, which is the first locally observed
-full-speed-ish range; tune it with `scripts/mslug --dpf N` or the `+`/`-` keys
-while running. The underlying script
+full-speed-ish range; tune it with `./run.sh --dpf N` or the `+`/`-` keys while
+running. The
+underlying script
 recompiles Metal Slug, builds the user-provided BIOS slice, links a temporary
 `build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
 yet; it reuses the headless runtime model and current renderer, but it is a
