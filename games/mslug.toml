@@ -91,6 +91,7 @@ extra = [
   0x0524AA,
   0x0524B6,
   0x052514,
+  0x0573A2,
   0x05AA96,
   0x05AA9A,
   0x05AA9E,
@@ -134,6 +135,8 @@ extra = [
   0x05B5F0,
   0x05B5F4,
   0x05EA96,
+  0x060B7A,
+  0x060B84,
   0x079298,
   0x05B5F8,
   0x05B5FC,
@@ -498,6 +501,15 @@ stride = 4
 format = "abs32"
 
 [[jump_table]]
+# Object callback variants around the current $060420 render-path frontier.
+# This compact table intentionally includes mid-routine entries used to skip
+# the leading setup bit before sharing the common body.
+start = 0x0E80A0
+end = 0x0E80C8
+stride = 4
+format = "abs32"
+
+[[jump_table]]
 # Object init/state callbacks for the render path around the $0478FC family.
 # Seed this compact contiguous run rather than only the currently-hit state.
 start = 0x0E8180
@@ -638,8 +650,33 @@ end = 0x2EBA24
 stride = 0x14
 format = "abs32"
 
+[[jump_table]]
+# Banked mini callback vector reached from the $08DEC2 helper.  The abs32
+# entries are word-aligned but start at an unaligned-to-4 ROM address.
+start = 0x2F3712
+end = 0x2F3732
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Fixed-size projectile/spawn setup records reached as computed code targets.
+# Each 0x1E-byte slot initializes shape/timing data before joining $078778.
+start = 0x078218
+end = 0x07877C
+stride = 0x1E
+format = "bra16"
+
+[[jump_table]]
+# Four-way projectile state branch table reached from $057714.  The dispatch
+# masks D0 between the LEA and JMP, so the generic adjacent-instruction matcher
+# cannot infer this PC-indexed BRA.W table by itself.
+start = 0x057718
+end = 0x057728
+stride = 4
+format = "bra16"
+
 [dispatch]
 # Callback target is loaded from RAM through A6 and dispatched via JSR (A0).
 # The additional sites are reached after seeding the VBlank handler and are
 # intentionally left as runtime-computed dispatch boundaries for now.
-runtime = [0x0006C8, 0x000FDE, 0x001F3C, 0x025DE0, 0x025EA8, 0x02841E, 0x028602, 0x028DD2, 0x02912A, 0x0335A4, 0x039600, 0x03962E, 0x039664, 0x0396A0, 0x0396C2, 0x0396F8, 0x039734, 0x039756, 0x039790, 0x0397CC, 0x0397F6, 0x03982A, 0x03985C, 0x039890, 0x043818, 0x043906, 0x043A02, 0x043AA4, 0x0443E0, 0x0446D6, 0x04A09A, 0x05032C, 0x05AA60, 0x05B542, 0x05B57C, 0x05B782, 0x05B988, 0x05BB50, 0x05BC92, 0x05BE5A, 0x05BF8A]
+runtime = [0x0006C8, 0x000FDE, 0x001F3C, 0x025DE0, 0x025EA8, 0x02841E, 0x028602, 0x028DD2, 0x02912A, 0x0335A4, 0x039600, 0x03962E, 0x039664, 0x0396A0, 0x0396C2, 0x0396F8, 0x039734, 0x039756, 0x039790, 0x0397CC, 0x0397F6, 0x03982A, 0x03985C, 0x039890, 0x043818, 0x043906, 0x043A02, 0x043AA4, 0x0443E0, 0x0446D6, 0x04A09A, 0x05032C, 0x057714, 0x05AA60, 0x05B542, 0x05B57C, 0x05B782, 0x05B988, 0x05BB50, 0x05BC92, 0x05BE5A, 0x05BF8A]

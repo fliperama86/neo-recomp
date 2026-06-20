@@ -67,13 +67,15 @@ headless budgets. Generated cart C still compiles, and the static dispatch audit
 is clean:
 
 ```text
-function candidates: 26332
-dispatch audit: sites=3578 missing_direct=0 external_direct=15 computed=0 runtime_computed=41 jump_tables=1
+function candidates: 29571
+dispatch audit: sites=4143 missing_direct=0 external_direct=15 computed=0 runtime_computed=42 jump_tables=1
 BIOS candidates: 32768 (truncated)
 ```
 
 The discovery candidate cap and audit storage were raised to keep this explicit
-instead of silently truncating. `games/mslug.toml` now declares the Neo Geo
+instead of silently truncating; the cart audit now allows 8192 sites so the
+newly reached object/state subsystem can stay under `--fail-on-dispatch-gaps`.
+`games/mslug.toml` now declares the Neo Geo
 program address map (`$000000-$0FFFFF` fixed P-ROM and `$200000-$2FFFFF` bank
 window), seeds additional structured task/callback tables, and marks currently
 visible dynamic dispatch sites as runtime-computed. Function discovery also
@@ -239,16 +241,20 @@ handler, input update, video gate, and render worker all execute repeatedly, and
 the final snapshot has nonzero work RAM, palette RAM, and VRAM. It is still not
 a frame renderer or boot/attract success oracle.
 
-The latest render-discovery slice seeds additional banked render/object
+The latest render-discovery slices seed additional banked render/object
 callback records, a focused object-init callback run around `$0478FC`, the
-two-level `$04A09A` ROM target tables, and neighboring object callback runs.
-That moves the 5M frontier through `$03C776`, `$088BBC`, `$088B3E`, `$03C7AA`,
-`$04791C`, `$09911E`, and `$08DC5A`; the current CPU-side blocker is:
+two-level `$04A09A` ROM target tables, neighboring object callback runs, the
+`$060420` object callback variants, a small `$08DEC2` mini-vector, the
+fixed-size `$078218` projectile/spawn setup records, the `$057714` four-way
+projectile branch table, and narrow state-handler entries needed by the newly
+reached render path. That moves the 5M frontier through `$03C776`, `$088BBC`,
+`$088B3E`, `$03C7AA`, `$04791C`, `$09911E`, `$08DC5A`, `$060420`, `$08DD26`,
+`$078272`, `$0573A2`, and `$060B7A`; the current CPU-side blocker is:
 
 ```text
-dispatch miss at $060420
-smoke summary: dispatches=1370302 cart=1234434 bios=135868 unique=2596 last=$060420 pc=$060420 vblank=2016 frame=2016 irqack=2021 mslug_sync=$01000000000001 wram_nonzero=28892 palette_nonzero=12038 palette_writes=41930 palette_nonzero_writes=21085 palette_peak_nonzero=12038 vram_nonzero=7918 recent_loop=0
-instruction watch: ... $05C9E0:cart_video_active=556 $05CA02:cart_video_jsr_render=556 $05B400:cart_render_worker=1112 ...
+dispatch miss at $0670D2
+smoke summary: dispatches=1541841 cart=1401585 bios=140256 unique=3118 last=$0670D2 pc=$0670D2 vblank=2100 frame=2100 irqack=2105 mslug_sync=$01000000000101 wram_nonzero=29196 palette_nonzero=12213 palette_writes=42050 palette_nonzero_writes=21205 palette_peak_nonzero=12215 vram_nonzero=8107 recent_loop=0
+instruction watch: ... $05C9E0:cart_video_active=598 $05CA02:cart_video_jsr_render=598 $05B400:cart_render_worker=1196 ...
 ```
 
 The smoke still prints repeated `$FFFFFF`/`$F30001` read misses shortly before
@@ -485,6 +491,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Advanced the Metal Slug render-path discovery frontier through several
+  object/state callback layers: `$060420` variants, the unaligned `$08DEC2`
+  mini-vector, fixed-size `$078218` projectile/spawn code records, the
+  `$057714` four-way branch table, and narrow `$0573A2`/`$060B7A` state
+  entries. The static cart audit remains clean after raising its site storage
+  to 8192 (`sites=4143`, `computed=0`, `runtime_computed=42`), the 500k
+  checkpoint remains clean, and the 5M frontier advances to `$0670D2` after
+  1541841 dispatches with 12213 nonzero palette bytes, 8107 nonzero VRAM
+  words, and 1196 render-worker instruction-watch hits.
 - local: Seeded additional Metal Slug render/object callback metadata: banked
   20-byte record families, representative uneven render data callbacks,
   focused object-init callback runs around `$0478FC`, `$08DC5A`, and `$09911E`,
@@ -1493,11 +1508,12 @@ Use this loop:
 
 Immediate next slice:
 
-- Resolve the current headless Metal Slug CPU frontier at `$060420` while
+- Resolve the current headless Metal Slug CPU frontier at `$0670D2` while
   keeping the runtime/hardware surface minimal.
 - Keep the next work isolated: classify the target as a missing callback/table
-  seed, runtime-computed dispatch site, or a real unsupported generated path
-  before adding any larger renderer/SDL loop.
+  seed, runtime-computed dispatch site, a generated-control-flow issue, or the
+  first runtime bus/sentinel problem behind the repeated `$FFFFFF`/`$F30001`
+  read misses before adding any larger renderer/SDL loop.
 
 Near follow-ups:
 
