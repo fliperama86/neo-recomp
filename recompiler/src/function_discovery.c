@@ -158,8 +158,24 @@ static int is_task_state_store(const NgM68kInstr *load,
         store->size != 4u ||
         store->src.mode != NG_M68K_EA_AREG ||
         store->src.reg != load->dst.reg ||
-        store->dst.mode != NG_M68K_EA_AIND ||
         store->dst.reg != 6u) {
+        return 0;
+    }
+    /* Metal Slug object setup also stores secondary state callbacks in the
+       A6-relative $70 slot.  Keep ADISP matching narrow so ordinary object-data
+       pointer stores do not explode discovery, and do not treat bank-window
+       animation/sprite data pointers as code just because they are stored in
+       the same field. */
+    if (store->dst.mode == NG_M68K_EA_ADISP) {
+        if (store->dst.displacement != 0x70) {
+            return 0;
+        }
+        if ((load->target & 0x00FFFFFFu) >= 0x00100000u) {
+            return 0;
+        }
+    }
+    if (store->dst.mode != NG_M68K_EA_AIND &&
+        store->dst.mode != NG_M68K_EA_ADISP) {
         return 0;
     }
 

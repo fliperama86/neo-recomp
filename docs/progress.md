@@ -67,22 +67,23 @@ headless budgets. Generated cart C still compiles, and the static dispatch audit
 is clean:
 
 ```text
-function candidates: 31014
-dispatch audit: sites=4504 missing_direct=0 external_direct=15 computed=0 runtime_computed=42 jump_tables=1
-BIOS candidates: 32768 (truncated)
+function candidates: 35164
+dispatch audit: sites=5343 missing_direct=0 external_direct=20 computed=0 runtime_computed=42 jump_tables=1
+BIOS candidates: 65536 (truncated)
 ```
 
-The discovery candidate cap and audit storage were raised to keep this explicit
-instead of silently truncating; the cart audit now allows 8192 sites so the
-newly reached object/state subsystem can stay under `--fail-on-dispatch-gaps`.
-`games/mslug.toml` now declares the Neo Geo
-program address map (`$000000-$0FFFFF` fixed P-ROM and `$200000-$2FFFFF` bank
-window), seeds additional structured task/callback tables, and marks currently
-visible dynamic dispatch sites as runtime-computed. Function discovery also
-recognizes common Neo task patterns such as `LEA target,Ax; MOVE.L Ax,(A6)` and
-`LEA target,A1; JSR $0004AE/$0006FE`, which is why the cart candidate count is
-much larger. The BIOS slice still truncates at 32768 candidates; that is not
-blocking the current smoke, but it remains a cleanup item.
+The discovery candidate cap and dispatch-audit seen storage were raised to
+65536 entries so this stays explicit instead of silently truncating; the cart
+audit still fits under the 8192-site audit limit and remains green under
+`--fail-on-dispatch-gaps`. `games/mslug.toml` now declares the Neo Geo program
+address map (`$000000-$0FFFFF` fixed P-ROM and `$200000-$2FFFFF` bank window),
+seeds additional structured task/callback tables, and marks currently visible
+dynamic dispatch sites as runtime-computed. Function discovery also recognizes
+common Neo task patterns such as `LEA target,Ax; MOVE.L Ax,(A6)` and
+`LEA target,A1; JSR $0004AE/$0006FE`; the secondary A6+$70 callback heuristic is
+kept to fixed-P-ROM targets so banked animation/sprite data pointers do not get
+misclassified as code. The BIOS slice still truncates at 65536 candidates; that
+is not blocking the current smoke, but it remains a cleanup item.
 
 An earlier no-BIOS executable checkpoint remains useful as a boundary proof:
 generated cart code reaches cartridge execution and then stops at the expected
@@ -226,44 +227,38 @@ smoke summary: dispatches=500000 cart=410150 bios=89850 unique=1037 last=$05B714
 instruction watch: ... $05C9E0:cart_video_active=148 $05CA02:cart_video_jsr_render=148 $05B400:cart_render_worker=296 ...
 ```
 
-A deeper 5M-budget probe no longer reaches the full guard; after adding
-several banked 10-byte callback-record tables, it advanced to a new cart
-dispatch frontier after about 1.31M dispatches:
+The latest render-discovery slices moved the old 5M frontier through the
+`$0572BE`, `$033256`, `$033346`, `$05FD98`, `$060C9A`, `$03C28E`, `$03C7FC`,
+`$037A3E`, `$03BE4E`, `$058F58`, `$04A110`, `$08716A`, `$055BCE`, `$088CB8`,
+`$084DB0`, `$087F4C`, `$03A60A`, `$001020`, and `$001172` dispatch misses. The
+new metadata covers focused object callback vectors, banked 10/20-byte callback
+records, the `$033346` inline trampoline family, the `$03338A` object-state
+pointer table, early mission/object spawn records, and the main `$000FDE`
+mode/substate vectors at `$000E6E` and `$000B92`.
+
+With those seeds, the current 5M checkpoint reaches the dispatch-budget guard
+without a cart dispatch miss:
 
 ```text
-dispatch miss at $03C776
-smoke summary: dispatches=1311342 cart=1177666 bios=133676 unique=2293 last=$03C776 pc=$03C776 vblank=1974 frame=1974 irqack=1979 mslug_sync=$01000000000101 wram_nonzero=28838 palette_nonzero=11924 palette_writes=41870 palette_nonzero_writes=21026 palette_peak_nonzero=11924 vram_nonzero=7755 recent_loop=0
-instruction watch: ... $05C9E0:cart_video_active=535 $05CA02:cart_video_jsr_render=535 $05B400:cart_render_worker=1070 ...
+smoke summary: dispatches=5000000 cart=4690155 bios=309845 unique=4859 last=$C185A0 pc=$C1862E vblank=5406 frame=5406 irqack=5412 wram_nonzero=349 palette_nonzero=7678 palette_writes=49013 palette_nonzero_writes=22508 palette_peak_nonzero=12278 vram_nonzero=8734 recent_loop=0
+instruction watch: ... $05C9E0:cart_video_active=1752 $05CA02:cart_video_jsr_render=1752 $05B400:cart_render_worker=3504 ...
+```
+
+A direct 10M run of the already-built combined harness also reaches its budget
+without a dispatch miss:
+
+```text
+smoke summary: dispatches=10000000 cart=4789911 bios=5210089 unique=4859 pc=$C123DE vblank=105162 frame=105162 irqack=105168 wram_nonzero=350 palette_nonzero=7678 vram_nonzero=8734 recent_loop=0
+smoke budget reached at $C123DE after 10000000 dispatches
 ```
 
 This is real progress toward headless game execution: the cart main loop, VBlank
 handler, input update, video gate, and render worker all execute repeatedly, and
-the final snapshot has nonzero work RAM, palette RAM, and VRAM. It is still not
-a frame renderer or boot/attract success oracle.
-
-The latest render-discovery slices seed additional banked render/object
-callback records, a focused object-init callback run around `$0478FC`, the
-two-level `$04A09A` ROM target tables, neighboring object callback runs, the
-`$060420` object callback variants, a small `$08DEC2` mini-vector, the
-fixed-size `$078218` projectile/spawn setup records, the `$057714` four-way
-projectile branch table, two more banked 10-byte callback-record runs, the
-`$0E8470` intro/player-select callback variants, and narrow state-handler
-entries needed by the newly reached render path. That moves the 5M frontier
-through `$03C776`, `$088BBC`, `$088B3E`, `$03C7AA`, `$04791C`, `$09911E`,
-`$08DC5A`, `$060420`, `$08DD26`, `$078272`, `$0573A2`, `$060B7A`, `$0670D2`,
-`$03FE5A`, `$03A560`, `$03942E`, `$039A70`, `$04A1BA`, `$03A514`, `$039E54`,
-`$039450`, and `$09A976`; the current CPU-side blocker is:
-
-```text
-dispatch miss at $0572BE
-smoke summary: dispatches=1806913 cart=1659503 bios=147410 unique=3714 last=$0572BE pc=$0572BE vblank=2237 frame=2237 irqack=2242 mslug_sync=$01000000000001 wram_nonzero=29239 palette_nonzero=12230 palette_writes=42200 palette_nonzero_writes=21352 palette_peak_nonzero=12238 vram_nonzero=8102 recent_loop=0
-instruction watch: ... $05C9E0:cart_video_active=666 $05CA02:cart_video_jsr_render=666 $05B400:cart_render_worker=1332 ...
-```
-
-The smoke still prints repeated `$FFFFFF`/`$F30001` read misses shortly before
-the deeper dispatch frontier, so the next slice should keep classifying whether
-that is harmless out-of-range probing, a stack/sentinel pattern, or the first
-runtime bus issue that must be modeled.
+the final snapshot has nonzero palette RAM and VRAM. It is still not a frame
+renderer or boot/attract success oracle: after the current mode transition the
+longer run spends most of its time in BIOS/VBlank wait code, and the smoke still
+prints known benign byte-read probes at `$FFFFFF`/`$F3000x` that the progress
+script now filters separately from dispatch/write/word-bus misses.
 
 This snapshot/debug-render path is also the cleanest seam for a real SDL host.
 When SDL2 is available through `pkg-config`, CMake builds the optional

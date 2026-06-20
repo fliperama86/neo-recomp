@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#define NG_DISPATCH_AUDIT_MAX_SEEN 32768u
+#define NG_DISPATCH_AUDIT_MAX_SEEN NG_FUNCTION_DISCOVERY_MAX_CANDIDATES
 
 void ng_dispatch_audit_init(NgDispatchAudit *audit) {
     if (audit) {

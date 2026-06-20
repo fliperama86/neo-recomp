@@ -494,6 +494,40 @@ stride = 4
 format = "abs32"
 
 [[jump_table]]
+# Inline JMP trampoline entries selected by the object helper at $05EAB6 after
+# the $033256/$0332BC handlers load the table address.  The entries themselves
+# are dispatch targets, so use the self-seeding table form with a 6-byte stride.
+start = 0x033346
+end = 0x033358
+stride = 6
+format = "bra16"
+
+[[jump_table]]
+# Object state handler pointer table immediately after the $033346 trampoline
+# entries.  Stop before the following table-of-table pointers at $03349A.
+start = 0x03338A
+end = 0x03349A
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Main game-mode callback vector selected by the $000FDE runtime dispatcher
+# through the A6+$70 state pointer.  Stop at $000E8E where code resumes.
+start = 0x000E6E
+end = 0x000E8E
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Mode/substate callback vector used by the same $000FDE state dispatcher.
+# Stop before the $FFFFFFFF sentinel and following table-chain pointer at
+# $000BC6/$000BCA.
+start = 0x000B92
+end = 0x000BC6
+stride = 4
+format = "abs32"
+
+[[jump_table]]
 # Mission/player intro object callbacks stored in structured data.
 start = 0x097684
 end = 0x097724
@@ -501,12 +535,39 @@ stride = 0x14
 format = "abs32"
 
 [[jump_table]]
-# Intro/player-select object init callbacks, including the four preceding
-# variants reached on the current render/object path.  Runtime object creation
-# stores these long pointers into task state, so seed the table rather than
-# chasing each runtime dispatch miss by hand.
-start = 0x0E8470
+# Earlier mission/object spawn record reached by the render path.  The full
+# 0x14-byte record run is sizeable, so seed the active callback field first.
+start = 0x097322
+end = 0x097326
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Intro/player-select object init callbacks, including the preceding render
+# variants reached on the current object path.  Runtime object creation stores
+# these long pointers into task state, so seed the compact table slice rather
+# than chasing each runtime dispatch miss by hand.
+start = 0x0E843C
 end = 0x0E8524
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Object callback variants immediately before the $060420 table.  This focused
+# prefix includes the compact $0572xx/$0573xx state-entry run reached at the
+# current render frontier without pulling in the larger adjacent callback set.
+start = 0x0E8000
+end = 0x0E805C
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Focused middle slice of the same object callback vector.  The full
+# $0E805C-$0E80A0 gap is too expensive for the current near-cap discovery set,
+# so seed only the active render/object callback family reached after the
+# $033346 inline trampoline table.
+start = 0x0E8078
+end = 0x0E8090
 stride = 4
 format = "abs32"
 
@@ -581,6 +642,15 @@ stride = 0x0A
 format = "abs32"
 
 [[jump_table]]
+# Preface records for the same banked mission/object callback block.  These
+# wider records carry callback longwords at a 0x14 cadence before the compact
+# $279F40 run begins.
+start = 0x279F04
+end = 0x279F40
+stride = 0x14
+format = "abs32"
+
+[[jump_table]]
 # Another banked mission/object callback record run reached after the $279F40
 # table.  Same 10-byte structure with the callback longword at record +4.
 start = 0x279AB0
@@ -627,11 +697,77 @@ stride = 0x0A
 format = "abs32"
 
 [[jump_table]]
+# Small banked object callback-record cluster reached after the focused object
+# vectors.  This begins at the first callback field in the run and strides over
+# the embedded sentinel gaps; keep it narrow so the near-cap discovery set does
+# not absorb the surrounding non-callback record data.
+start = 0x279D02
+end = 0x279D52
+stride = 0x0A
+format = "abs32"
+
+[[jump_table]]
+# Wider pre-sentinel banked object records that feed the current $03A6xx render
+# helper family.  The callback longword is 0x1C bytes into the first observed
+# command group and then repeats every 0x14 bytes until the compact $279D02
+# cluster begins.
+start = 0x279C24
+end = 0x279C78
+stride = 0x14
+format = "abs32"
+
+[[jump_table]]
 # Render/object data block callback reached after the 10-byte callback-record
 # clusters.  Several banked data blocks embed this same callback as an abs32
 # longword; seed one representative pointer rather than a one-off function.
 start = 0x27BB26
 end = 0x27BB2A
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Sibling render/object data block callback from the same uneven banked command
+# stream family as the $27BB26 representative.  The surrounding bytes are sprite
+# command data, so keep this to the single repeated callback longword.
+start = 0x27BA3A
+end = 0x27BA3E
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Banked action/object data embeds this callback inside an uneven command stream
+# (the same target appears in several sibling blocks).  Seed one representative
+# pointer so the current render path can enter the $033256 handler without
+# widening the surrounding non-code data into the near-cap discovery set.
+start = 0x27C1A2
+end = 0x27C1A6
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Another uneven banked action stream embeds a render/object callback selected
+# after the $0E8078 family.  Seed one representative occurrence of the repeated
+# $060C9A target instead of scanning the surrounding mixed sprite command data.
+start = 0x2C2A74
+end = 0x2C2A78
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Banked action stream callback that reuses the $04A09A helper family; seed a
+# representative occurrence of the $04A110 sound/effect target without widening
+# the mixed sprite command records around it.
+start = 0x29BA72
+end = 0x29BA76
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Follow-up banked action stream callback from the same mixed command block as
+# $29BA72.  This target spawns a secondary object state through the standard
+# helper, so keep the metadata to one representative longword.
+start = 0x29BAEC
+end = 0x29BAF0
 stride = 4
 format = "abs32"
 
@@ -674,6 +810,25 @@ format = "abs32"
 start = 0x2EB970
 end = 0x2EBA24
 stride = 0x14
+format = "abs32"
+
+[[jump_table]]
+# Further continuation of the 20-byte render/object callback records selected
+# after the currently active object state enters the $088Cxx stub family.  This
+# post-sentinel section carries the callback longword at the start of each
+# record; keep it to the compact forward run for now.
+start = 0x2EBAC0
+end = 0x2EBB60
+stride = 0x14
+format = "abs32"
+
+[[jump_table]]
+# Mixed banked command stream callback reached from the same render/object
+# state family as the $088Cxx records.  The surrounding bytes are not a uniform
+# pointer table, so seed the active init callback as one representative.
+start = 0x2ED0BC
+end = 0x2ED0C0
+stride = 4
 format = "abs32"
 
 [[jump_table]]

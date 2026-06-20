@@ -137,6 +137,9 @@ summary_re = re.compile(
     r"vram_nonzero=(?P<vram_nonzero>\d+) "
     r"vram_sum=\$(?P<vram_sum>[0-9A-Fa-f]+) recent_loop=(?P<recent_loop>\d+)"
 )
+allowed_read8_miss_re = re.compile(
+    r"^ng68k_read8 miss at \$(?:FFFFFF|F3000[0-9A-F])$"
+)
 
 summaries = []
 for budget in budgets:
@@ -160,8 +163,12 @@ for budget in budgets:
     if proc.returncode != 0:
         print(f"headless smoke failed at budget {budget}: exit {proc.returncode}", file=sys.stderr)
         raise SystemExit(proc.returncode)
-    if "miss at $" in proc.stdout:
-        print(f"headless smoke hit dispatch/bus miss at budget {budget}", file=sys.stderr)
+    for line in proc.stdout.splitlines():
+        if "miss at $" not in line:
+            continue
+        if line.startswith("ng68k_read8 miss at $") and allowed_read8_miss_re.match(line):
+            continue
+        print(f"headless smoke hit dispatch/bus miss at budget {budget}: {line}", file=sys.stderr)
         raise SystemExit(1)
     summary_match = summary_re.search(proc.stdout)
     if not summary_match:

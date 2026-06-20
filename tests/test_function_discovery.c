@@ -177,6 +177,59 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x40u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x43FAu);  /* LEA $000020(PC),A1 */
+        write16(&rom, 0x02u, 0x001Eu);
+        write16(&rom, 0x04u, 0x2D49u);  /* MOVE.L A1,($70,A6): task field callback */
+        write16(&rom, 0x06u, 0x0070u);
+        write16(&rom, 0x08u, 0x4E75u);
+        write16(&rom, 0x20u, 0x4E75u);  /* callback after the caller's RTS */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x20u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x80u);
+        CHECK(rom.data != NULL);
+        ng_program_rom_set_address_map(&rom, 0x000000u, 0x40u, 0x200000u, 0x40u);
+
+        write16(&rom, 0x00u, 0x43F9u);  /* LEA $200020,A1: banked data */
+        write32(&rom, 0x02u, 0x00200020u);
+        write16(&rom, 0x06u, 0x2D49u);  /* MOVE.L A1,($70,A6) */
+        write16(&rom, 0x08u, 0x0070u);
+        write16(&rom, 0x0Au, 0x4E75u);
+        write16(&rom, 0x60u, 0x4E75u);  /* mapped bank-window bytes */
+
+        CHECK(ng_program_rom_addr_is_mapped(&rom, 0x200020u));
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x200020u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x40u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x43FAu);  /* LEA $000020(PC),A1 */
+        write16(&rom, 0x02u, 0x001Eu);
+        write16(&rom, 0x04u, 0x2D49u);  /* MOVE.L A1,($8,A6): ordinary field */
+        write16(&rom, 0x06u, 0x0008u);
+        write16(&rom, 0x08u, 0x4E75u);
+        write16(&rom, 0x20u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x20u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x500u);
         CHECK(rom.data != NULL);
 
