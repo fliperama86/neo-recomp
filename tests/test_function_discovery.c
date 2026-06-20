@@ -379,10 +379,14 @@ int main(void) {
         write16(&rom, 0x50u, 0x4E75u);
         write16(&rom, 0x60u, 0x0020u);       /* manual pcrel16 target $80 */
         write16(&rom, 0x80u, 0x4E75u);
+        write32(&rom, 0x94u, 0x000000C0u);   /* callback at +4 in 10-byte record */
+        write32(&rom, 0x9Eu, 0x000000D0u);   /* callback at +4 in next record */
+        write16(&rom, 0xC0u, 0x4E75u);
+        write16(&rom, 0xD0u, 0x4E75u);
 
         NgGameConfig config;
         ng_game_config_init(&config);
-        config.jump_table_count = 2u;
+        config.jump_table_count = 3u;
         config.jump_tables[0].start = 0x20u;
         config.jump_tables[0].end = 0x28u;
         config.jump_tables[0].stride = 4u;
@@ -391,6 +395,10 @@ int main(void) {
         config.jump_tables[1].end = 0x62u;
         config.jump_tables[1].stride = 2u;
         config.jump_tables[1].format = NG_GAME_CONFIG_JUMP_TABLE_PCREL16;
+        config.jump_tables[2].start = 0x94u;
+        config.jump_tables[2].end = 0xA8u;
+        config.jump_tables[2].stride = 0x0Au;
+        config.jump_tables[2].format = NG_GAME_CONFIG_JUMP_TABLE_ABS32;
 
         const uint32_t seeds[] = {0x00000010u};
         CHECK(ng_function_discover_from_game_config(&rom,
@@ -398,11 +406,13 @@ int main(void) {
                                                     1u,
                                                     &config,
                                                     &discovery));
-        CHECK(discovery.count == 4u);
+        CHECK(discovery.count == 6u);
         CHECK(discovery.addrs[0] == 0x10u);
         CHECK(discovery.addrs[1] == 0x40u);
         CHECK(discovery.addrs[2] == 0x50u);
         CHECK(discovery.addrs[3] == 0x80u);
+        CHECK(discovery.addrs[4] == 0xC0u);
+        CHECK(discovery.addrs[5] == 0xD0u);
 
         ng_program_rom_free(&rom);
     }

@@ -67,8 +67,8 @@ headless budgets. Generated cart C still compiles, and the static dispatch audit
 is clean:
 
 ```text
-function candidates: 22893
-dispatch audit: sites=2782 missing_direct=0 external_direct=15 computed=0 runtime_computed=40 jump_tables=1
+function candidates: 23518
+dispatch audit: sites=2933 missing_direct=0 external_direct=15 computed=0 runtime_computed=40 jump_tables=1
 BIOS candidates: 32768 (truncated)
 ```
 
@@ -224,20 +224,21 @@ smoke summary: dispatches=500000 cart=410150 bios=89850 unique=1037 last=$05B714
 instruction watch: ... $05C9E0:cart_video_active=148 $05CA02:cart_video_jsr_render=148 $05B400:cart_render_worker=296 ...
 ```
 
-A deeper 5M-budget probe no longer reaches the full guard; it advances to a new
-cart dispatch frontier after about 1.09M dispatches:
+A deeper 5M-budget probe no longer reaches the full guard; after adding
+several banked 10-byte callback-record tables, it advances to a new cart
+dispatch frontier after about 1.31M dispatches:
 
 ```text
-dispatch miss at $03BEA0
-smoke summary: dispatches=1088115 cart=964779 bios=123336 unique=1923 last=$03BEA0 pc=$03BEA0 vblank=1776 frame=1776 irqack=1781 mslug_sync=$01000000000001 wram_nonzero=26603 palette_nonzero=9723 palette_writes=33095 palette_nonzero_writes=12268 palette_peak_nonzero=9787 vram_nonzero=7643 recent_loop=0
-instruction watch: ... $05C9E0:cart_video_active=448 $05CA02:cart_video_jsr_render=448 $05B400:cart_render_worker=896 ...
+dispatch miss at $03C776
+smoke summary: dispatches=1311342 cart=1177666 bios=133676 unique=2293 last=$03C776 pc=$03C776 vblank=1974 frame=1974 irqack=1979 mslug_sync=$01000000000101 wram_nonzero=28838 palette_nonzero=11924 palette_writes=41870 palette_nonzero_writes=21026 palette_peak_nonzero=11924 vram_nonzero=7755 recent_loop=0
+instruction watch: ... $05C9E0:cart_video_active=535 $05CA02:cart_video_jsr_render=535 $05B400:cart_render_worker=1070 ...
 ```
 
 This is real progress toward headless game execution: the cart main loop, VBlank
 handler, input update, video gate, and render worker all execute repeatedly, and
 the final snapshot has nonzero work RAM, palette RAM, and VRAM. It is still not
 a frame renderer or boot/attract success oracle; the next CPU-side blocker is
-the missing generated/runtime dispatch target at `$03BEA0`.
+the missing generated/runtime dispatch target at `$03C776`.
 
 This snapshot/debug-render path is also the cleanest seam for a real SDL host.
 When SDL2 is available through `pkg-config`, CMake builds the optional
@@ -468,14 +469,19 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Seeded banked Metal Slug 10-byte callback-record tables reached
+  on the render path. This moved the 5M-budget frontier from `$03BEA0` through
+  `$03A656`, `$039940`, `$03A1B8`, and `$03A35E` to `$03C776` after 1311342
+  dispatches, while keeping the 500k checkpoint clean and increasing the render
+  worker instruction watch to 1070 hits.
 - local: Advanced the Metal Slug headless/render-discovery path. The cart
   recompile now uses an explicit Neo Geo P-ROM address map, expanded discovery
   and dispatch-audit capacities, task callback/spawn heuristics, instruction
   watch telemetry, and a less aggressive scanline-poll interval so synthetic
   VBlank no longer starves the main loop. The 500k smoke reaches repeated
   cart video/render worker activity with nonzero palette/VRAM state; the deeper
-  5M probe now advances to dispatch frontier `$03BEA0` after 1088115
-  dispatches, with the static audit still clean.
+  5M probe advanced first to `$03BEA0` after 1088115 dispatches, with the
+  static audit still clean.
 - local: Fixed generic `MOVE` destination-predecrement source capture. The
   generated-exec fixture covered `MOVE.L A7,-(A7)` red first and now checks
   that the pushed longword is the old stack pointer value, not the
@@ -1463,7 +1469,7 @@ Use this loop:
 
 Immediate next slice:
 
-- Resolve the current headless Metal Slug CPU frontier at `$03BEA0` while
+- Resolve the current headless Metal Slug CPU frontier at `$03C776` while
   keeping the runtime/hardware surface minimal.
 - Keep the next work isolated: classify the target as a missing callback/table
   seed, runtime-computed dispatch site, or a real unsupported generated path

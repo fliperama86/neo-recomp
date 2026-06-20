@@ -497,6 +497,45 @@ end = 0x0E8524
 stride = 4
 format = "abs32"
 
+[[jump_table]]
+# Banked mission/object callback records reached on the render path.  The
+# records are 10 bytes wide; the callback longword starts four bytes into each
+# record, so the metadata starts at the first callback field.
+start = 0x279F40
+end = 0x279F8A
+stride = 0x0A
+format = "abs32"
+
+[[jump_table]]
+# Another banked mission/object callback record run reached after the $279F40
+# table.  Same 10-byte structure with the callback longword at record +4.
+start = 0x279AB0
+end = 0x279B2C
+stride = 0x0A
+format = "abs32"
+
+[[jump_table]]
+# Banked callback record cluster reached from the render path; split before the
+# following all-ones sentinel gap.
+start = 0x27981A
+end = 0x27983C
+stride = 0x0A
+format = "abs32"
+
+[[jump_table]]
+# Continuation of the same record family after the sentinel gap.
+start = 0x27984C
+end = 0x279882
+stride = 0x0A
+format = "abs32"
+
+[[jump_table]]
+# Banked callback records for the state machine guarded around $0397A6.
+start = 0x2798DC
+end = 0x279926
+stride = 0x0A
+format = "abs32"
+
 [dispatch]
 # Callback target is loaded from RAM through A6 and dispatched via JSR (A0).
 # The additional sites are reached after seeding the VBlank handler and are
