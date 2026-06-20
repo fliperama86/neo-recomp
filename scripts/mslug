@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RUNNER="$ROOT/scripts/run_mslug_sdl.sh"
+
+usage() {
+  cat >&2 <<USAGE
+usage: scripts/mslug [quick|build|--ff N] [game.neo bios.rom [lo-rom]]
+
+Default paths:
+  ~/Documents/Games/Mister/NEOGEO/mslug.neo
+  ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1
+
+Examples:
+  scripts/mslug            # normal live SDL run
+  scripts/mslug quick      # faster startup
+  scripts/mslug build      # build/link only, do not launch
+USAGE
+}
+
+declare -a args=()
+while (($#)); do
+  case "$1" in
+    quick|--quick|-q)
+      export NG_MSLUG_SDL_FAST_FORWARD=10000
+      ;;
+    noff|--no-ff)
+      export NG_MSLUG_SDL_FAST_FORWARD=0
+      ;;
+    build|--build|--build-only)
+      export NG_MSLUG_SDL_BUILD_ONLY=1
+      ;;
+    --ff)
+      shift
+      if (($# == 0)); then
+        echo "--ff needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_FAST_FORWARD="$1"
+      ;;
+    --scale)
+      shift
+      if (($# == 0)); then
+        echo "--scale needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_SCALE="$1"
+      ;;
+    --dpf)
+      shift
+      if (($# == 0)); then
+        echo "--dpf needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_DISPATCHES_PER_REFRESH="$1"
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      args+=("$@")
+      break
+      ;;
+    *)
+      args+=("$1")
+      ;;
+  esac
+  shift
+done
+
+if ((${#args[@]})); then
+  exec "$RUNNER" "${args[@]}"
+else
+  exec "$RUNNER"
+fi

@@ -381,16 +381,17 @@ rather than driving the CPU/runtime in a live loop.
 There is now also a first live SDL host path:
 
 ```sh
-scripts/run_mslug_sdl.sh \
-  ~/Documents/Games/Mister/NEOGEO/mslug.neo \
-  ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1
+scripts/mslug
 ```
 
-The script uses the same Metal Slug recompilation and user-provided BIOS slice
-as the headless smoke, then links `tools/sdl_live_host.c` with the generated
-cart/BIOS objects, runtime, video renderer, and shared dispatch trampoline. The
-host initializes the runtime, optionally fast-forwards to the current useful
-frontier (`NG_MSLUG_SDL_FAST_FORWARD`, default 500000 dispatches), then advances
+The wrapper defaults to the local MiSTer-style Metal Slug and BIOS paths;
+`scripts/mslug quick` shortens startup, and `scripts/mslug build` only
+builds/links. The script uses the same Metal Slug recompilation and
+user-provided BIOS slice as the headless smoke, then links
+`tools/sdl_live_host.c` with the generated cart/BIOS objects, runtime, video
+renderer, and shared dispatch trampoline. The host initializes the runtime,
+optionally fast-forwards to the current useful frontier
+(`NG_MSLUG_SDL_FAST_FORWARD`, default 500000 dispatches), then advances
 generated CPU dispatches each SDL refresh and renders directly from live
 runtime VRAM/palette state. `NG_MSLUG_SDL_MAX_REFRESHES` plus
 `SDL_VIDEODRIVER=dummy` gives a noninteractive smoke path; locally this was

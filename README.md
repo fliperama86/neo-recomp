@@ -240,16 +240,15 @@ For a first live SDL host that drives generated CPU/runtime state and renders
 the current framebuffer continuously, use:
 
 ```sh
-scripts/run_mslug_sdl.sh \
-  ~/Documents/Games/Mister/NEOGEO/mslug.neo \
-  ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1
+scripts/mslug
 ```
 
-The script recompiles Metal Slug, builds the user-provided BIOS slice, links a
-temporary `build/mslug_sdl_host`, fast-forwards by
-`NG_MSLUG_SDL_FAST_FORWARD` dispatches (default: 500000), then runs an SDL
-window. Tune `NG_MSLUG_SDL_DISPATCHES_PER_REFRESH`, `NG_MSLUG_SDL_SCALE`, and
-`NG_MSLUG_SDL_MAX_REFRESHES` for local experiments. This is not a full emulator
+That wrapper defaults to `~/Documents/Games/Mister/NEOGEO/mslug.neo` and
+`~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. Use `scripts/mslug quick` for
+a shorter fast-forward, `scripts/mslug build` to build/link without launching,
+or pass custom paths after the command if needed. The underlying script
+recompiles Metal Slug, builds the user-provided BIOS slice, links a temporary
+`build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
 yet; it reuses the headless runtime model and current renderer, but it is a
 real live host loop rather than a saved-snapshot reload.
 
