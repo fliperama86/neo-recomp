@@ -325,6 +325,18 @@ shrink falls back to an approximation when no LO ROM is provided, line-buffer
 priority is intentionally approximate, and there is no live SDL gameplay loop
 yet.
 
+`neo-render-snapshot --sprite-report` now prints per-snapshot visible sprite
+palette usage. On `build/mslug_snapshot_render_path`, the report shows the title
+background sprite strips are active but their selected palette-bank entries are
+blank/white, matching the false-color render that shows sprite geometry while
+the real palette render is black. On `build/mslug_snapshot_next`, the same
+palette IDs have usable colors, which explains why that later title snapshot
+renders the building/background sprites correctly. The current in-game
+`build/mslug_snapshot_500k_current` report shows active gameplay palettes with
+usable colors and no 96-sprite-per-line clipping, so remaining visual issues are
+more likely timing/line-buffer/positioning than C-region decode or missing
+palette data.
+
 The optional SDL snapshot host now consumes the same renderer when passed a
 `.neo` image:
 

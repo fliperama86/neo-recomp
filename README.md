@@ -195,6 +195,9 @@ That atlas proves C-region sprite tile decode and sprite-map/palette plumbing,
 but it is not a positioned/layered game frame.
 If a snapshot palette is all white/black, add `--debug-palette` to false-color
 the sprite pixel indices.
+Use `--sprite-report` to print which visible sprite palettes are active in the
+snapshot and whether the selected palette bank has usable non-white colors; this
+is useful when false-color sprites exist but the real render is blank.
 
 For a first-pass real game-frame image, render positioned sprites plus the
 visible fix layer:

@@ -164,6 +164,26 @@ def main() -> int:
     assert pixels[3:6] == bytes((0, 255, 0))
     assert pixels[6:9] == bytes((0, 0, 0))
 
+    report_proc = subprocess.run(
+        [
+            str(render_tool),
+            "--mode",
+            "sprites",
+            "--sprite-report",
+            str(snapshot_dir),
+            str(neo_path),
+            str(work_dir / "sprites_report.ppm"),
+        ],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    assert "sprite report: palette_bank=0" in report_proc.stdout
+    assert "drawable_samples=16" in report_proc.stdout
+    assert "palette 0x01: samples=16 usable_colors=2/15" in report_proc.stdout
+    assert "WARNING" not in report_proc.stdout
+
     subprocess.run(
         [
             str(render_tool),

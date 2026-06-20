@@ -244,6 +244,7 @@ static void usage(const char *argv0) {
             "  --sprite-rows <n>            atlas rows (default: 32)\n"
             "  --lo-rom <path>              optional 000-lo.lo/ng-lo.rom vertical\n"
             "                               zoom ROM (auto-detects next to .neo)\n"
+            "  --sprite-report              print visible sprite/palette diagnostics\n"
             "\n"
             "fix renders the CPU-visible 40x32 fix tile map from the snapshot\n"
             "and cartridge S region. sprite-atlas renders slow-VRAM sprite-map\n"
@@ -379,6 +380,252 @@ static uint8_t snapshot_auto_animation_counter(uint32_t frame_count, uint16_t ls
     return (uint8_t)((frame_count + speed) / (speed + 1u));
 }
 
+static uint16_t report_sprite_y(uint16_t scb3_word) {
+    return (uint16_t)((496u - ((scb3_word >> 7) & 0x01FFu)) & 0x01FFu);
+}
+
+static int report_sprite_on_scanline(uint32_t scanline,
+                                     uint16_t y,
+                                     uint8_t rows) {
+    return rows >= 0x20u ||
+           (((scanline - (uint32_t)y) & 0x01FFu) <
+            (uint32_t)rows * NG_NEO_SPRITE_TILE_PIXELS);
+}
+
+static void report_sprite_zoom_source(const uint8_t *zoom_rom,
+                                      uint32_t zoom_rom_size,
+                                      uint8_t zoom_y,
+                                      uint8_t zoom_line,
+                                      uint8_t *out_tile,
+                                      uint8_t *out_line) {
+    if (zoom_rom && zoom_rom_size >= NG_NEO_ZOOM_ROM_BYTES) {
+        uint8_t source_line =
+            zoom_rom[((uint32_t)zoom_y << 8) | (uint32_t)zoom_line];
+        *out_tile = (uint8_t)(source_line >> 4);
+        *out_line = (uint8_t)(source_line & 0x0Fu);
+        return;
+    }
+
+    uint16_t source_line;
+    if (zoom_y == 0xFFu) {
+        source_line = zoom_line;
+    } else if (zoom_line <= zoom_y) {
+        source_line = (uint16_t)(((uint32_t)zoom_line * 256u) /
+                                 ((uint32_t)zoom_y + 1u));
+    } else {
+        source_line = 0xFFu;
+    }
+
+    *out_tile = (uint8_t)(source_line >> 4);
+    *out_line = (uint8_t)(source_line & 0x0Fu);
+}
+
+static uint8_t report_build_active_sprite_list(
+    const uint16_t *vram_words,
+    uint32_t scanline,
+    uint16_t active_sprites[NG_NEO_SPRITES_PER_SCANLINE],
+    int *out_limited) {
+    uint16_t y = 0;
+    uint8_t rows = 0;
+    uint8_t active_count = 0;
+
+    for (uint16_t sprite = 0; sprite < NG_NEO_SPRITE_DISPLAY_LIMIT; ++sprite) {
+        uint16_t scb3 = vram_words[0x8200u + sprite];
+        if (((scb3 >> 6) & 1u) == 0u) {
+            y = report_sprite_y(scb3);
+            rows = (uint8_t)(scb3 & 0x3Fu);
+        }
+
+        if (rows == 0u ||
+            !report_sprite_on_scanline(scanline, y, rows)) {
+            continue;
+        }
+
+        active_sprites[active_count++] = sprite;
+        if (active_count == NG_NEO_SPRITES_PER_SCANLINE) {
+            if (out_limited) {
+                *out_limited = 1;
+            }
+            break;
+        }
+    }
+
+    return active_count;
+}
+
+static uint32_t report_palette_nonzero_colors(const uint16_t *palette_words,
+                                              uint32_t palette) {
+    uint32_t count = 0;
+    for (uint32_t color = 1; color < 16u; ++color) {
+        if (palette_words[palette * 16u + color] != 0u) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static uint32_t report_palette_usable_colors(const uint16_t *palette_words,
+                                             uint32_t palette) {
+    uint32_t count = 0;
+    for (uint32_t color = 1; color < 16u; ++color) {
+        uint16_t word = palette_words[palette * 16u + color];
+        if (word != 0u && word != 0x7FFFu) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static void print_sprite_report(const uint16_t *vram_words,
+                                const uint16_t *palette_words,
+                                uint32_t palette_bank,
+                                const NgNeoVideoRenderOptions *options) {
+    uint32_t palette_samples[256];
+    memset(palette_samples, 0, sizeof(palette_samples));
+
+    uint32_t active_samples = 0;
+    uint32_t drawable_samples = 0;
+    uint32_t x_skipped_samples = 0;
+    uint32_t map_skipped_samples = 0;
+    uint32_t limited_lines = 0;
+    uint8_t max_active = 0;
+
+    for (uint32_t scanline = 0; scanline < NG_NEO_SPRITE_FRAME_HEIGHT; ++scanline) {
+        uint16_t active_sprites[NG_NEO_SPRITES_PER_SCANLINE];
+        int limited = 0;
+        uint8_t active_count = report_build_active_sprite_list(
+            vram_words,
+            scanline,
+            active_sprites,
+            &limited);
+        if (active_count > max_active) {
+            max_active = active_count;
+        }
+        if (limited) {
+            ++limited_lines;
+        }
+
+        uint16_t chain_x = 0;
+        uint16_t chain_y = 0;
+        uint8_t chain_rows = 0;
+        uint8_t chain_zoom_y = 0xFFu;
+        uint8_t chain_zoom_x = 0x0Fu;
+
+        for (uint8_t i = 0; i < active_count; ++i) {
+            uint16_t sprite = active_sprites[i];
+            uint16_t scb2 = vram_words[0x8000u + sprite];
+            uint16_t scb3 = vram_words[0x8200u + sprite];
+            uint16_t scb4 = vram_words[0x8400u + sprite];
+            uint8_t sticky = (uint8_t)((scb3 >> 6) & 1u);
+
+            uint16_t x;
+            uint16_t y;
+            uint8_t rows;
+            uint8_t zoom_y;
+            uint8_t zoom_x;
+            if (sticky) {
+                x = (uint16_t)((chain_x + (uint16_t)chain_zoom_x + 1u) & 0x01FFu);
+                y = chain_y;
+                rows = chain_rows;
+                zoom_y = chain_zoom_y;
+                zoom_x = (uint8_t)((scb2 >> 8) & 0x0Fu);
+            } else {
+                x = (uint16_t)((scb4 >> 7) & 0x01FFu);
+                y = report_sprite_y(scb3);
+                rows = (uint8_t)(scb3 & 0x3Fu);
+                zoom_y = (uint8_t)(scb2 & 0xFFu);
+                zoom_x = (uint8_t)((scb2 >> 8) & 0x0Fu);
+            }
+
+            chain_x = x;
+            chain_y = y;
+            chain_rows = rows;
+            chain_zoom_y = zoom_y;
+            chain_zoom_x = zoom_x;
+
+            ++active_samples;
+            if (rows == 0u ||
+                !report_sprite_on_scanline(scanline, y, rows)) {
+                continue;
+            }
+            if (x >= NG_NEO_SPRITE_FRAME_WIDTH && x <= 0x01F0u) {
+                ++x_skipped_samples;
+                continue;
+            }
+
+            uint16_t sprite_line =
+                (uint16_t)(((uint32_t)scanline - (uint32_t)y) & 0x01FFu);
+            uint8_t zoom_line = (uint8_t)sprite_line;
+            uint8_t invert = (uint8_t)((sprite_line >> 8) & 1u);
+            if (invert) {
+                zoom_line ^= 0xFFu;
+            }
+            if (rows > 0x20u) {
+                uint16_t period = (uint16_t)(((uint16_t)zoom_y + 1u) << 1);
+                if (period != 0u) {
+                    zoom_line = (uint8_t)(zoom_line % period);
+                    if (zoom_line > zoom_y) {
+                        zoom_line = (uint8_t)(period - 1u - zoom_line);
+                        invert = (uint8_t)!invert;
+                    }
+                }
+            }
+
+            uint8_t tile_y;
+            uint8_t source_y;
+            report_sprite_zoom_source(options ? options->zoom_rom : NULL,
+                                      options ? options->zoom_rom_size : 0,
+                                      zoom_y,
+                                      zoom_line,
+                                      &tile_y,
+                                      &source_y);
+            (void)source_y;
+            if (invert) {
+                tile_y ^= 0x1Fu;
+            }
+
+            uint32_t map_addr = (uint32_t)sprite * 64u + (uint32_t)tile_y * 2u;
+            if (map_addr + 1u >= 0x7000u) {
+                ++map_skipped_samples;
+                continue;
+            }
+
+            NgNeoSpriteMapEntry entry = ng_neogeo_video_decode_sprite_map_entry(
+                vram_words[map_addr],
+                vram_words[map_addr + 1u]);
+            ++drawable_samples;
+            ++palette_samples[entry.palette];
+        }
+    }
+
+    fprintf(stdout,
+            "sprite report: palette_bank=%u active_samples=%u "
+            "drawable_samples=%u x_skipped=%u map_skipped=%u "
+            "max_active_per_line=%u limited_lines=%u\n",
+            palette_bank,
+            active_samples,
+            drawable_samples,
+            x_skipped_samples,
+            map_skipped_samples,
+            max_active,
+            limited_lines);
+    for (uint32_t palette = 0; palette < 256u; ++palette) {
+        if (palette_samples[palette] == 0u) {
+            continue;
+        }
+        uint32_t nonzero = report_palette_nonzero_colors(palette_words, palette);
+        uint32_t usable = report_palette_usable_colors(palette_words, palette);
+        fprintf(stdout,
+                "  palette 0x%02X: samples=%u usable_colors=%u/15 "
+                "nonzero_colors=%u/15%s\n",
+                palette,
+                palette_samples[palette],
+                usable,
+                nonzero,
+                usable == 0u ? " WARNING blank-or-white active palette" : "");
+    }
+}
+
 static int parse_u32_option(const char *text, uint32_t max_value, uint32_t *out) {
     char *end = NULL;
     unsigned long parsed = strtoul(text, &end, 0);
@@ -397,6 +644,7 @@ int main(int argc, char **argv) {
     uint32_t sprite_cols = 32;
     uint32_t sprite_rows = 32;
     const char *lo_rom_path = NULL;
+    int sprite_report = 0;
     int argi = 1;
 
     while (argi < argc && strncmp(argv[argi], "--", 2) == 0) {
@@ -433,6 +681,8 @@ int main(int argc, char **argv) {
             ++argi;
         } else if (strcmp(option, "--debug-palette") == 0) {
             debug_palette = 1;
+        } else if (strcmp(option, "--sprite-report") == 0) {
+            sprite_report = 1;
         } else if (strcmp(option, "--lo-rom") == 0) {
             if (argc <= argi) {
                 fprintf(stderr, "LO ROM option requires a path\n");
@@ -529,10 +779,6 @@ int main(int argc, char **argv) {
         }
     }
     if (ok) {
-        if (debug_palette) {
-            fill_debug_palette(palette_words);
-            fill_debug_palette(palette_words + NG_NEO_PALETTE_COLORS_PER_BANK);
-        }
         if (palette_bank == NG_RENDER_PALETTE_BANK_AUTO) {
             palette_bank = debug_palette ? 0u : choose_palette_bank(palette_words);
         }
@@ -544,6 +790,16 @@ int main(int argc, char **argv) {
         render_options.auto_animation_counter =
             snapshot_auto_animation_counter(frame_count, lspc);
         render_options.auto_animation_disabled = (uint8_t)((lspc >> 3) & 1u);
+        if (sprite_report) {
+            print_sprite_report(vram_words,
+                                palette_words + palette_word_offset,
+                                palette_bank,
+                                &render_options);
+        }
+        if (debug_palette) {
+            fill_debug_palette(palette_words);
+            fill_debug_palette(palette_words + NG_NEO_PALETTE_COLORS_PER_BANK);
+        }
         if (mode == NG_RENDER_MODE_FIX) {
             ok = ng_neogeo_video_render_fix_layer_argb(
                 image.s.data,
