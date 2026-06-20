@@ -78,6 +78,9 @@ extra = [
   0x029582,
   0x029588,
   0x28DB6A,
+  # Companion callback embedded by the $2A3Axx/$2A3Bxx banked action records
+  # after their $02A2F8 helper field.
+  0x031D90,
   0x032406,
   0x03240C,
   0x03364A,
@@ -88,9 +91,54 @@ extra = [
   0x039E54,
   0x03A514,
   0x03A560,
+  # Banked mixed command records around $281E24-$2822D4 embed these fixed-code
+  # callbacks; they are not part of a clean uniform pointer table.
+  0x03CA26,
+  0x03CA4E,
+  0x03CA64,
+  0x03CA8C,
+  0x03CABA,
+  0x03CAE8,
+  0x03CB78,
+  0x03CBBC,
+  0x03CBE2,
+  0x03CC32,
+  0x03CC76,
+  # Banked object records around $27ABxx/$27E0xx embed this fixed-code spawn
+  # callback family; the records are not contiguous enough for a narrow table.
+  0x03D616,
+  0x03D640,
+  0x03D66E,
+  0x03D6B4,
+  0x03D6E4,
+  0x03D72A,
+  # Mixed fixed-code/data block around $03F52C embeds this score/helper
+  # callback.
+  0x03EFEC,
+  # Object-state callback family reached from the $0E82xx object vector and
+  # its LEA target,A1 / MOVE.L A1,(A6) continuations.
+  0x03FCC0,
+  0x03FCD8,
+  0x03FD22,
+  0x03FD42,
+  0x03FD52,
+  0x03FD6E,
+  0x03FD7E,
+  0x03FDD0,
+  0x03FF14,
   0x03FE5A,
   0x0442E6,
+  # Mixed command data embeds this fixed-code callback; it is reached through
+  # the runtime object dispatcher rather than a normal direct branch.
+  0x04B052,
   0x04A1BA,
+  # Banked object records around $29BBxx/$29BCxx embed this shared score/SFX
+  # callback.
+  0x04A108,
+  0x04A110,
+  0x04A118,
+  0x04A120,
+  0x04A128,
   0x051F94,
   0x0523FA,
   0x08FD68,
@@ -100,6 +148,17 @@ extra = [
   0x0524B6,
   0x052514,
   0x0573A2,
+  # Banked object record at $29BCEA embeds this spawn callback.
+  0x056844,
+  # Runtime object slot receives this mission spawn state from the $02AE90
+  # callback table; seed only the active state until the wider family is
+  # classified.
+  0x02AF64,
+  # Repeated banked action/SFX records embed this helper alongside the already
+  # observed $02A310 sibling.
+  0x02A2F8,
+  # Smaller action/SFX helper family embedded by later $2A29xx/$2A58xx records.
+  0x02A606,
   0x05AA96,
   0x05AA9A,
   0x05AA9E,
@@ -143,6 +202,9 @@ extra = [
   0x05B5F0,
   0x05B5F4,
   0x05EA96,
+  # Banked command stream at $2C1A7E embeds this one fixed-code spawn
+  # callback among non-uniform command bytes.
+  0x06034C,
   0x060B7A,
   0x060B84,
   0x0670D2,
@@ -426,6 +488,23 @@ extra = [
   0x091514,
   0x091558,
   0x091630,
+  # Object-state callback chain installed by the $03CB16 helper through
+  # LEA target,A1 / MOVE.L A1,(A6) state transitions.
+  0x09BDC6,
+  0x09BDD4,
+  0x09BDE2,
+  0x09BE70,
+  0x09BEC2,
+  0x09BFA6,
+  0x09BFFE,
+  0x09C00A,
+  0x09C052,
+  0x09C10C,
+  0x09C25E,
+  0x09C30A,
+  0x09C39A,
+  0x09C3D0,
+  0x09C3F0,
   0x0934E2,
   0x0934F4,
   0x093512,
@@ -494,6 +573,43 @@ stride = 4
 format = "abs32"
 
 [[jump_table]]
+# Short same-target helper callback table used by the $02A328 collision helper.
+start = 0x02A33A
+end = 0x02A34E
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Short same-target helper callback table used by the $02A34E collision helper.
+start = 0x02A360
+end = 0x02A374
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Short same-target helper callback table used by the $02A374 collision helper.
+start = 0x02A386
+end = 0x02A39A
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Focused mission/player object callback table; the current path reaches
+# $02D63E through the second entry.
+start = 0x02A064
+end = 0x02A078
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Animation command dispatch table reached from $02FB3C.  Only the first four
+# longwords are table entries; code resumes immediately at $02FADA.
+start = 0x02FACA
+end = 0x02FADA
+stride = 4
+format = "abs32"
+
+[[jump_table]]
 # Inline JMP trampoline entries selected by the object helper at $05EAB6 after
 # the $033256/$0332BC handlers load the table address.  The entries themselves
 # are dispatch targets, so use the self-seeding table form with a 6-byte stride.
@@ -536,10 +652,10 @@ format = "abs32"
 
 [[jump_table]]
 # Earlier mission/object spawn record reached by the render path.  The full
-# 0x14-byte record run is sizeable, so seed the active callback field first.
-start = 0x097322
-end = 0x097326
-stride = 4
+# record carries its callback longword at +0x0E.
+start = 0x09730E
+end = 0x0973EE
+stride = 0x14
 format = "abs32"
 
 [[jump_table]]
@@ -562,11 +678,10 @@ stride = 4
 format = "abs32"
 
 [[jump_table]]
-# Focused middle slice of the same object callback vector.  The full
-# $0E805C-$0E80A0 gap is too expensive for the current near-cap discovery set,
-# so seed only the active render/object callback family reached after the
-# $033346 inline trampoline table.
-start = 0x0E8078
+# Focused middle slice of the same object callback vector, including the
+# $04258E/$0425B6 pair reached by the render path while avoiding the older
+# $078Cxx callback family before this compact active run.
+start = 0x0E806C
 end = 0x0E8090
 stride = 4
 format = "abs32"
@@ -577,6 +692,13 @@ format = "abs32"
 # the leading setup bit before sharing the common body.
 start = 0x0E80A0
 end = 0x0E80C8
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Single active object-vector entry reached by the current mission path.
+start = 0x0E815C
+end = 0x0E8160
 stride = 4
 format = "abs32"
 
@@ -603,25 +725,33 @@ stride = 4
 format = "abs32"
 
 [[jump_table]]
+# Compact active object-vector entries reached in the render path; stop before
+# the adjacent $0433BE/$083Bxx object family.
+start = 0x0E83E4
+end = 0x0E83F0
+stride = 4
+format = "abs32"
+
+[[jump_table]]
 # Sprite/action callback targets reached by the two-level ROM lookup around
 # $04A09A.  The game selects one of four pointer tables, stores a target on the
 # stack while running setup code, then returns through `JMP (A0)`.
 start = 0x049D8A
-end = 0x049DCA
+end = 0x049E12
 stride = 4
 format = "abs32"
 
 [[jump_table]]
 # Second $04A09A target table.
 start = 0x049E12
-end = 0x049E52
+end = 0x049E9A
 stride = 4
 format = "abs32"
 
 [[jump_table]]
 # Third $04A09A target table.
 start = 0x049E9A
-end = 0x049EDA
+end = 0x049F22
 stride = 4
 format = "abs32"
 
@@ -717,6 +847,14 @@ stride = 0x14
 format = "abs32"
 
 [[jump_table]]
+# Second callback slot in the same pre-sentinel banked object records.  The
+# active mission path reaches the $03B868 sibling through the +0x0A field.
+start = 0x279C2E
+end = 0x279C72
+stride = 0x14
+format = "abs32"
+
+[[jump_table]]
 # Render/object data block callback reached after the 10-byte callback-record
 # clusters.  Several banked data blocks embed this same callback as an abs32
 # longword; seed one representative pointer rather than a one-off function.
@@ -750,6 +888,53 @@ format = "abs32"
 # $060C9A target instead of scanning the surrounding mixed sprite command data.
 start = 0x2C2A74
 end = 0x2C2A78
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Mission enemy state table selected by $06B8EA after the $06A07E object enters
+# its interaction path.
+start = 0x2CA644
+end = 0x2CA664
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Alternate $06B8EA state table used when the object's direction flag selects
+# the sibling banked script.
+start = 0x2CA664
+end = 0x2CA684
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Single banked action callback embedded in an uneven $2CAFxx command record;
+# the current mission path reaches the $06B974 helper through this longword.
+start = 0x2CAF60
+end = 0x2CAF64
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Unaligned callback longword in the following uneven $2CB0xx command record.
+start = 0x2CB072
+end = 0x2CB076
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Repeated banked action record callback that spawns the $03207C helper through
+# the standard object allocator.  Seed one representative occurrence; the
+# surrounding command data is uneven.
+start = 0x2A4C22
+end = 0x2A4C26
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Repeated banked action/SFX callback from the same uneven command-data family.
+start = 0x2A2680
+end = 0x2A2684
 stride = 4
 format = "abs32"
 
@@ -823,6 +1008,15 @@ stride = 0x14
 format = "abs32"
 
 [[jump_table]]
+# Fixed-code render/object helper stubs referenced by the surrounding banked
+# record blocks.  Each 0x0E-byte stub loads its matching banked data record into
+# A2, calls $05022A, and returns.
+start = 0x088C02
+end = 0x088F58
+stride = 0x0E
+format = "bra16"
+
+[[jump_table]]
 # Mixed banked command stream callback reached from the same render/object
 # state family as the $088Cxx records.  The surrounding bytes are not a uniform
 # pointer table, so seed the active init callback as one representative.
@@ -836,6 +1030,15 @@ format = "abs32"
 # entries are word-aligned but start at an unaligned-to-4 ROM address.
 start = 0x2F3712
 end = 0x2F3732
+stride = 4
+format = "abs32"
+
+[[jump_table]]
+# Banked action record callback reached by the current mission path.  Keep this
+# to the single observed longword because the surrounding $2F77xx command bytes
+# are uneven.
+start = 0x2F7758
+end = 0x2F775C
 stride = 4
 format = "abs32"
 
@@ -856,8 +1059,62 @@ end = 0x057728
 stride = 4
 format = "bra16"
 
+[[jump_table]]
+# Four-way sprite command branch table reached from $05BF8A.  Like the nearby
+# projectile table, the selector is massaged between the arithmetic and the
+# PC-indexed JMP, so seed the BRA.W table slots explicitly.
+start = 0x05BF8E
+end = 0x05BF9E
+stride = 4
+format = "bra16"
+
+[[jump_table]]
+# Unrolled sprite command emit table reached after the first $05BF8A arm.
+# The selector covers 32 four-byte slots; the final slot falls through directly
+# into code rather than starting with a BRA.
+start = 0x05BFC8
+end = 0x05C048
+stride = 4
+format = "bra16"
+
+[[jump_table]]
+# Reverse-order variant of the same 32-way unrolled sprite command emitter.
+start = 0x05C1D4
+end = 0x05C254
+stride = 4
+format = "bra16"
+
+[[jump_table]]
+# Forward-order sibling table selected by another $05BF8A arm.
+start = 0x05C3E0
+end = 0x05C460
+stride = 4
+format = "bra16"
+
+[[jump_table]]
+# Reverse-order sibling table selected by the final $05BF8A arm.
+start = 0x05C6F0
+end = 0x05C770
+stride = 4
+format = "bra16"
+
+[[jump_table]]
+# Dense forward unrolled emitter reached from $05C5A4.  The PC-indexed jump
+# lands directly on repeated instruction pairs, not on branch opcodes.
+start = 0x05C5A8
+end = 0x05C6A8
+stride = 8
+format = "bra16"
+
+[[jump_table]]
+# Dense reverse unrolled emitter reached from $05C8B4.
+start = 0x05C8B8
+end = 0x05C9B8
+stride = 8
+format = "bra16"
+
 [dispatch]
 # Callback target is loaded from RAM through A6 and dispatched via JSR (A0).
 # The additional sites are reached after seeding the VBlank handler and are
 # intentionally left as runtime-computed dispatch boundaries for now.
-runtime = [0x0006C8, 0x000FDE, 0x001F3C, 0x025DE0, 0x025EA8, 0x02841E, 0x028602, 0x028DD2, 0x02912A, 0x0335A4, 0x039600, 0x03962E, 0x039664, 0x0396A0, 0x0396C2, 0x0396F8, 0x039734, 0x039756, 0x039790, 0x0397CC, 0x0397F6, 0x03982A, 0x03985C, 0x039890, 0x043818, 0x043906, 0x043A02, 0x043AA4, 0x0443E0, 0x0446D6, 0x04A09A, 0x05032C, 0x057714, 0x05AA60, 0x05B542, 0x05B57C, 0x05B782, 0x05B988, 0x05BB50, 0x05BC92, 0x05BE5A, 0x05BF8A]
+runtime = [0x0006C8, 0x000FDE, 0x001F3C, 0x025DE0, 0x025EA8, 0x02841E, 0x028602, 0x028DD2, 0x02912A, 0x02A336, 0x02A35C, 0x02A382, 0x02FB3C, 0x0335A4, 0x039600, 0x03962E, 0x039664, 0x0396A0, 0x0396C2, 0x0396F8, 0x039734, 0x039756, 0x039790, 0x0397CC, 0x0397F6, 0x03982A, 0x03985C, 0x039890, 0x043818, 0x043906, 0x043A02, 0x043AA4, 0x0443E0, 0x0446D6, 0x04A09A, 0x05032C, 0x057714, 0x05AA60, 0x05B542, 0x05B57C, 0x05B782, 0x05B988, 0x05BB50, 0x05BC92, 0x05BE5A, 0x05BF8A, 0x05BFC4, 0x05C1D0, 0x05C3DC, 0x05C5A4, 0x05C6EC, 0x05C8B4, 0x06ACF4, 0x06AD7A, 0x06ADDA, 0x06AE54, 0x06AE9C, 0x06AEF8, 0x06AF3C]
