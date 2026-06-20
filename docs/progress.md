@@ -392,7 +392,7 @@ expensive generated-code/relink work, while `./run.sh` only launches the cached
 `./run.sh quick` uses a 10k-dispatch pre-window fast-forward, `./run.sh attract`
 uses the deeper 500k-dispatch pre-window fast-forward, and `scripts/mslug
 rebuild` forces a build and then launches. The wrapper defaults to the local
-MiSTer-style Metal Slug and BIOS paths. The live host currently defaults to 1500
+MiSTer-style Metal Slug and BIOS paths. The live host currently defaults to 2000
 dispatches per refresh for a full-speed-ish local baseline, tunable via
 `./run.sh --dpf N` or the `+`/`-` keys while running. The script uses the same
 Metal Slug recompilation and

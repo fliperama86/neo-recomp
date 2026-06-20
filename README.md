@@ -253,7 +253,7 @@ attract` for the deeper 500k-dispatch pre-window fast-forward, or
 `scripts/mslug rebuild` to force a build and then launch. The wrapper defaults
 to `~/Documents/Games/Mister/NEOGEO/mslug.neo` and
 `~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. The live host currently
-defaults to 1500 dispatches per refresh, which is the first locally observed
+defaults to 2000 dispatches per refresh, which is the first locally observed
 full-speed-ish range; tune it with `./run.sh --dpf N` or the `+`/`-` keys while
 running. The
 underlying script

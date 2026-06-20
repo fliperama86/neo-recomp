@@ -12,7 +12,7 @@
 
 #define NG_LIVE_PALETTE_WORDS (NG_NEO_PALETTE_RAM_BYTES / 2u)
 #define NG_LIVE_PALETTE_BANK_AUTO UINT32_MAX
-#define NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH 1500u
+#define NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH 2000u
 #define NG_LIVE_DEFAULT_FAST_FORWARD 0u
 #define NG_LIVE_DEFAULT_SCALE 3u
 
@@ -321,6 +321,30 @@ static int render_live_frame(const NgNeoRomImage *image,
         width);
 }
 
+static void print_live_status(const char *label,
+                              uint64_t refreshes,
+                              uint64_t dispatches_per_refresh) {
+    fprintf(stderr,
+            "%s refresh=%llu dispatches=%llu frame=%u scanline=%u "
+            "pc=$%06X sr=$%04X dpf=%llu irq_pending=$%04X polls=%u "
+            "last_irq_pc=$%06X last_irq_level=%u last_irq_vector=%u "
+            "budget_stop=$%06X\n",
+            label,
+            (unsigned long long)refreshes,
+            (unsigned long long)ng_generated_smoke_dispatch_count(),
+            ng_neogeo_frame_count(),
+            ng_neogeo_current_scanline(),
+            g_ng_m68k.pc & 0x00FFFFFFu,
+            g_ng_m68k.sr & 0xFFFFu,
+            (unsigned long long)dispatches_per_refresh,
+            ng_neogeo_irq_pending(),
+            ng_neogeo_interrupt_polls(),
+            ng_neogeo_last_interrupt_return_pc() & 0x00FFFFFFu,
+            ng_neogeo_last_interrupt_level(),
+            ng_neogeo_last_interrupt_vector(),
+            ng_generated_smoke_dispatch_budget_stop_addr() & 0x00FFFFFFu);
+}
+
 static int parse_u64(const char *text, uint64_t *out) {
     char *end = NULL;
     unsigned long long value = strtoull(text, &end, 0);
@@ -340,6 +364,9 @@ static void usage(const char *argv0) {
             "  --dispatches-per-refresh <n>   dispatches per rendered refresh (default: %u)\n"
             "  --scanline-poll-interval <n>   runtime scanline poll interval (default: 64)\n"
             "  --max-refreshes <n>            exit after n presented frames\n"
+            "  --status-interval <n>          log status every n presented frames\n"
+            "  --stall-refreshes <n>          log if scanline/frame stalls for n refreshes (default: 180, 0 disables)\n"
+            "  --no-throttle                  do not sleep to ~60Hz after each refresh\n"
             "  --scale <n>                    integer window scale (default: %u)\n",
             argv0,
             NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH,
@@ -350,6 +377,9 @@ int main(int argc, char **argv) {
     uint64_t fast_forward = NG_LIVE_DEFAULT_FAST_FORWARD;
     uint64_t dispatches_per_refresh = NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH;
     uint64_t max_refreshes = 0;
+    uint64_t status_interval = 0;
+    uint64_t stall_refreshes = 180u;
+    uint64_t no_throttle = 0;
     uint64_t scanline_poll_interval = 64u;
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
 
@@ -365,8 +395,15 @@ int main(int argc, char **argv) {
             target = &scanline_poll_interval;
         } else if (strcmp(option, "--max-refreshes") == 0) {
             target = &max_refreshes;
+        } else if (strcmp(option, "--status-interval") == 0) {
+            target = &status_interval;
+        } else if (strcmp(option, "--stall-refreshes") == 0) {
+            target = &stall_refreshes;
         } else if (strcmp(option, "--scale") == 0) {
             target = &scale;
+        } else if (strcmp(option, "--no-throttle") == 0) {
+            no_throttle = 1u;
+            continue;
         } else if (strcmp(option, "--help") == 0 || strcmp(option, "-h") == 0) {
             usage(argv[0]);
             return 0;
@@ -514,6 +551,10 @@ int main(int argc, char **argv) {
 
     int quit = 0;
     int paused = 0;
+    int stall_reported = 0;
+    uint64_t stagnant_refreshes = 0;
+    uint32_t last_progress_frame = ng_neogeo_frame_count();
+    uint16_t last_progress_scanline = ng_neogeo_current_scanline();
     uint64_t refreshes = 0;
     while (!quit) {
         uint32_t tick_start = SDL_GetTicks();
@@ -550,6 +591,29 @@ int main(int argc, char **argv) {
         SDL_RenderCopy(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);
 
+        if (status_interval != 0u && refreshes != 0u &&
+            (refreshes % status_interval) == 0u) {
+            print_live_status("live status", refreshes, dispatches_per_refresh);
+        }
+
+        uint32_t current_frame = ng_neogeo_frame_count();
+        uint16_t current_scanline = ng_neogeo_current_scanline();
+        if (current_frame != last_progress_frame ||
+            current_scanline != last_progress_scanline) {
+            last_progress_frame = current_frame;
+            last_progress_scanline = current_scanline;
+            stagnant_refreshes = 0;
+            stall_reported = 0;
+        } else if (!paused && stall_refreshes != 0u) {
+            ++stagnant_refreshes;
+            if (!stall_reported && stagnant_refreshes >= stall_refreshes) {
+                print_live_status("live scanline stall",
+                                  refreshes,
+                                  dispatches_per_refresh);
+                stall_reported = 1;
+            }
+        }
+
         if ((refreshes % 30u) == 0u) {
             char title[256];
             snprintf(title,
@@ -568,7 +632,7 @@ int main(int argc, char **argv) {
             quit = 1;
         }
         uint32_t elapsed = SDL_GetTicks() - tick_start;
-        if (elapsed < 16u) {
+        if (!no_throttle && elapsed < 16u) {
             SDL_Delay(16u - elapsed);
         }
     }

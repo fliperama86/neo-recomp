@@ -41,10 +41,13 @@ launch_cached_host() {
   local bios="${2:-$DEFAULT_BIOS}"
   local lo_rom="${3:-}"
   local fast_forward="${NG_MSLUG_SDL_FAST_FORWARD:-0}"
-  local dpf="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-1500}"
+  local dpf="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-2000}"
   local scanline_poll="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
   local scale="${NG_MSLUG_SDL_SCALE:-3}"
   local max_refreshes="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
+  local status_interval="${NG_MSLUG_SDL_STATUS_INTERVAL:-}"
+  local stall_refreshes="${NG_MSLUG_SDL_STALL_REFRESHES:-}"
+  local no_throttle="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
 
   if [[ ! -x "$HOST_BIN" ]]; then
     echo "cached host missing: $HOST_BIN" >&2
@@ -68,6 +71,15 @@ launch_cached_host() {
   )
   if [[ -n "$max_refreshes" ]]; then
     host_args+=(--max-refreshes "$max_refreshes")
+  fi
+  if [[ -n "$status_interval" ]]; then
+    host_args+=(--status-interval "$status_interval")
+  fi
+  if [[ -n "$stall_refreshes" ]]; then
+    host_args+=(--stall-refreshes "$stall_refreshes")
+  fi
+  if [[ "$no_throttle" != "0" ]]; then
+    host_args+=(--no-throttle)
   fi
   host_args+=("$game" "$bios")
   if [[ -n "$lo_rom" ]]; then
