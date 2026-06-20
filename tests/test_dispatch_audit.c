@@ -73,10 +73,10 @@ int main(void) {
     write16(&rom, 0xB0u, 0x4E75u);
 
     const uint32_t seeds[] = {0x10u, 0x60u, 0x68u, 0x70u, 0x78u};
-    NgFunctionDiscovery discovery;
+    static NgFunctionDiscovery discovery;
     CHECK(ng_function_discover_from_seeds(&rom, seeds, 5u, &discovery));
 
-    NgDispatchAudit audit;
+    static NgDispatchAudit audit;
     CHECK(ng_dispatch_audit_build(&rom, &discovery, &audit));
     CHECK(audit.direct_count == 3u);
     CHECK(audit.missing_direct_count == 1u);
@@ -192,7 +192,7 @@ int main(void) {
     write32(&stop_rom, 0x64u, 0x00000300u);
     write16(&stop_rom, 0x68u, 0x4E75u);
 
-    NgFunctionDiscovery stop_discovery;
+    static NgFunctionDiscovery stop_discovery;
     ng_function_discovery_init(&stop_discovery);
     CHECK(ng_function_discovery_add(&stop_discovery, &stop_rom, 0x10u));
     CHECK(ng_function_discovery_add(&stop_discovery, &stop_rom, 0x20u));
@@ -224,7 +224,7 @@ int main(void) {
             seeds[i] = addr;
         }
 
-        NgFunctionDiscovery many_discovery;
+        static NgFunctionDiscovery many_discovery;
         CHECK(ng_function_discover_from_seeds(&many_rom,
                                               seeds,
                                               seed_count,

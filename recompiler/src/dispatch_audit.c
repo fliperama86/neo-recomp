@@ -4,6 +4,7 @@
 #include "m68k_validate.h"
 #include "neogeo_map.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #define NG_DISPATCH_AUDIT_MAX_SEEN NG_FUNCTION_DISCOVERY_MAX_CANDIDATES
@@ -224,13 +225,18 @@ int ng_dispatch_audit_build_with_config(const NgProgramRom *rom,
     }
 
     ng_dispatch_audit_init(audit);
-    uint32_t seen[NG_DISPATCH_AUDIT_MAX_SEEN];
+    uint32_t *seen =
+        (uint32_t *)calloc(NG_DISPATCH_AUDIT_MAX_SEEN, sizeof(*seen));
     uint32_t seen_count = 0;
+    if (!seen) {
+        return 0;
+    }
 
     for (uint32_t i = 0; i < discovery->count; ++i) {
         audit_scan_from(rom, discovery, config, audit, discovery->addrs[i],
                         seen, &seen_count);
     }
+    free(seen);
     return 1;
 }
 
