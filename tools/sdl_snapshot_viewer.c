@@ -1,5 +1,7 @@
 #include <SDL.h>
 
+#include "ngrecomp/neogeo_video.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -109,18 +111,7 @@ static uint32_t nonzero_word_color(uint16_t word) {
 }
 
 static uint32_t palette_word_color(uint16_t word) {
-    uint16_t r5 = (uint16_t)(((word >> 7) & 0x1Eu) | ((word >> 14) & 0x01u));
-    uint16_t g5 = (uint16_t)(((word >> 3) & 0x1Eu) | ((word >> 13) & 0x01u));
-    uint16_t b5 = (uint16_t)(((word << 1) & 0x1Eu) | ((word >> 12) & 0x01u));
-    uint8_t r = scale5(r5);
-    uint8_t g = scale5(g5);
-    uint8_t b = scale5(b5);
-    if (word & 0x8000u) {
-        r = (uint8_t)((uint16_t)r * 2u / 3u);
-        g = (uint8_t)((uint16_t)g * 2u / 3u);
-        b = (uint8_t)((uint16_t)b * 2u / 3u);
-    }
-    return argb(r, g, b);
+    return ng_neogeo_video_palette_word_to_argb(word);
 }
 
 static uint16_t read_be_word(const uint8_t *data, uint32_t word_index) {

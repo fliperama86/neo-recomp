@@ -11,7 +11,7 @@ project orientation; update this file after each meaningful green slice.
 - Branch: `main`
 - Latest pushed commit: see `git log --oneline -1` after each push
 - Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
-- Current test status: 13/13 passing
+- Current test status: 15/15 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
@@ -267,11 +267,27 @@ files with raw VRAM, nonzero-VRAM, work-RAM, and palette modes. It remains an
 offline diagnostic scaffold, not a live emulator loop, so there is still no
 mandatory SDL dependency or added CI surface.
 
-The next real-frame prerequisite is loading and decoding the cartridge asset
-regions that a renderer will actually need. The `.neo` loader already has a
-tested full-container path for P/S/M/V1/V2/C regions: P is normalized for 68000
-recompilation, while S fix-layer and interleaved C sprite data are preserved for
-future video decode/rendering work.
+The next real-frame prerequisite is moving from CPU-visible video state to
+host-rendered pixels in isolated, testable pieces. The `.neo` loader already has
+a tested full-container path for P/S/M/V1/V2/C regions: P is normalized for
+68000 recompilation, while S fix-layer and interleaved C sprite data are
+preserved for video decode/rendering work. A small `neo_video` helper library
+now covers the shared palette bit mapping, a generic 4bpp planar sprite-line
+decode primitive, native S/fix tile line decode, and a deterministic 40x32
+fix-layer renderer over snapshot VRAM/palette RAM. The corresponding
+`neo-render-snapshot` CLI writes a PPM from a headless snapshot and a
+user-provided `.neo` image:
+
+```sh
+build/neo-render-snapshot build/mslug_snapshot \
+  ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  build/mslug_snapshot/fix_layer.ppm
+```
+
+This is the first path that converts real snapshot VRAM + real cartridge S
+graphics + real palette RAM into host pixels. It intentionally renders only the
+fix layer so the sprite renderer can be brought up separately against the
+planar decode primitive and observed VRAM maps.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
@@ -489,6 +505,15 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Added the first isolated video/rendering slice. `neo_video` now
+  centralizes Neo Geo palette conversion, generic 4bpp planar line decode,
+  native S/fix tile-line decode, and a 40x32 fix-layer renderer. The new
+  dependency-free `neo-render-snapshot` tool combines a headless snapshot with
+  the `.neo` S region and writes a fix-layer PPM; synthetic C/Python tests cover
+  both the low-level video helpers and the snapshot-to-PPM tool. Local
+  validation is 15/15 tests passing, and the current Metal Slug snapshot renders
+  a deterministic full-screen fix-layer image, confirming the host pixel path is
+  wired even though sprites are not rendered yet.
 - local: Advanced the Metal Slug render-path discovery frontier from `$0670D2`
   through render/object state entries (`$03FE5A`, `$03A560`, `$03942E`,
   `$039A70`, `$04A1BA`, `$03A514`, `$039E54`, `$039450`, `$09A976`) to

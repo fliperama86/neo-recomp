@@ -31,4 +31,11 @@ Neo Geo-specific behavior belongs in the runtime:
 - BIOS calls or BIOS interpreter fallback
 - protection and cartridge-specific behavior
 
+Renderer-facing helpers should stay separate from generated-code execution.
+`neo_video` is the current home for deterministic, host-side decode/render
+pieces that can be tested without running the CPU: palette conversion, tile
+decoders, and snapshot-to-pixel helpers. Live SDL/native hosts should compose
+the generated CPU module, the runtime bus state, and these video helpers rather
+than baking rendering knowledge into emitted 68000 C.
+
 The first useful milestone is function-level parity against an interpreter for selected 68000 routines, not full game boot.

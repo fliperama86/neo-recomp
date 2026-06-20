@@ -13,7 +13,8 @@ TDD slices, see [`docs/progress.md`](docs/progress.md). For the concrete
 ## Shape
 
 - `recompiler/` owns ROM loading, 68000 decoding, function discovery, and C emission.
-- `runtime/` owns the Neo Geo bus/runtime boundary used by generated C.
+- `runtime/` owns the Neo Geo bus/runtime boundary used by generated C plus
+  small host-side video helpers.
 - `include/ngrecomp/` contains shared public interfaces.
 - `games/` contains per-game metadata.
 
@@ -168,6 +169,18 @@ tools/render_snapshot_debug.py build/mslug_snapshot
 
 This writes PPMs under `build/mslug_snapshot/debug_images/`. They are visual
 diagnostics, not accurate Neo Geo rendering yet.
+
+The first real-rendering seam is a deterministic fix-layer snapshot renderer:
+
+```sh
+build/neo-render-snapshot build/mslug_snapshot \
+  ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  build/mslug_snapshot/fix_layer.ppm
+```
+
+It loads the user-provided `.neo` S region plus the snapshot VRAM/palette RAM
+and renders the CPU-visible 40x32 fix tile map. Sprites are intentionally not
+rendered yet.
 
 If SDL2 is available through `pkg-config`, CMake also builds an optional
 interactive snapshot host:

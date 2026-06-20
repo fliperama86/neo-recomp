@@ -1,0 +1,113 @@
+#include "ngrecomp/neogeo_video.h"
+
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define CHECK(expr) do { \
+    if (!(expr)) { \
+        fprintf(stderr, "CHECK failed at %s:%d: %s\n", __FILE__, __LINE__, #expr); \
+        return 1; \
+    } \
+} while (0)
+
+static int test_palette_decode(void) {
+    NgNeoRgb rgb = ng_neogeo_video_palette_word_to_rgb(0x0000u);
+    CHECK(rgb.r == 0u && rgb.g == 0u && rgb.b == 0u);
+
+    rgb = ng_neogeo_video_palette_word_to_rgb(0x4F00u);
+    CHECK(rgb.r == 255u && rgb.g == 0u && rgb.b == 0u);
+
+    rgb = ng_neogeo_video_palette_word_to_rgb(0x20F0u);
+    CHECK(rgb.r == 0u && rgb.g == 255u && rgb.b == 0u);
+
+    rgb = ng_neogeo_video_palette_word_to_rgb(0x100Fu);
+    CHECK(rgb.r == 0u && rgb.g == 0u && rgb.b == 255u);
+
+    uint32_t argb = ng_neogeo_video_palette_word_to_argb(0x4F00u);
+    CHECK(argb == 0xFFFF0000u);
+
+    rgb = ng_neogeo_video_palette_word_to_rgb(0xCF00u);
+    CHECK(rgb.r < 255u && rgb.r > 0u && rgb.g == 0u && rgb.b == 0u);
+    return 0;
+}
+
+static int test_planar_line_decode(void) {
+    uint8_t pixels[NG_NEO_SPRITE_TILE_PIXELS];
+    memset(pixels, 0xFF, sizeof(pixels));
+    ng_neogeo_video_decode_4bpp_planar_line(0x8000u, 0x4000u, 0x2000u, 0x1000u, pixels);
+    CHECK(pixels[0] == 1u);
+    CHECK(pixels[1] == 2u);
+    CHECK(pixels[2] == 4u);
+    CHECK(pixels[3] == 8u);
+    for (uint8_t i = 4; i < NG_NEO_SPRITE_TILE_PIXELS; ++i) {
+        CHECK(pixels[i] == 0u);
+    }
+
+    ng_neogeo_video_decode_4bpp_planar_line(0xFFFFu, 0x0000u, 0xFFFFu, 0x0000u, pixels);
+    for (uint8_t i = 0; i < NG_NEO_SPRITE_TILE_PIXELS; ++i) {
+        CHECK(pixels[i] == 5u);
+    }
+    return 0;
+}
+
+static int test_fix_tile_line_decode(void) {
+    uint8_t s_rom[NG_NEO_FIX_TILE_BYTES];
+    memset(s_rom, 0, sizeof(s_rom));
+    s_rom[0x10u + 2u] = 0x21u;
+    s_rom[0x18u + 2u] = 0x43u;
+    s_rom[0x00u + 2u] = 0x65u;
+    s_rom[0x08u + 2u] = 0x87u;
+
+    uint8_t pixels[NG_NEO_FIX_TILE_PIXELS];
+    CHECK(ng_neogeo_video_decode_fix_tile_line(s_rom, sizeof(s_rom), 0, 2, pixels));
+    for (uint8_t i = 0; i < NG_NEO_FIX_TILE_PIXELS; ++i) {
+        CHECK(pixels[i] == (uint8_t)(i + 1u));
+    }
+    CHECK(!ng_neogeo_video_decode_fix_tile_line(s_rom, 4, 0, 2, pixels));
+    CHECK(!ng_neogeo_video_decode_fix_tile_line(s_rom, sizeof(s_rom), 0, 8, pixels));
+    return 0;
+}
+
+static int test_fix_layer_render(void) {
+    uint8_t s_rom[NG_NEO_FIX_TILE_BYTES];
+    uint16_t *vram = (uint16_t *)calloc(0x10000u, sizeof(uint16_t));
+    uint16_t palette[NG_NEO_PALETTE_COLORS_PER_BANK];
+    uint32_t *frame = (uint32_t *)calloc(NG_NEO_FIX_FRAME_WIDTH * NG_NEO_FIX_FRAME_HEIGHT,
+                                         sizeof(uint32_t));
+    CHECK(vram != NULL && frame != NULL);
+    memset(s_rom, 0, sizeof(s_rom));
+    memset(palette, 0, sizeof(palette));
+
+    s_rom[0x10u] = 0x21u;
+    vram[NG_NEO_FIX_MAP_BASE] = 0x1000u;
+    palette[0x11u] = 0x4F00u;
+    palette[0x12u] = 0x20F0u;
+
+    CHECK(ng_neogeo_video_render_fix_layer_argb(s_rom,
+                                                sizeof(s_rom),
+                                                vram,
+                                                0x10000u,
+                                                palette,
+                                                NG_NEO_PALETTE_COLORS_PER_BANK,
+                                                frame,
+                                                NG_NEO_FIX_FRAME_WIDTH,
+                                                NG_NEO_FIX_FRAME_HEIGHT,
+                                                NG_NEO_FIX_FRAME_WIDTH));
+    CHECK(frame[0] == 0xFFFF0000u);
+    CHECK(frame[1] == 0xFF00FF00u);
+    CHECK(frame[2] == 0xFF000000u);
+
+    free(vram);
+    free(frame);
+    return 0;
+}
+
+int main(void) {
+    if (test_palette_decode() != 0) return 1;
+    if (test_planar_line_decode() != 0) return 1;
+    if (test_fix_tile_line_decode() != 0) return 1;
+    if (test_fix_layer_render() != 0) return 1;
+    return 0;
+}
