@@ -207,10 +207,12 @@ build/neo-render-snapshot --mode frame --palette-bank auto \
 
 This is still an offline snapshot renderer, not a live emulator loop. The
 sprite path now uses a scanline active-list pass with the hardware horizontal
-shrink masks and sticky-chain X stepping; vertical shrink is still approximate
-until the LO zoom table is loaded. Line-buffer priority is not exact yet, but
-the C-region swizzle, sprite positioning/shrink, palette lookup, and fix overlay
-are isolated and covered by tests.
+shrink masks, sticky-chain X stepping, the optional Neo Geo LO vertical zoom
+ROM, and snapshot-derived auto-animation state. `neo-render-snapshot` will
+auto-detect `000-lo.lo` or `ng-lo.rom` next to the `.neo` image; use
+`--lo-rom <path>` if the BIOS/LO file lives elsewhere. Line-buffer priority is
+not exact yet, but the C-region swizzle, sprite positioning/shrink, palette
+lookup, and fix overlay are isolated and covered by tests.
 
 If SDL2 is available through `pkg-config`, CMake also builds an optional
 interactive snapshot host:
@@ -224,7 +226,9 @@ build/neo-snapshot-viewer build/mslug_snapshot \
 Keys `1`-`4` switch between raw VRAM, nonzero VRAM, work RAM, and palette
 views. With an optional `.neo` argument, keys `5`-`7` switch between fix,
 positioned sprites, and the sprite+fix game frame; `r` reloads the snapshot.
-This is a host/viewer scaffold, not the final live emulator loop.
+The viewer also auto-detects `000-lo.lo`/`ng-lo.rom` next to the `.neo`, or
+accepts it as an optional third path. This is a host/viewer scaffold, not the
+final live emulator loop.
 
 ## Decoder Slice
 

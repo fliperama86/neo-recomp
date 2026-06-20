@@ -15,6 +15,7 @@
 #define NG_NEO_SPRITE_FRAME_HEIGHT 224u
 #define NG_NEO_SPRITE_DISPLAY_LIMIT 381u
 #define NG_NEO_SPRITES_PER_SCANLINE 96u
+#define NG_NEO_ZOOM_ROM_BYTES 0x10000u
 #define NG_NEO_FIX_VISIBLE_Y_OFFSET 16u
 #define NG_NEO_PALETTE_COLORS_PER_BANK 0x1000u
 
@@ -27,13 +28,19 @@ typedef struct NgNeoRgb {
 typedef struct NgNeoSpriteMapEntry {
     uint32_t tile_index;
     uint8_t palette;
-    /* Raw auto-animation bits from the sprite-map attribute word. The current
-     * helpers expose them for later timing/state work but do not rewrite the
-     * tile index. */
+    /* Raw auto-animation bits from the sprite-map attribute word. Render
+     * options provide the counter used to rewrite low tile-index bits. */
     uint8_t auto_animation;
     uint8_t vflip;
     uint8_t hflip;
 } NgNeoSpriteMapEntry;
+
+typedef struct NgNeoVideoRenderOptions {
+    const uint8_t *zoom_rom;
+    uint32_t zoom_rom_size;
+    uint8_t auto_animation_counter;
+    uint8_t auto_animation_disabled;
+} NgNeoVideoRenderOptions;
 
 uint8_t ng_neogeo_video_scale5(uint8_t value);
 NgNeoRgb ng_neogeo_video_palette_word_to_rgb(uint16_t word);
@@ -100,6 +107,33 @@ int ng_neogeo_video_render_sprite_frame_argb(const uint8_t *c_rom,
                                              uint32_t out_height,
                                              uint32_t out_stride_pixels);
 
+int ng_neogeo_video_render_sprite_frame_argb_with_zoom(
+    const uint8_t *c_rom,
+    uint32_t c_rom_size,
+    const uint8_t *zoom_rom,
+    uint32_t zoom_rom_size,
+    const uint16_t *vram_words,
+    uint32_t vram_word_count,
+    const uint16_t *palette_words,
+    uint32_t palette_word_count,
+    uint32_t *out_argb,
+    uint32_t out_width,
+    uint32_t out_height,
+    uint32_t out_stride_pixels);
+
+int ng_neogeo_video_render_sprite_frame_argb_with_options(
+    const uint8_t *c_rom,
+    uint32_t c_rom_size,
+    const NgNeoVideoRenderOptions *options,
+    const uint16_t *vram_words,
+    uint32_t vram_word_count,
+    const uint16_t *palette_words,
+    uint32_t palette_word_count,
+    uint32_t *out_argb,
+    uint32_t out_width,
+    uint32_t out_height,
+    uint32_t out_stride_pixels);
+
 int ng_neogeo_video_render_frame_argb(const uint8_t *s_rom,
                                       uint32_t s_rom_size,
                                       const uint8_t *c_rom,
@@ -112,3 +146,33 @@ int ng_neogeo_video_render_frame_argb(const uint8_t *s_rom,
                                       uint32_t out_width,
                                       uint32_t out_height,
                                       uint32_t out_stride_pixels);
+
+int ng_neogeo_video_render_frame_argb_with_zoom(const uint8_t *s_rom,
+                                                uint32_t s_rom_size,
+                                                const uint8_t *c_rom,
+                                                uint32_t c_rom_size,
+                                                const uint8_t *zoom_rom,
+                                                uint32_t zoom_rom_size,
+                                                const uint16_t *vram_words,
+                                                uint32_t vram_word_count,
+                                                const uint16_t *palette_words,
+                                                uint32_t palette_word_count,
+                                                uint32_t *out_argb,
+                                                uint32_t out_width,
+                                                uint32_t out_height,
+                                                uint32_t out_stride_pixels);
+
+int ng_neogeo_video_render_frame_argb_with_options(
+    const uint8_t *s_rom,
+    uint32_t s_rom_size,
+    const uint8_t *c_rom,
+    uint32_t c_rom_size,
+    const NgNeoVideoRenderOptions *options,
+    const uint16_t *vram_words,
+    uint32_t vram_word_count,
+    const uint16_t *palette_words,
+    uint32_t palette_word_count,
+    uint32_t *out_argb,
+    uint32_t out_width,
+    uint32_t out_height,
+    uint32_t out_stride_pixels);

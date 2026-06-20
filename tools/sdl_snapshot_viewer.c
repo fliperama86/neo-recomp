@@ -3,6 +3,7 @@
 #include "ngrecomp/neogeo_video.h"
 #include "p_rom.h"
 
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,8 +39,12 @@ typedef struct NgSnapshotView {
     uint32_t pixels[NG_VIEW_MAX_WIDTH * NG_VIEW_MAX_HEIGHT];
     uint32_t width;
     uint32_t height;
+    uint32_t frame_count;
+    uint16_t lspc;
     char snapshot_dir[1024];
     NgNeoRomImage image;
+    uint8_t *zoom_rom;
+    uint32_t zoom_rom_size;
     int has_neo;
 } NgSnapshotView;
 
@@ -73,6 +78,110 @@ static int read_exact(const char *path, void *out, size_t expected_size) {
     return 1;
 }
 
+static int load_zoom_rom_file(const char *path,
+                              uint8_t **out_data,
+                              uint32_t *out_size,
+                              int report_errors) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        if (report_errors) {
+            fprintf(stderr, "failed to open %s: %s\n", path, strerror(errno));
+        }
+        return 0;
+    }
+
+    if (fseek(f, 0, SEEK_END) != 0) {
+        if (report_errors) {
+            fprintf(stderr, "failed to seek %s: %s\n", path, strerror(errno));
+        }
+        fclose(f);
+        return 0;
+    }
+    long size = ftell(f);
+    if (size < 0) {
+        if (report_errors) {
+            fprintf(stderr, "failed to size %s: %s\n", path, strerror(errno));
+        }
+        fclose(f);
+        return 0;
+    }
+    rewind(f);
+
+    if (size != (long)NG_NEO_ZOOM_ROM_BYTES &&
+        size != (long)(NG_NEO_ZOOM_ROM_BYTES * 2u)) {
+        if (report_errors) {
+            fprintf(stderr,
+                    "%s has unexpected LO ROM size %ld (expected %u or %u)\n",
+                    path,
+                    size,
+                    NG_NEO_ZOOM_ROM_BYTES,
+                    NG_NEO_ZOOM_ROM_BYTES * 2u);
+        }
+        fclose(f);
+        return 0;
+    }
+
+    uint8_t *data = (uint8_t *)malloc((size_t)size);
+    if (!data) {
+        if (report_errors) {
+            fprintf(stderr, "failed to allocate LO ROM buffer\n");
+        }
+        fclose(f);
+        return 0;
+    }
+    size_t got = fread(data, 1, (size_t)size, f);
+    if (fclose(f) != 0 || got != (size_t)size) {
+        if (report_errors) {
+            fprintf(stderr, "failed to read %s: %s\n", path, strerror(errno));
+        }
+        free(data);
+        return 0;
+    }
+
+    *out_data = data;
+    *out_size = (uint32_t)size;
+    return 1;
+}
+
+static int make_sibling_path(char *out,
+                             size_t out_size,
+                             const char *path,
+                             const char *name) {
+    const char *slash = strrchr(path, '/');
+    const char *backslash = strrchr(path, '\\');
+    const char *sep = slash;
+    if (backslash && (!sep || backslash > sep)) {
+        sep = backslash;
+    }
+    if (!sep) {
+        int written = snprintf(out, out_size, "%s", name);
+        return written >= 0 && (size_t)written < out_size;
+    }
+
+    size_t dir_len = (size_t)(sep - path) + 1u;
+    if (dir_len >= out_size) {
+        return 0;
+    }
+    memcpy(out, path, dir_len);
+    int written = snprintf(out + dir_len, out_size - dir_len, "%s", name);
+    return written >= 0 && (size_t)written < out_size - dir_len;
+}
+
+static int try_load_default_zoom_rom(const char *neo_path,
+                                     uint8_t **out_data,
+                                     uint32_t *out_size) {
+    char path[1200];
+    if (make_sibling_path(path, sizeof(path), neo_path, "000-lo.lo") &&
+        load_zoom_rom_file(path, out_data, out_size, 0)) {
+        return 1;
+    }
+    if (make_sibling_path(path, sizeof(path), neo_path, "ng-lo.rom") &&
+        load_zoom_rom_file(path, out_data, out_size, 0)) {
+        return 1;
+    }
+    return 0;
+}
+
 static uint16_t read_be_word(const uint8_t *data, uint32_t word_index) {
     uint32_t off = word_index * 2u;
     return (uint16_t)(((uint16_t)data[off] << 8) | (uint16_t)data[off + 1u]);
@@ -85,6 +194,55 @@ static void refresh_snapshot_words(NgSnapshotView *view) {
     for (uint32_t i = 0; i < NG_VIEW_VRAM_WORDS; ++i) {
         view->vram_words[i] = read_be_word(view->vram_be, i);
     }
+}
+
+static int parse_summary_u32(const char *line, const char *key, uint32_t *out) {
+    size_t key_len = strlen(key);
+    if (strncmp(line, key, key_len) != 0 || line[key_len] != '=') {
+        return 0;
+    }
+    const char *value = line + key_len + 1u;
+    int base = 10;
+    if (*value == '$') {
+        ++value;
+        base = 16;
+    }
+    char *end = NULL;
+    unsigned long parsed = strtoul(value, &end, base);
+    if (end == value || parsed > UINT32_MAX) {
+        return 0;
+    }
+    *out = (uint32_t)parsed;
+    return 1;
+}
+
+static void load_snapshot_render_state(NgSnapshotView *view, const char *dir) {
+    char path[1200];
+    char line[256];
+    view->frame_count = 0;
+    view->lspc = 0;
+    if (!make_path(path, sizeof(path), dir, "summary.txt")) {
+        return;
+    }
+
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        return;
+    }
+    while (fgets(line, sizeof(line), f)) {
+        uint32_t value = 0;
+        if (parse_summary_u32(line, "frame", &value)) {
+            view->frame_count = value;
+        } else if (parse_summary_u32(line, "lspc", &value)) {
+            view->lspc = (uint16_t)value;
+        }
+    }
+    fclose(f);
+}
+
+static uint8_t snapshot_auto_animation_counter(uint32_t frame_count, uint16_t lspc) {
+    uint32_t speed = (uint32_t)(lspc >> 8);
+    return (uint8_t)((frame_count + speed) / (speed + 1u));
 }
 
 static int load_snapshot(NgSnapshotView *view, const char *dir) {
@@ -111,15 +269,30 @@ static int load_snapshot(NgSnapshotView *view, const char *dir) {
         return 0;
     }
     refresh_snapshot_words(view);
+    load_snapshot_render_state(view, dir);
     return 1;
 }
 
-static int load_neo_image(NgSnapshotView *view, const char *neo_path) {
+static int load_neo_image(NgSnapshotView *view,
+                          const char *neo_path,
+                          const char *lo_rom_path) {
     if (!neo_path) {
         return 1;
     }
     if (!ng_neo_rom_image_load(&view->image, neo_path)) {
         return 0;
+    }
+    if (lo_rom_path) {
+        if (!load_zoom_rom_file(lo_rom_path,
+                                &view->zoom_rom,
+                                &view->zoom_rom_size,
+                                1)) {
+            return 0;
+        }
+    } else {
+        (void)try_load_default_zoom_rom(neo_path,
+                                        &view->zoom_rom,
+                                        &view->zoom_rom_size);
     }
     view->has_neo = 1;
     return 1;
@@ -240,6 +413,13 @@ static int render_game_snapshot(NgSnapshotView *view, NgViewMode mode) {
     uint32_t palette_bank = choose_palette_bank(view->palette_words);
     const uint16_t *palette_words =
         view->palette_words + palette_bank * NG_NEO_PALETTE_COLORS_PER_BANK;
+    NgNeoVideoRenderOptions render_options;
+    memset(&render_options, 0, sizeof(render_options));
+    render_options.zoom_rom = view->zoom_rom;
+    render_options.zoom_rom_size = view->zoom_rom_size;
+    render_options.auto_animation_counter =
+        snapshot_auto_animation_counter(view->frame_count, view->lspc);
+    render_options.auto_animation_disabled = (uint8_t)((view->lspc >> 3) & 1u);
 
     switch (mode) {
     case NG_VIEW_FIX_LAYER:
@@ -254,29 +434,33 @@ static int render_game_snapshot(NgSnapshotView *view, NgViewMode mode) {
                                                      out_height,
                                                      out_width);
     case NG_VIEW_SPRITES:
-        return ng_neogeo_video_render_sprite_frame_argb(view->image.c.data,
-                                                        view->image.c.size,
-                                                        view->vram_words,
-                                                        NG_VIEW_VRAM_WORDS,
-                                                        palette_words,
-                                                        NG_NEO_PALETTE_COLORS_PER_BANK,
-                                                        pixels,
-                                                        out_width,
-                                                        out_height,
-                                                        out_width);
+        return ng_neogeo_video_render_sprite_frame_argb_with_options(
+            view->image.c.data,
+            view->image.c.size,
+            &render_options,
+            view->vram_words,
+            NG_VIEW_VRAM_WORDS,
+            palette_words,
+            NG_NEO_PALETTE_COLORS_PER_BANK,
+            pixels,
+            out_width,
+            out_height,
+            out_width);
     case NG_VIEW_FRAME:
-        return ng_neogeo_video_render_frame_argb(view->image.s.data,
-                                                 view->image.s.size,
-                                                 view->image.c.data,
-                                                 view->image.c.size,
-                                                 view->vram_words,
-                                                 NG_VIEW_VRAM_WORDS,
-                                                 palette_words,
-                                                 NG_NEO_PALETTE_COLORS_PER_BANK,
-                                                 pixels,
-                                                 out_width,
-                                                 out_height,
-                                                 out_width);
+        return ng_neogeo_video_render_frame_argb_with_options(
+            view->image.s.data,
+            view->image.s.size,
+            view->image.c.data,
+            view->image.c.size,
+            &render_options,
+            view->vram_words,
+            NG_VIEW_VRAM_WORDS,
+            palette_words,
+            NG_NEO_PALETTE_COLORS_PER_BANK,
+            pixels,
+            out_width,
+            out_height,
+            out_width);
     default:
         return 0;
     }
@@ -325,6 +509,9 @@ static void print_help(int has_neo) {
     printf("  7: sprite+fix game frame%s\n", has_neo ? "" : " (.neo required)");
     printf("  r: reload snapshot files\n");
     printf("  q/Escape: quit\n");
+    if (has_neo) {
+        printf("  note: 000-lo.lo/ng-lo.rom is auto-detected next to the .neo, or can be passed as a third path\n");
+    }
 }
 
 static SDL_Texture *create_texture(SDL_Renderer *renderer,
@@ -367,21 +554,24 @@ static int update_texture_for_view(SDL_Renderer *renderer,
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2 && argc != 3) {
-        fprintf(stderr, "usage: %s <snapshot-dir> [game.neo]\n", argv[0]);
+    if (argc != 2 && argc != 3 && argc != 4) {
+        fprintf(stderr, "usage: %s <snapshot-dir> [game.neo] [lo-rom]\n", argv[0]);
         return 2;
     }
 
     NgSnapshotView view;
     memset(&view, 0, sizeof(view));
-    if (!load_snapshot(&view, argv[1]) || !load_neo_image(&view, argc == 3 ? argv[2] : NULL)) {
+    if (!load_snapshot(&view, argv[1]) ||
+        !load_neo_image(&view, argc >= 3 ? argv[2] : NULL, argc == 4 ? argv[3] : NULL)) {
         ng_neo_rom_image_free(&view.image);
+        free(view.zoom_rom);
         return 1;
     }
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         ng_neo_rom_image_free(&view.image);
+        free(view.zoom_rom);
         return 1;
     }
 
@@ -395,6 +585,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();
         ng_neo_rom_image_free(&view.image);
+        free(view.zoom_rom);
         return 1;
     }
 
@@ -409,6 +600,7 @@ int main(int argc, char **argv) {
         SDL_DestroyWindow(window);
         SDL_Quit();
         ng_neo_rom_image_free(&view.image);
+        free(view.zoom_rom);
         return 1;
     }
     SDL_RenderSetIntegerScale(renderer, SDL_FALSE);
@@ -503,5 +695,6 @@ int main(int argc, char **argv) {
     SDL_DestroyWindow(window);
     SDL_Quit();
     ng_neo_rom_image_free(&view.image);
+    free(view.zoom_rom);
     return 0;
 }

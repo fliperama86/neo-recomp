@@ -288,13 +288,23 @@ static int ng_neogeo_video_sprite_on_scanline(uint32_t scanline,
             (uint32_t)rows * NG_NEO_SPRITE_TILE_PIXELS);
 }
 
-static void ng_neogeo_video_sprite_zoom_source(uint8_t zoom_y,
+static void ng_neogeo_video_sprite_zoom_source(const uint8_t *zoom_rom,
+                                               uint32_t zoom_rom_size,
+                                               uint8_t zoom_y,
                                                uint8_t zoom_line,
                                                uint8_t *out_tile,
                                                uint8_t *out_line) {
+    if (zoom_rom && zoom_rom_size >= NG_NEO_ZOOM_ROM_BYTES) {
+        uint8_t source_line =
+            zoom_rom[((uint32_t)zoom_y << 8) | (uint32_t)zoom_line];
+        *out_tile = (uint8_t)(source_line >> 4);
+        *out_line = (uint8_t)(source_line & 0x0Fu);
+        return;
+    }
+
     /* Hardware uses the LO zoom ROM as a 256x256 line/tile lookup.  Keep the
        full-size path exact and use a monotonic approximation for shrunken
-       sprites until the renderer can consume the user-provided LO region. */
+       sprites when the user-provided LO region is not available. */
     uint16_t source_line;
     if (zoom_y == 0xFFu) {
         source_line = zoom_line;
@@ -341,6 +351,7 @@ static uint8_t ng_neogeo_video_build_active_sprite_list(
 static void ng_neogeo_video_draw_sprite_scanline(
     const uint8_t *c_rom,
     uint32_t c_rom_size,
+    const NgNeoVideoRenderOptions *options,
     const uint16_t *vram_words,
     const uint16_t *palette_words,
     uint32_t palette_word_count,
@@ -407,7 +418,12 @@ static void ng_neogeo_video_draw_sprite_scanline(
 
     uint8_t tile_y;
     uint8_t source_y;
-    ng_neogeo_video_sprite_zoom_source(zoom_y, zoom_line, &tile_y, &source_y);
+    ng_neogeo_video_sprite_zoom_source(options ? options->zoom_rom : NULL,
+                                       options ? options->zoom_rom_size : 0,
+                                       zoom_y,
+                                       zoom_line,
+                                       &tile_y,
+                                       &source_y);
     if (invert) {
         tile_y ^= 0x1Fu;
         source_y ^= 0x0Fu;
@@ -421,6 +437,16 @@ static void ng_neogeo_video_draw_sprite_scanline(
     NgNeoSpriteMapEntry entry = ng_neogeo_video_decode_sprite_map_entry(
         vram_words[map_addr],
         vram_words[map_addr + 1u]);
+    uint32_t tile_index = entry.tile_index;
+    if (!options || !options->auto_animation_disabled) {
+        if (entry.auto_animation & 0x02u) {
+            tile_index = (tile_index & ~0x07u) |
+                         (uint32_t)((options ? options->auto_animation_counter : 0u) & 0x07u);
+        } else if (entry.auto_animation & 0x01u) {
+            tile_index = (tile_index & ~0x03u) |
+                         (uint32_t)((options ? options->auto_animation_counter : 0u) & 0x03u);
+        }
+    }
     if (entry.vflip) {
         source_y ^= 0x0Fu;
     }
@@ -428,7 +454,7 @@ static void ng_neogeo_video_draw_sprite_scanline(
     uint8_t pixels[NG_NEO_SPRITE_TILE_PIXELS];
     if (!ng_neogeo_video_decode_sprite_tile_line(c_rom,
                                                  c_rom_size,
-                                                 entry.tile_index,
+                                                 tile_index,
                                                  source_y,
                                                  entry.hflip,
                                                  pixels)) {
@@ -467,16 +493,18 @@ static void ng_neogeo_video_draw_sprite_scanline(
     }
 }
 
-int ng_neogeo_video_render_sprite_frame_argb(const uint8_t *c_rom,
-                                             uint32_t c_rom_size,
-                                             const uint16_t *vram_words,
-                                             uint32_t vram_word_count,
-                                             const uint16_t *palette_words,
-                                             uint32_t palette_word_count,
-                                             uint32_t *out_argb,
-                                             uint32_t out_width,
-                                             uint32_t out_height,
-                                             uint32_t out_stride_pixels) {
+int ng_neogeo_video_render_sprite_frame_argb_with_options(
+    const uint8_t *c_rom,
+    uint32_t c_rom_size,
+    const NgNeoVideoRenderOptions *options,
+    const uint16_t *vram_words,
+    uint32_t vram_word_count,
+    const uint16_t *palette_words,
+    uint32_t palette_word_count,
+    uint32_t *out_argb,
+    uint32_t out_width,
+    uint32_t out_height,
+    uint32_t out_stride_pixels) {
     if (!c_rom || !vram_words || !out_argb ||
         vram_word_count < 0x8600u ||
         out_width < NG_NEO_SPRITE_FRAME_WIDTH ||
@@ -507,6 +535,7 @@ int ng_neogeo_video_render_sprite_frame_argb(const uint8_t *c_rom,
         for (uint8_t i = 0; i < active_count; ++i) {
             ng_neogeo_video_draw_sprite_scanline(c_rom,
                                                  c_rom_size,
+                                                 options,
                                                  vram_words,
                                                  palette_words,
                                                  palette_word_count,
@@ -522,6 +551,60 @@ int ng_neogeo_video_render_sprite_frame_argb(const uint8_t *c_rom,
     }
 
     return 1;
+}
+
+int ng_neogeo_video_render_sprite_frame_argb_with_zoom(
+    const uint8_t *c_rom,
+    uint32_t c_rom_size,
+    const uint8_t *zoom_rom,
+    uint32_t zoom_rom_size,
+    const uint16_t *vram_words,
+    uint32_t vram_word_count,
+    const uint16_t *palette_words,
+    uint32_t palette_word_count,
+    uint32_t *out_argb,
+    uint32_t out_width,
+    uint32_t out_height,
+    uint32_t out_stride_pixels) {
+    NgNeoVideoRenderOptions options;
+    memset(&options, 0, sizeof(options));
+    options.zoom_rom = zoom_rom;
+    options.zoom_rom_size = zoom_rom_size;
+    return ng_neogeo_video_render_sprite_frame_argb_with_options(
+        c_rom,
+        c_rom_size,
+        &options,
+        vram_words,
+        vram_word_count,
+        palette_words,
+        palette_word_count,
+        out_argb,
+        out_width,
+        out_height,
+        out_stride_pixels);
+}
+
+int ng_neogeo_video_render_sprite_frame_argb(const uint8_t *c_rom,
+                                             uint32_t c_rom_size,
+                                             const uint16_t *vram_words,
+                                             uint32_t vram_word_count,
+                                             const uint16_t *palette_words,
+                                             uint32_t palette_word_count,
+                                             uint32_t *out_argb,
+                                             uint32_t out_width,
+                                             uint32_t out_height,
+                                             uint32_t out_stride_pixels) {
+    return ng_neogeo_video_render_sprite_frame_argb_with_options(c_rom,
+                                                                 c_rom_size,
+                                                                 NULL,
+                                                                 vram_words,
+                                                                 vram_word_count,
+                                                                 palette_words,
+                                                                 palette_word_count,
+                                                                 out_argb,
+                                                                 out_width,
+                                                                 out_height,
+                                                                 out_stride_pixels);
 }
 
 static int ng_neogeo_video_overlay_fix_layer_argb(const uint8_t *s_rom,
@@ -589,28 +672,31 @@ static int ng_neogeo_video_overlay_fix_layer_argb(const uint8_t *s_rom,
     return 1;
 }
 
-int ng_neogeo_video_render_frame_argb(const uint8_t *s_rom,
-                                      uint32_t s_rom_size,
-                                      const uint8_t *c_rom,
-                                      uint32_t c_rom_size,
-                                      const uint16_t *vram_words,
-                                      uint32_t vram_word_count,
-                                      const uint16_t *palette_words,
-                                      uint32_t palette_word_count,
-                                      uint32_t *out_argb,
-                                      uint32_t out_width,
-                                      uint32_t out_height,
-                                      uint32_t out_stride_pixels) {
-    if (!ng_neogeo_video_render_sprite_frame_argb(c_rom,
-                                                  c_rom_size,
-                                                  vram_words,
-                                                  vram_word_count,
-                                                  palette_words,
-                                                  palette_word_count,
-                                                  out_argb,
-                                                  out_width,
-                                                  out_height,
-                                                  out_stride_pixels)) {
+int ng_neogeo_video_render_frame_argb_with_options(
+    const uint8_t *s_rom,
+    uint32_t s_rom_size,
+    const uint8_t *c_rom,
+    uint32_t c_rom_size,
+    const NgNeoVideoRenderOptions *options,
+    const uint16_t *vram_words,
+    uint32_t vram_word_count,
+    const uint16_t *palette_words,
+    uint32_t palette_word_count,
+    uint32_t *out_argb,
+    uint32_t out_width,
+    uint32_t out_height,
+    uint32_t out_stride_pixels) {
+    if (!ng_neogeo_video_render_sprite_frame_argb_with_options(c_rom,
+                                                               c_rom_size,
+                                                               options,
+                                                               vram_words,
+                                                               vram_word_count,
+                                                               palette_words,
+                                                               palette_word_count,
+                                                               out_argb,
+                                                               out_width,
+                                                               out_height,
+                                                               out_stride_pixels)) {
         return 0;
     }
     return ng_neogeo_video_overlay_fix_layer_argb(s_rom,
@@ -624,6 +710,66 @@ int ng_neogeo_video_render_frame_argb(const uint8_t *s_rom,
                                                   out_height,
                                                   out_stride_pixels,
                                                   NG_NEO_FIX_VISIBLE_Y_OFFSET);
+}
+
+int ng_neogeo_video_render_frame_argb_with_zoom(const uint8_t *s_rom,
+                                                uint32_t s_rom_size,
+                                                const uint8_t *c_rom,
+                                                uint32_t c_rom_size,
+                                                const uint8_t *zoom_rom,
+                                                uint32_t zoom_rom_size,
+                                                const uint16_t *vram_words,
+                                                uint32_t vram_word_count,
+                                                const uint16_t *palette_words,
+                                                uint32_t palette_word_count,
+                                                uint32_t *out_argb,
+                                                uint32_t out_width,
+                                                uint32_t out_height,
+                                                uint32_t out_stride_pixels) {
+    NgNeoVideoRenderOptions options;
+    memset(&options, 0, sizeof(options));
+    options.zoom_rom = zoom_rom;
+    options.zoom_rom_size = zoom_rom_size;
+    return ng_neogeo_video_render_frame_argb_with_options(s_rom,
+                                                          s_rom_size,
+                                                          c_rom,
+                                                          c_rom_size,
+                                                          &options,
+                                                          vram_words,
+                                                          vram_word_count,
+                                                          palette_words,
+                                                          palette_word_count,
+                                                          out_argb,
+                                                          out_width,
+                                                          out_height,
+                                                          out_stride_pixels);
+}
+
+int ng_neogeo_video_render_frame_argb(const uint8_t *s_rom,
+                                      uint32_t s_rom_size,
+                                      const uint8_t *c_rom,
+                                      uint32_t c_rom_size,
+                                      const uint16_t *vram_words,
+                                      uint32_t vram_word_count,
+                                      const uint16_t *palette_words,
+                                      uint32_t palette_word_count,
+                                      uint32_t *out_argb,
+                                      uint32_t out_width,
+                                      uint32_t out_height,
+                                      uint32_t out_stride_pixels) {
+    return ng_neogeo_video_render_frame_argb_with_options(s_rom,
+                                                          s_rom_size,
+                                                          c_rom,
+                                                          c_rom_size,
+                                                          NULL,
+                                                          vram_words,
+                                                          vram_word_count,
+                                                          palette_words,
+                                                          palette_word_count,
+                                                          out_argb,
+                                                          out_width,
+                                                          out_height,
+                                                          out_stride_pixels);
 }
 
 int ng_neogeo_video_render_fix_layer_argb(const uint8_t *s_rom,

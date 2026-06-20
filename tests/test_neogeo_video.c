@@ -328,6 +328,108 @@ static int test_sprite_frame_hshrink_and_sticky_chain(void) {
     return 0;
 }
 
+static int test_sprite_frame_uses_zoom_rom_table(void) {
+    uint8_t c_rom[NG_NEO_SPRITE_TILE_BYTES * 2u];
+    uint8_t *zoom_rom = (uint8_t *)calloc(NG_NEO_ZOOM_ROM_BYTES, sizeof(uint8_t));
+    uint16_t *vram = (uint16_t *)calloc(0x10000u, sizeof(uint16_t));
+    uint16_t palette[NG_NEO_PALETTE_COLORS_PER_BANK];
+    uint32_t *frame = (uint32_t *)calloc(NG_NEO_SPRITE_FRAME_WIDTH *
+                                         NG_NEO_SPRITE_FRAME_HEIGHT,
+                                         sizeof(uint32_t));
+    CHECK(zoom_rom != NULL && vram != NULL && frame != NULL);
+    memset(c_rom, 0, sizeof(c_rom));
+    memset(palette, 0, sizeof(palette));
+
+    uint8_t source[NG_NEO_SPRITE_TILE_PIXELS];
+    memset(source, 0, sizeof(source));
+    source[0] = 1u;
+    encode_sprite_line(c_rom, 0u, source);
+    source[0] = 2u;
+    encode_sprite_line(c_rom + NG_NEO_SPRITE_TILE_BYTES, 0u, source);
+
+    vram[0x8001u] = 0x0F01u; /* vertical zoom value 1, full horizontal zoom */
+    vram[0x8201u] = (uint16_t)((496u << 7) | 2u);
+    vram[0x8401u] = 0x0000u;
+    vram[64u] = 0x0000u;
+    vram[65u] = 0x0100u;
+    vram[66u] = 0x0001u;
+    vram[67u] = 0x0100u;
+    zoom_rom[(0x01u << 8) | 0x00u] = 0x10u; /* map first scanline to map row 1 */
+
+    palette[0x11u] = 0x4F00u;
+    palette[0x12u] = 0x20F0u;
+
+    CHECK(ng_neogeo_video_render_sprite_frame_argb_with_zoom(
+        c_rom,
+        sizeof(c_rom),
+        zoom_rom,
+        NG_NEO_ZOOM_ROM_BYTES,
+        vram,
+        0x10000u,
+        palette,
+        NG_NEO_PALETTE_COLORS_PER_BANK,
+        frame,
+        NG_NEO_SPRITE_FRAME_WIDTH,
+        NG_NEO_SPRITE_FRAME_HEIGHT,
+        NG_NEO_SPRITE_FRAME_WIDTH));
+
+    CHECK(frame[0] == 0xFF00FF00u);
+
+    free(zoom_rom);
+    free(vram);
+    free(frame);
+    return 0;
+}
+
+static int test_sprite_frame_auto_animation_counter(void) {
+    uint8_t c_rom[NG_NEO_SPRITE_TILE_BYTES * 4u];
+    uint16_t *vram = (uint16_t *)calloc(0x10000u, sizeof(uint16_t));
+    uint16_t palette[NG_NEO_PALETTE_COLORS_PER_BANK];
+    uint32_t *frame = (uint32_t *)calloc(NG_NEO_SPRITE_FRAME_WIDTH *
+                                         NG_NEO_SPRITE_FRAME_HEIGHT,
+                                         sizeof(uint32_t));
+    CHECK(vram != NULL && frame != NULL);
+    memset(c_rom, 0, sizeof(c_rom));
+    memset(palette, 0, sizeof(palette));
+
+    uint8_t source[NG_NEO_SPRITE_TILE_PIXELS];
+    memset(source, 0, sizeof(source));
+    source[0] = 1u;
+    encode_sprite_line(c_rom, 0u, source);
+    source[0] = 2u;
+    encode_sprite_line(c_rom + NG_NEO_SPRITE_TILE_BYTES * 2u, 0u, source);
+
+    vram[0x8001u] = 0x0FFFu;
+    vram[0x8201u] = (uint16_t)((496u << 7) | 1u);
+    vram[0x8401u] = 0x0000u;
+    vram[64u] = 0x0000u;
+    vram[65u] = 0x0104u; /* 2-frame auto-animation replaces code bits 0..1. */
+    palette[0x11u] = 0x4F00u;
+    palette[0x12u] = 0x20F0u;
+
+    NgNeoVideoRenderOptions options;
+    memset(&options, 0, sizeof(options));
+    options.auto_animation_counter = 2u;
+    CHECK(ng_neogeo_video_render_sprite_frame_argb_with_options(
+        c_rom,
+        sizeof(c_rom),
+        &options,
+        vram,
+        0x10000u,
+        palette,
+        NG_NEO_PALETTE_COLORS_PER_BANK,
+        frame,
+        NG_NEO_SPRITE_FRAME_WIDTH,
+        NG_NEO_SPRITE_FRAME_HEIGHT,
+        NG_NEO_SPRITE_FRAME_WIDTH));
+
+    CHECK(frame[0] == 0xFF00FF00u);
+
+    free(vram);
+    free(frame);
+    return 0;
+}
+
 static int test_frame_render_overlays_visible_fix_layer(void) {
     uint8_t s_rom[NG_NEO_FIX_TILE_BYTES];
     uint8_t c_rom[NG_NEO_SPRITE_TILE_BYTES];
@@ -392,6 +494,8 @@ int main(void) {
     if (test_sprite_map_atlas_render() != 0) return 1;
     if (test_sprite_frame_render() != 0) return 1;
     if (test_sprite_frame_hshrink_and_sticky_chain() != 0) return 1;
+    if (test_sprite_frame_uses_zoom_rom_table() != 0) return 1;
+    if (test_sprite_frame_auto_animation_counter() != 0) return 1;
     if (test_frame_render_overlays_visible_fix_layer() != 0) return 1;
     return 0;
 }

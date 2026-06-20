@@ -314,13 +314,16 @@ build/neo-render-snapshot --mode frame --palette-bank auto \
 The renderer applies the same `.neo` C-region byte swizzle used by the MiSTer
 loader, builds a 96-sprite scanline active list from SCB3, draws SCB1-SCB4
 positioned sprites with the hardware horizontal shrink masks and sticky-chain X
-stepping, then overlays the visible 224-line fix layer.
+stepping, applies the optional LO vertical zoom ROM (`000-lo.lo`/`ng-lo.rom`)
+when available, substitutes auto-animation code bits from the snapshot frame
+counter/LSPC state, then overlays the visible 224-line fix layer.
 `build/mslug_snapshot_render_path/frame_auto.png` is now a recognizable Metal
 Slug title/credits image from a headless CPU snapshot; the newer
 `build/mslug_snapshot_500k_current/frame_auto.png` renders an in-game
 background/credits frame. This is still an offline snapshot renderer: vertical
-shrink is approximated until the LO zoom table is loaded, line-buffer priority
-is intentionally approximate, and there is no live SDL gameplay loop yet.
+shrink falls back to an approximation when no LO ROM is provided, line-buffer
+priority is intentionally approximate, and there is no live SDL gameplay loop
+yet.
 
 The optional SDL snapshot host now consumes the same renderer when passed a
 `.neo` image:
@@ -333,9 +336,10 @@ build/neo-snapshot-viewer build/mslug_snapshot_render_path \
 
 It defaults to the sprite+fix frame view when a `.neo` path is present and can
 switch between diagnostic RAM/VRAM views and fix/sprite/frame modes with
-keyboard shortcuts. This is the first SDL surface showing actual game pixels,
-but it still reloads offline snapshots rather than driving the CPU/runtime in a
-live loop.
+keyboard shortcuts. Like the CLI renderer, it auto-detects the LO zoom ROM next
+to the `.neo` path or accepts it as an optional third path. This is the first
+SDL surface showing actual game pixels, but it still reloads offline snapshots
+rather than driving the CPU/runtime in a live loop.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.

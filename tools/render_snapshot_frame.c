@@ -52,6 +52,110 @@ static int read_exact(const char *path, uint8_t *out, size_t expected_size) {
     return 1;
 }
 
+static int load_zoom_rom_file(const char *path,
+                              uint8_t **out_data,
+                              uint32_t *out_size,
+                              int report_errors) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        if (report_errors) {
+            fprintf(stderr, "failed to open %s: %s\n", path, strerror(errno));
+        }
+        return 0;
+    }
+
+    if (fseek(f, 0, SEEK_END) != 0) {
+        if (report_errors) {
+            fprintf(stderr, "failed to seek %s: %s\n", path, strerror(errno));
+        }
+        fclose(f);
+        return 0;
+    }
+    long size = ftell(f);
+    if (size < 0) {
+        if (report_errors) {
+            fprintf(stderr, "failed to size %s: %s\n", path, strerror(errno));
+        }
+        fclose(f);
+        return 0;
+    }
+    rewind(f);
+
+    if (size != (long)NG_NEO_ZOOM_ROM_BYTES &&
+        size != (long)(NG_NEO_ZOOM_ROM_BYTES * 2u)) {
+        if (report_errors) {
+            fprintf(stderr,
+                    "%s has unexpected LO ROM size %ld (expected %u or %u)\n",
+                    path,
+                    size,
+                    NG_NEO_ZOOM_ROM_BYTES,
+                    NG_NEO_ZOOM_ROM_BYTES * 2u);
+        }
+        fclose(f);
+        return 0;
+    }
+
+    uint8_t *data = (uint8_t *)malloc((size_t)size);
+    if (!data) {
+        if (report_errors) {
+            fprintf(stderr, "failed to allocate LO ROM buffer\n");
+        }
+        fclose(f);
+        return 0;
+    }
+    size_t got = fread(data, 1, (size_t)size, f);
+    if (fclose(f) != 0 || got != (size_t)size) {
+        if (report_errors) {
+            fprintf(stderr, "failed to read %s: %s\n", path, strerror(errno));
+        }
+        free(data);
+        return 0;
+    }
+
+    *out_data = data;
+    *out_size = (uint32_t)size;
+    return 1;
+}
+
+static int make_sibling_path(char *out,
+                             size_t out_size,
+                             const char *path,
+                             const char *name) {
+    const char *slash = strrchr(path, '/');
+    const char *backslash = strrchr(path, '\\');
+    const char *sep = slash;
+    if (backslash && (!sep || backslash > sep)) {
+        sep = backslash;
+    }
+    if (!sep) {
+        int written = snprintf(out, out_size, "%s", name);
+        return written >= 0 && (size_t)written < out_size;
+    }
+
+    size_t dir_len = (size_t)(sep - path) + 1u;
+    if (dir_len >= out_size) {
+        return 0;
+    }
+    memcpy(out, path, dir_len);
+    int written = snprintf(out + dir_len, out_size - dir_len, "%s", name);
+    return written >= 0 && (size_t)written < out_size - dir_len;
+}
+
+static int try_load_default_zoom_rom(const char *neo_path,
+                                     uint8_t **out_data,
+                                     uint32_t *out_size) {
+    char path[1200];
+    if (make_sibling_path(path, sizeof(path), neo_path, "000-lo.lo") &&
+        load_zoom_rom_file(path, out_data, out_size, 0)) {
+        return 1;
+    }
+    if (make_sibling_path(path, sizeof(path), neo_path, "ng-lo.rom") &&
+        load_zoom_rom_file(path, out_data, out_size, 0)) {
+        return 1;
+    }
+    return 0;
+}
+
 static uint16_t read_be16(const uint8_t *data, uint32_t word_index) {
     uint32_t offset = word_index * 2u;
     return (uint16_t)(((uint16_t)data[offset] << 8) | (uint16_t)data[offset + 1u]);
@@ -138,13 +242,16 @@ static void usage(const char *argv0) {
             "  --sprite-base-word <addr>    atlas VRAM word base (default: 0)\n"
             "  --sprite-cols <n>            atlas columns (default: 32)\n"
             "  --sprite-rows <n>            atlas rows (default: 32)\n"
+            "  --lo-rom <path>              optional 000-lo.lo/ng-lo.rom vertical\n"
+            "                               zoom ROM (auto-detects next to .neo)\n"
             "\n"
             "fix renders the CPU-visible 40x32 fix tile map from the snapshot\n"
             "and cartridge S region. sprite-atlas renders slow-VRAM sprite-map\n"
             "entries as a diagnostic atlas using the cartridge C region. sprites\n"
             "renders a first-pass positioned sprite frame from SCB1-SCB4. frame\n"
-            "renders sprites plus the visible fix layer; shrink and line-buffer\n"
-            "priority are not exact yet.\n",
+            "renders sprites plus the visible fix layer; vertical shrink falls\n"
+            "back to an approximation without LO ROM, and line-buffer priority\n"
+            "is not exact yet.\n",
             argv0);
 }
 
@@ -214,6 +321,64 @@ static uint32_t choose_palette_bank(const uint16_t *palette_words) {
     return best_bank;
 }
 
+static int parse_summary_u32(const char *line, const char *key, uint32_t *out) {
+    size_t key_len = strlen(key);
+    if (strncmp(line, key, key_len) != 0 || line[key_len] != '=') {
+        return 0;
+    }
+    const char *value = line + key_len + 1u;
+    int base = 10;
+    if (*value == '$') {
+        ++value;
+        base = 16;
+    }
+    char *end = NULL;
+    unsigned long parsed = strtoul(value, &end, base);
+    if (end == value || parsed > UINT32_MAX) {
+        return 0;
+    }
+    *out = (uint32_t)parsed;
+    return 1;
+}
+
+static void load_snapshot_render_state(const char *snapshot_dir,
+                                       uint32_t *out_frame_count,
+                                       uint16_t *out_lspc) {
+    char path[1200];
+    char line[256];
+    uint32_t frame_count = 0;
+    uint32_t lspc = 0;
+    if (!make_path(path, sizeof(path), snapshot_dir, "summary.txt")) {
+        *out_frame_count = frame_count;
+        *out_lspc = (uint16_t)lspc;
+        return;
+    }
+
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        *out_frame_count = frame_count;
+        *out_lspc = (uint16_t)lspc;
+        return;
+    }
+    while (fgets(line, sizeof(line), f)) {
+        uint32_t value = 0;
+        if (parse_summary_u32(line, "frame", &value)) {
+            frame_count = value;
+        } else if (parse_summary_u32(line, "lspc", &value)) {
+            lspc = value & 0xFFFFu;
+        }
+    }
+    fclose(f);
+
+    *out_frame_count = frame_count;
+    *out_lspc = (uint16_t)lspc;
+}
+
+static uint8_t snapshot_auto_animation_counter(uint32_t frame_count, uint16_t lspc) {
+    uint32_t speed = (uint32_t)(lspc >> 8);
+    return (uint8_t)((frame_count + speed) / (speed + 1u));
+}
+
 static int parse_u32_option(const char *text, uint32_t max_value, uint32_t *out) {
     char *end = NULL;
     unsigned long parsed = strtoul(text, &end, 0);
@@ -231,6 +396,7 @@ int main(int argc, char **argv) {
     uint32_t sprite_base_word = 0;
     uint32_t sprite_cols = 32;
     uint32_t sprite_rows = 32;
+    const char *lo_rom_path = NULL;
     int argi = 1;
 
     while (argi < argc && strncmp(argv[argi], "--", 2) == 0) {
@@ -267,6 +433,12 @@ int main(int argc, char **argv) {
             ++argi;
         } else if (strcmp(option, "--debug-palette") == 0) {
             debug_palette = 1;
+        } else if (strcmp(option, "--lo-rom") == 0) {
+            if (argc <= argi) {
+                fprintf(stderr, "LO ROM option requires a path\n");
+                return 2;
+            }
+            lo_rom_path = argv[argi++];
         } else if (strcmp(option, "--sprite-base-word") == 0) {
             if (argc <= argi ||
                 !parse_u32_option(argv[argi], NG_RENDER_VRAM_WORDS - 1u, &sprite_base_word)) {
@@ -342,8 +514,20 @@ int main(int argc, char **argv) {
 
     NgNeoRomImage image;
     memset(&image, 0, sizeof(image));
+    uint8_t *zoom_rom = NULL;
+    uint32_t zoom_rom_size = 0;
+    uint32_t frame_count = 0;
+    uint16_t lspc = 0;
     int ok = load_snapshot_words(snapshot_dir, palette_words, vram_words) &&
              ng_neo_rom_image_load(&image, neo_path);
+    load_snapshot_render_state(snapshot_dir, &frame_count, &lspc);
+    if (ok) {
+        if (lo_rom_path) {
+            ok = load_zoom_rom_file(lo_rom_path, &zoom_rom, &zoom_rom_size, 1);
+        } else if (mode == NG_RENDER_MODE_SPRITES || mode == NG_RENDER_MODE_FRAME) {
+            (void)try_load_default_zoom_rom(neo_path, &zoom_rom, &zoom_rom_size);
+        }
+    }
     if (ok) {
         if (debug_palette) {
             fill_debug_palette(palette_words);
@@ -353,6 +537,13 @@ int main(int argc, char **argv) {
             palette_bank = debug_palette ? 0u : choose_palette_bank(palette_words);
         }
         uint32_t palette_word_offset = palette_bank * NG_NEO_PALETTE_COLORS_PER_BANK;
+        NgNeoVideoRenderOptions render_options;
+        memset(&render_options, 0, sizeof(render_options));
+        render_options.zoom_rom = zoom_rom;
+        render_options.zoom_rom_size = zoom_rom_size;
+        render_options.auto_animation_counter =
+            snapshot_auto_animation_counter(frame_count, lspc);
+        render_options.auto_animation_disabled = (uint8_t)((lspc >> 3) & 1u);
         if (mode == NG_RENDER_MODE_FIX) {
             ok = ng_neogeo_video_render_fix_layer_argb(
                 image.s.data,
@@ -381,9 +572,10 @@ int main(int argc, char **argv) {
                 out_height,
                 out_width);
         } else if (mode == NG_RENDER_MODE_SPRITES) {
-            ok = ng_neogeo_video_render_sprite_frame_argb(
+            ok = ng_neogeo_video_render_sprite_frame_argb_with_options(
                 image.c.data,
                 image.c.size,
+                &render_options,
                 vram_words,
                 NG_RENDER_VRAM_WORDS,
                 palette_words + palette_word_offset,
@@ -393,11 +585,12 @@ int main(int argc, char **argv) {
                 out_height,
                 out_width);
         } else {
-            ok = ng_neogeo_video_render_frame_argb(
+            ok = ng_neogeo_video_render_frame_argb_with_options(
                 image.s.data,
                 image.s.size,
                 image.c.data,
                 image.c.size,
+                &render_options,
                 vram_words,
                 NG_RENDER_VRAM_WORDS,
                 palette_words + palette_word_offset,
@@ -415,6 +608,7 @@ int main(int argc, char **argv) {
     }
 
     ng_neo_rom_image_free(&image);
+    free(zoom_rom);
     free(palette_words);
     free(vram_words);
     free(pixels);
