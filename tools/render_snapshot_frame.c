@@ -15,7 +15,9 @@
 
 typedef enum NgRenderMode {
     NG_RENDER_MODE_FIX = 0,
-    NG_RENDER_MODE_SPRITE_ATLAS = 1
+    NG_RENDER_MODE_SPRITE_ATLAS = 1,
+    NG_RENDER_MODE_SPRITES = 2,
+    NG_RENDER_MODE_FRAME = 3
 } NgRenderMode;
 
 #define NG_RENDER_PALETTE_BANK_AUTO UINT32_MAX
@@ -128,7 +130,8 @@ static void usage(const char *argv0) {
             "usage: %s [options] <snapshot-dir> <game.neo> <out.ppm>\n"
             "\n"
             "Options:\n"
-            "  --mode fix|sprite-atlas      render mode (default: fix)\n"
+            "  --mode fix|sprite-atlas|sprites|frame\n"
+            "                               render mode (default: fix)\n"
             "  --palette-bank auto|0|1      palette RAM bank (default: auto)\n"
             "  --debug-palette              false-color tile pixels instead of\n"
             "                               using snapshot palette RAM\n"
@@ -138,8 +141,10 @@ static void usage(const char *argv0) {
             "\n"
             "fix renders the CPU-visible 40x32 fix tile map from the snapshot\n"
             "and cartridge S region. sprite-atlas renders slow-VRAM sprite-map\n"
-            "entries as a diagnostic atlas using the cartridge C region; it is\n"
-            "not a positioned/layered sprite frame yet.\n",
+            "entries as a diagnostic atlas using the cartridge C region. sprites\n"
+            "renders a first-pass positioned sprite frame from SCB1-SCB4. frame\n"
+            "renders sprites plus the visible fix layer; shrink and line-buffer\n"
+            "priority are not exact yet.\n",
             argv0);
 }
 
@@ -239,8 +244,12 @@ int main(int argc, char **argv) {
                 mode = NG_RENDER_MODE_FIX;
             } else if (strcmp(argv[argi], "sprite-atlas") == 0) {
                 mode = NG_RENDER_MODE_SPRITE_ATLAS;
+            } else if (strcmp(argv[argi], "sprites") == 0) {
+                mode = NG_RENDER_MODE_SPRITES;
+            } else if (strcmp(argv[argi], "frame") == 0) {
+                mode = NG_RENDER_MODE_FRAME;
             } else {
-                fprintf(stderr, "mode must be fix or sprite-atlas\n");
+                fprintf(stderr, "mode must be fix, sprite-atlas, sprites, or frame\n");
                 return 2;
             }
             ++argi;
@@ -307,6 +316,10 @@ int main(int argc, char **argv) {
         }
         out_width = sprite_cols * NG_NEO_SPRITE_TILE_PIXELS;
         out_height = sprite_rows * NG_NEO_SPRITE_TILE_PIXELS;
+    } else if (mode == NG_RENDER_MODE_SPRITES ||
+               mode == NG_RENDER_MODE_FRAME) {
+        out_width = NG_NEO_SPRITE_FRAME_WIDTH;
+        out_height = NG_NEO_SPRITE_FRAME_HEIGHT;
     }
     if (out_width == 0u || out_height == 0u ||
         (size_t)out_width > SIZE_MAX / (size_t)out_height ||
@@ -352,7 +365,7 @@ int main(int argc, char **argv) {
                 out_width,
                 out_height,
                 out_width);
-        } else {
+        } else if (mode == NG_RENDER_MODE_SPRITE_ATLAS) {
             ok = ng_neogeo_video_render_sprite_map_atlas_argb(
                 image.c.data,
                 image.c.size,
@@ -364,6 +377,32 @@ int main(int argc, char **argv) {
                 pixels,
                 sprite_cols,
                 sprite_rows,
+                out_width,
+                out_height,
+                out_width);
+        } else if (mode == NG_RENDER_MODE_SPRITES) {
+            ok = ng_neogeo_video_render_sprite_frame_argb(
+                image.c.data,
+                image.c.size,
+                vram_words,
+                NG_RENDER_VRAM_WORDS,
+                palette_words + palette_word_offset,
+                NG_NEO_PALETTE_COLORS_PER_BANK,
+                pixels,
+                out_width,
+                out_height,
+                out_width);
+        } else {
+            ok = ng_neogeo_video_render_frame_argb(
+                image.s.data,
+                image.s.size,
+                image.c.data,
+                image.c.size,
+                vram_words,
+                NG_RENDER_VRAM_WORDS,
+                palette_words + palette_word_offset,
+                NG_NEO_PALETTE_COLORS_PER_BANK,
+                pixels,
                 out_width,
                 out_height,
                 out_width);

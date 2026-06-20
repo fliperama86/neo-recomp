@@ -11,6 +11,10 @@
 #define NG_NEO_FIX_FRAME_HEIGHT (NG_NEO_FIX_MAP_ROWS * NG_NEO_FIX_TILE_PIXELS)
 #define NG_NEO_SPRITE_TILE_PIXELS 16u
 #define NG_NEO_SPRITE_TILE_BYTES 128u
+#define NG_NEO_SPRITE_FRAME_WIDTH 320u
+#define NG_NEO_SPRITE_FRAME_HEIGHT 224u
+#define NG_NEO_SPRITE_DISPLAY_LIMIT 381u
+#define NG_NEO_FIX_VISIBLE_Y_OFFSET 16u
 #define NG_NEO_PALETTE_COLORS_PER_BANK 0x1000u
 
 typedef struct NgNeoRgb {
@@ -83,3 +87,27 @@ int ng_neogeo_video_render_sprite_map_atlas_argb(const uint8_t *c_rom,
                                                  uint32_t out_width,
                                                  uint32_t out_height,
                                                  uint32_t out_stride_pixels);
+
+int ng_neogeo_video_render_sprite_frame_argb(const uint8_t *c_rom,
+                                             uint32_t c_rom_size,
+                                             const uint16_t *vram_words,
+                                             uint32_t vram_word_count,
+                                             const uint16_t *palette_words,
+                                             uint32_t palette_word_count,
+                                             uint32_t *out_argb,
+                                             uint32_t out_width,
+                                             uint32_t out_height,
+                                             uint32_t out_stride_pixels);
+
+int ng_neogeo_video_render_frame_argb(const uint8_t *s_rom,
+                                      uint32_t s_rom_size,
+                                      const uint8_t *c_rom,
+                                      uint32_t c_rom_size,
+                                      const uint16_t *vram_words,
+                                      uint32_t vram_word_count,
+                                      const uint16_t *palette_words,
+                                      uint32_t palette_word_count,
+                                      uint32_t *out_argb,
+                                      uint32_t out_width,
+                                      uint32_t out_height,
+                                      uint32_t out_stride_pixels);

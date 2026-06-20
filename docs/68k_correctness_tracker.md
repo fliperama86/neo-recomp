@@ -22,7 +22,7 @@ Current verification command:
 ctest --test-dir build --output-on-failure
 ```
 
-Last local verification: **13/13 passing** on 2026-06-20.
+Last local verification: **15/15 passing** on 2026-06-20.
 
 ## Done and Covered
 
@@ -136,7 +136,7 @@ Last local verification: **13/13 passing** on 2026-06-20.
 | Full oracle/fuzz harness | Missing | Add a trusted 68000 reference runner or generated randomized fixtures for every implemented instruction family, size, EA mode, and edge case. |
 | Cycle timing / prefetch | Missing | No cycle timing or prefetch behavior is modeled. Only add this once functional correctness and real-ROM needs demand it. |
 | NeoGeo hardware integration | Missing | Implement/test full watchdog reset behavior, configurable/full input semantics, Z80/YM2610 sound execution and IRQ semantics, BIOS/system registers beyond current latch bits, rendered VRAM/display behavior, protection/bank-switch variants, persistent save backing, VBlank/level integration with host pacing, and remaining unmapped/bus-error behavior. |
-| Real game boot checkpoint | Missing | Metal Slug generated code now enters cartridge code through `tools/generated_smoke_harness.c`; without BIOS it stops at the expected BIOS/system-ROM dispatch fallback, and with a user-provided generated BIOS slice plus DIP/watchdog handling, default input/status reads, a port-output latch, scanline-driven smoke VBlank, trampoline-safe dispatch, P-ROM address mapping, and task/callback discovery metadata, the headless smoke reaches repeated cart main/VBlank/input/video/render-worker execution. The current 500k checkpoint has durable nonzero work RAM, palette RAM, and VRAM; the 5M checkpoint now reaches the budget guard without a cart dispatch miss, and a direct 10M harness run also reaches its budget. Snapshot files, diagnostic PPM generation, optional SDL2 snapshot viewing, and tested `.neo` P/S/M/V1/V2/C extraction exist for future renderer work, but the generated BIOS slice is still truncated, known byte-read probes remain modeled as default `0xFF` reads, and there is no boot/attract-mode success oracle. |
+| Real game boot checkpoint | Missing | Metal Slug generated code now enters cartridge code through `tools/generated_smoke_harness.c`; without BIOS it stops at the expected BIOS/system-ROM dispatch fallback, and with a user-provided generated BIOS slice plus DIP/watchdog handling, default input/status reads, a port-output latch, scanline-driven smoke VBlank, trampoline-safe dispatch, P-ROM address mapping, and task/callback discovery metadata, the headless smoke reaches repeated cart main/VBlank/input/video/render-worker execution. The current 500k checkpoint has durable nonzero work RAM, palette RAM, and VRAM; the 5M checkpoint now reaches the budget guard without a cart dispatch miss, and a direct 10M harness run also reaches its budget. Snapshot files, first-pass sprite/fix frame rendering, optional SDL2 snapshot viewing, and tested `.neo` P/S/M/V1/V2/C extraction now produce recognizable offline Metal Slug title/background images from headless state, but the generated BIOS slice is still truncated, known byte-read probes remain modeled as default `0xFF` reads, and there is no live boot/attract-mode success oracle. |
 
 ## Cross-Repo Reference Notes
 

@@ -273,8 +273,8 @@ a tested full-container path for P/S/M/V1/V2/C regions: P is normalized for
 68000 recompilation, while S fix-layer and interleaved C sprite data are
 preserved for video decode/rendering work. A small `neo_video` helper library
 now covers the shared palette bit mapping, a generic 4bpp planar sprite-line
-decode primitive, native S/fix tile line decode, packed C-region sprite
-tile-line decode, sprite-map entry decode, and deterministic renderers over
+decode primitive, native S/fix tile line decode, MiSTer/MAME `.neo` C-region
+sprite swizzle/decode, sprite-map entry decode, and deterministic renderers over
 snapshot VRAM/palette RAM. The corresponding `neo-render-snapshot` CLI writes a
 PPM from a headless snapshot and a user-provided `.neo` image:
 
@@ -302,6 +302,23 @@ palette; `--debug-palette` can false-color sprite pixel indices when a snapshot
 palette is intentionally blank/faded. It is a staging artifact for the next
 step: reconstructing active sprite lists, X/Y/shrink parameters, and line-buffer
 priority.
+
+That staging path now has a first-pass frame renderer:
+
+```sh
+build/neo-render-snapshot --mode frame --palette-bank auto \
+  build/mslug_snapshot_render_path ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  build/mslug_snapshot_render_path/frame_auto.ppm
+```
+
+The renderer applies the same `.neo` C-region byte swizzle used by the MiSTer
+loader, draws SCB1-SCB4 positioned sprite strips, then overlays the visible
+224-line fix layer. `build/mslug_snapshot_render_path/frame_auto.png` is now a
+recognizable Metal Slug title/credits image from a headless CPU snapshot; the
+newer `build/mslug_snapshot_500k_current/frame_auto.png` renders an in-game
+background/credits frame. This is still an offline snapshot renderer: sprite
+shrink and line-buffer priority are intentionally approximate, and there is no
+live SDL gameplay loop yet.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.

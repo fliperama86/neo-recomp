@@ -170,7 +170,7 @@ tools/render_snapshot_debug.py build/mslug_snapshot
 This writes PPMs under `build/mslug_snapshot/debug_images/`. They are visual
 diagnostics, not accurate Neo Geo rendering yet.
 
-The first real-rendering seam is a deterministic fix-layer snapshot renderer:
+The first real-rendering seam is a deterministic snapshot renderer:
 
 ```sh
 build/neo-render-snapshot build/mslug_snapshot \
@@ -178,9 +178,8 @@ build/neo-render-snapshot build/mslug_snapshot \
   build/mslug_snapshot/fix_layer.ppm
 ```
 
-It loads the user-provided `.neo` S region plus the snapshot VRAM/palette RAM
-and renders the CPU-visible 40x32 fix tile map. Sprites are intentionally not
-rendered yet.
+It loads the user-provided `.neo` image plus snapshot VRAM/palette RAM and
+renders the CPU-visible 40x32 fix tile map by default.
 
 The same tool can render a diagnostic sprite-map atlas from slow VRAM entries
 and the cartridge C region:
@@ -196,6 +195,20 @@ That atlas proves C-region sprite tile decode and sprite-map/palette plumbing,
 but it is not a positioned/layered game frame.
 If a snapshot palette is all white/black, add `--debug-palette` to false-color
 the sprite pixel indices.
+
+For a first-pass real game-frame image, render positioned sprites plus the
+visible fix layer:
+
+```sh
+build/neo-render-snapshot --mode frame --palette-bank auto \
+  build/mslug_snapshot ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  build/mslug_snapshot/frame.ppm
+```
+
+This is still an offline snapshot renderer, not a live emulator loop. Sprite
+shrink and line-buffer priority are not exact yet, but the C-region swizzle,
+sprite positioning, palette lookup, and fix overlay are isolated and covered by
+tests.
 
 If SDL2 is available through `pkg-config`, CMake also builds an optional
 interactive snapshot host:
