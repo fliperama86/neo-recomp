@@ -18,6 +18,8 @@ typedef enum NgRenderMode {
     NG_RENDER_MODE_SPRITE_ATLAS = 1
 } NgRenderMode;
 
+#define NG_RENDER_PALETTE_BANK_AUTO UINT32_MAX
+
 static int make_path(char *out, size_t out_size, const char *dir, const char *name) {
     size_t len = strlen(dir);
     const char *sep = len != 0u && (dir[len - 1u] == '/' || dir[len - 1u] == '\\') ? "" : "/";
@@ -127,7 +129,9 @@ static void usage(const char *argv0) {
             "\n"
             "Options:\n"
             "  --mode fix|sprite-atlas      render mode (default: fix)\n"
-            "  --palette-bank 0|1           palette RAM bank (default: 0)\n"
+            "  --palette-bank auto|0|1      palette RAM bank (default: auto)\n"
+            "  --debug-palette              false-color tile pixels instead of\n"
+            "                               using snapshot palette RAM\n"
             "  --sprite-base-word <addr>    atlas VRAM word base (default: 0)\n"
             "  --sprite-cols <n>            atlas columns (default: 32)\n"
             "  --sprite-rows <n>            atlas rows (default: 32)\n"
@@ -137,6 +141,72 @@ static void usage(const char *argv0) {
             "entries as a diagnostic atlas using the cartridge C region; it is\n"
             "not a positioned/layered sprite frame yet.\n",
             argv0);
+}
+
+static uint16_t palette_word_from_rgb5(uint8_t r5, uint8_t g5, uint8_t b5) {
+    uint16_t word = 0;
+    r5 &= 0x1Fu;
+    g5 &= 0x1Fu;
+    b5 &= 0x1Fu;
+    word |= (uint16_t)((r5 & 0x1Eu) << 7);
+    word |= (uint16_t)((r5 & 0x01u) << 14);
+    word |= (uint16_t)((g5 & 0x1Eu) << 3);
+    word |= (uint16_t)((g5 & 0x01u) << 13);
+    word |= (uint16_t)((b5 & 0x1Eu) >> 1);
+    word |= (uint16_t)((b5 & 0x01u) << 12);
+    return word;
+}
+
+static uint16_t debug_palette_word(uint32_t palette, uint32_t color) {
+    static const uint8_t base_rgb5[16][3] = {
+        {0, 0, 0},     {31, 31, 31}, {31, 0, 0},   {0, 31, 0},
+        {0, 0, 31},    {31, 31, 0},  {31, 0, 31},  {0, 31, 31},
+        {18, 18, 18},  {31, 16, 0},  {16, 0, 31},  {0, 16, 31},
+        {16, 31, 0},   {31, 0, 16},  {0, 31, 16},  {24, 24, 24},
+    };
+
+    color &= 0x0Fu;
+    if (color == 0u) {
+        return 0;
+    }
+
+    uint8_t r = (uint8_t)(base_rgb5[color][0] + ((palette * 5u) & 0x0Fu));
+    uint8_t g = (uint8_t)(base_rgb5[color][1] + ((palette * 3u) & 0x0Fu));
+    uint8_t b = (uint8_t)(base_rgb5[color][2] + ((palette * 7u) & 0x0Fu));
+    if (r > 31u) r = 31u;
+    if (g > 31u) g = 31u;
+    if (b > 31u) b = 31u;
+    return palette_word_from_rgb5(r, g, b);
+}
+
+static void fill_debug_palette(uint16_t *palette_words) {
+    for (uint32_t palette = 0; palette < 256u; ++palette) {
+        for (uint32_t color = 0; color < 16u; ++color) {
+            palette_words[palette * 16u + color] =
+                debug_palette_word(palette, color);
+        }
+    }
+}
+
+static uint32_t choose_palette_bank(const uint16_t *palette_words) {
+    uint32_t best_bank = 0;
+    uint32_t best_score = 0;
+    for (uint32_t bank = 0; bank < 2u; ++bank) {
+        uint32_t score = 0;
+        const uint16_t *bank_words =
+            palette_words + bank * NG_NEO_PALETTE_COLORS_PER_BANK;
+        for (uint32_t i = 0; i < NG_NEO_PALETTE_COLORS_PER_BANK; ++i) {
+            uint16_t word = bank_words[i];
+            if (word != 0u && word != 0x7FFFu) {
+                ++score;
+            }
+        }
+        if (score > best_score) {
+            best_score = score;
+            best_bank = bank;
+        }
+    }
+    return best_bank;
 }
 
 static int parse_u32_option(const char *text, uint32_t max_value, uint32_t *out) {
@@ -151,7 +221,8 @@ static int parse_u32_option(const char *text, uint32_t max_value, uint32_t *out)
 
 int main(int argc, char **argv) {
     NgRenderMode mode = NG_RENDER_MODE_FIX;
-    uint32_t palette_bank = 0;
+    uint32_t palette_bank = NG_RENDER_PALETTE_BANK_AUTO;
+    int debug_palette = 0;
     uint32_t sprite_base_word = 0;
     uint32_t sprite_cols = 32;
     uint32_t sprite_rows = 32;
@@ -174,12 +245,19 @@ int main(int argc, char **argv) {
             }
             ++argi;
         } else if (strcmp(option, "--palette-bank") == 0) {
-            if (argc <= argi ||
-                !parse_u32_option(argv[argi], 1u, &palette_bank)) {
-                fprintf(stderr, "palette bank must be 0 or 1\n");
+            if (argc <= argi) {
+                fprintf(stderr, "palette bank must be auto, 0, or 1\n");
+                return 2;
+            }
+            if (strcmp(argv[argi], "auto") == 0) {
+                palette_bank = NG_RENDER_PALETTE_BANK_AUTO;
+            } else if (!parse_u32_option(argv[argi], 1u, &palette_bank)) {
+                fprintf(stderr, "palette bank must be auto, 0, or 1\n");
                 return 2;
             }
             ++argi;
+        } else if (strcmp(option, "--debug-palette") == 0) {
+            debug_palette = 1;
         } else if (strcmp(option, "--sprite-base-word") == 0) {
             if (argc <= argi ||
                 !parse_u32_option(argv[argi], NG_RENDER_VRAM_WORDS - 1u, &sprite_base_word)) {
@@ -254,6 +332,13 @@ int main(int argc, char **argv) {
     int ok = load_snapshot_words(snapshot_dir, palette_words, vram_words) &&
              ng_neo_rom_image_load(&image, neo_path);
     if (ok) {
+        if (debug_palette) {
+            fill_debug_palette(palette_words);
+            fill_debug_palette(palette_words + NG_NEO_PALETTE_COLORS_PER_BANK);
+        }
+        if (palette_bank == NG_RENDER_PALETTE_BANK_AUTO) {
+            palette_bank = debug_palette ? 0u : choose_palette_bank(palette_words);
+        }
         uint32_t palette_word_offset = palette_bank * NG_NEO_PALETTE_COLORS_PER_BANK;
         if (mode == NG_RENDER_MODE_FIX) {
             ok = ng_neogeo_video_render_fix_layer_argb(

@@ -290,15 +290,18 @@ default. The same tool can also render a diagnostic sprite-map atlas:
 
 ```sh
 build/neo-render-snapshot --mode sprite-atlas \
-  --sprite-base-word 0x1000 --sprite-cols 32 --sprite-rows 16 \
+  --palette-bank auto --sprite-base-word 0x1000 --sprite-cols 32 --sprite-rows 16 \
   build/mslug_snapshot ~/Documents/Games/Mister/NEOGEO/mslug.neo \
   build/mslug_snapshot/sprite_atlas.ppm
 ```
 
 The atlas uses real C-region sprite tile data, slow-VRAM sprite map entries,
 and snapshot palette RAM, but it does not position/layer sprites into a game
-frame yet. It is a staging artifact for the next step: reconstructing active
-sprite lists, X/Y/shrink parameters, and line-buffer priority.
+frame yet. `--palette-bank auto` chooses the RAM bank with the richer non-white
+palette; `--debug-palette` can false-color sprite pixel indices when a snapshot
+palette is intentionally blank/faded. It is a staging artifact for the next
+step: reconstructing active sprite lists, X/Y/shrink parameters, and line-buffer
+priority.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.

@@ -187,13 +187,15 @@ and the cartridge C region:
 
 ```sh
 build/neo-render-snapshot --mode sprite-atlas \
-  --sprite-base-word 0x1000 --sprite-cols 32 --sprite-rows 16 \
+  --palette-bank auto --sprite-base-word 0x1000 --sprite-cols 32 --sprite-rows 16 \
   build/mslug_snapshot ~/Documents/Games/Mister/NEOGEO/mslug.neo \
   build/mslug_snapshot/sprite_atlas.ppm
 ```
 
 That atlas proves C-region sprite tile decode and sprite-map/palette plumbing,
 but it is not a positioned/layered game frame.
+If a snapshot palette is all white/black, add `--debug-palette` to false-color
+the sprite pixel indices.
 
 If SDL2 is available through `pkg-config`, CMake also builds an optional
 interactive snapshot host:
