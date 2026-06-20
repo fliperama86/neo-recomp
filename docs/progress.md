@@ -378,6 +378,26 @@ to the `.neo` path or accepts it as an optional third path. This is the first
 SDL surface showing actual game pixels, but it still reloads offline snapshots
 rather than driving the CPU/runtime in a live loop.
 
+There is now also a first live SDL host path:
+
+```sh
+scripts/run_mslug_sdl.sh \
+  ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1
+```
+
+The script uses the same Metal Slug recompilation and user-provided BIOS slice
+as the headless smoke, then links `tools/sdl_live_host.c` with the generated
+cart/BIOS objects, runtime, video renderer, and shared dispatch trampoline. The
+host initializes the runtime, optionally fast-forwards to the current useful
+frontier (`NG_MSLUG_SDL_FAST_FORWARD`, default 500000 dispatches), then advances
+generated CPU dispatches each SDL refresh and renders directly from live
+runtime VRAM/palette state. `NG_MSLUG_SDL_MAX_REFRESHES` plus
+`SDL_VIDEODRIVER=dummy` gives a noninteractive smoke path; locally this was
+validated with a 10k-dispatch fast-forward and two rendered refreshes. This is
+still using the approximate headless device model, but it is no longer a saved
+snapshot reload loop.
+
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
 

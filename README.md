@@ -234,8 +234,24 @@ Keys `1`-`4` switch between raw VRAM, nonzero VRAM, work RAM, and palette
 views. With an optional `.neo` argument, keys `5`-`7` switch between fix,
 positioned sprites, and the sprite+fix game frame; `r` reloads the snapshot.
 The viewer also auto-detects `000-lo.lo`/`ng-lo.rom` next to the `.neo`, or
-accepts it as an optional third path. This is a host/viewer scaffold, not the
-final live emulator loop.
+accepts it as an optional third path. This is still an offline snapshot viewer.
+
+For a first live SDL host that drives generated CPU/runtime state and renders
+the current framebuffer continuously, use:
+
+```sh
+scripts/run_mslug_sdl.sh \
+  ~/Documents/Games/Mister/NEOGEO/mslug.neo \
+  ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1
+```
+
+The script recompiles Metal Slug, builds the user-provided BIOS slice, links a
+temporary `build/mslug_sdl_host`, fast-forwards by
+`NG_MSLUG_SDL_FAST_FORWARD` dispatches (default: 500000), then runs an SDL
+window. Tune `NG_MSLUG_SDL_DISPATCHES_PER_REFRESH`, `NG_MSLUG_SDL_SCALE`, and
+`NG_MSLUG_SDL_MAX_REFRESHES` for local experiments. This is not a full emulator
+yet; it reuses the headless runtime model and current renderer, but it is a
+real live host loop rather than a saved-snapshot reload.
 
 ## Decoder Slice
 
