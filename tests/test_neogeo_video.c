@@ -274,6 +274,60 @@ static int test_sprite_frame_render(void) {
     return 0;
 }
 
+static int test_sprite_frame_hshrink_and_sticky_chain(void) {
+    uint8_t c_rom[NG_NEO_SPRITE_TILE_BYTES * 2u];
+    uint16_t *vram = (uint16_t *)calloc(0x10000u, sizeof(uint16_t));
+    uint16_t palette[NG_NEO_PALETTE_COLORS_PER_BANK];
+    uint32_t *frame = (uint32_t *)calloc(NG_NEO_SPRITE_FRAME_WIDTH *
+                                         NG_NEO_SPRITE_FRAME_HEIGHT,
+                                         sizeof(uint32_t));
+    CHECK(vram != NULL && frame != NULL);
+    memset(c_rom, 0, sizeof(c_rom));
+    memset(palette, 0, sizeof(palette));
+
+    uint8_t source[NG_NEO_SPRITE_TILE_PIXELS];
+    memset(source, 0, sizeof(source));
+    source[8] = 1u;
+    encode_sprite_line(c_rom, 0u, source);
+    source[8] = 2u;
+    encode_sprite_line(c_rom + NG_NEO_SPRITE_TILE_BYTES, 0u, source);
+
+    vram[0x8001u] = 0x00FFu; /* full vertical zoom, minimum horizontal zoom */
+    vram[0x8201u] = (uint16_t)((496u << 7) | 1u);
+    vram[0x8401u] = 0x0000u;
+    vram[64u] = 0x0000u;
+    vram[65u] = 0x0100u;
+
+    vram[0x8002u] = 0x00FFu;
+    vram[0x8202u] = 0x0040u; /* sticky chain: inherit Y/rows from sprite 1 */
+    vram[0x8402u] = 0x0000u;
+    vram[128u] = 0x0001u;
+    vram[129u] = 0x0100u;
+
+    palette[0x11u] = 0x4F00u;
+    palette[0x12u] = 0x20F0u;
+
+    CHECK(ng_neogeo_video_render_sprite_frame_argb(
+        c_rom,
+        sizeof(c_rom),
+        vram,
+        0x10000u,
+        palette,
+        NG_NEO_PALETTE_COLORS_PER_BANK,
+        frame,
+        NG_NEO_SPRITE_FRAME_WIDTH,
+        NG_NEO_SPRITE_FRAME_HEIGHT,
+        NG_NEO_SPRITE_FRAME_WIDTH));
+
+    CHECK(frame[0] == 0xFFFF0000u);
+    CHECK(frame[1] == 0xFF00FF00u);
+    CHECK(frame[2] == 0xFF000000u);
+
+    free(vram);
+    free(frame);
+    return 0;
+}
+
 static int test_frame_render_overlays_visible_fix_layer(void) {
     uint8_t s_rom[NG_NEO_FIX_TILE_BYTES];
     uint8_t c_rom[NG_NEO_SPRITE_TILE_BYTES];
@@ -337,6 +391,7 @@ int main(void) {
     if (test_fix_layer_render() != 0) return 1;
     if (test_sprite_map_atlas_render() != 0) return 1;
     if (test_sprite_frame_render() != 0) return 1;
+    if (test_sprite_frame_hshrink_and_sticky_chain() != 0) return 1;
     if (test_frame_render_overlays_visible_fix_layer() != 0) return 1;
     return 0;
 }

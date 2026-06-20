@@ -268,23 +268,203 @@ static uint32_t ng_neogeo_video_palette_argb(const uint16_t *palette_words,
     return ng_neogeo_video_palette_word_to_argb(palette_words[palette_index]);
 }
 
-static int16_t ng_neogeo_video_wrap_coord(uint16_t coord) {
-    coord = (uint16_t)(coord & 0x01FFu);
-    return coord >= 0x0100u ? (int16_t)((int16_t)coord - 0x0200) : (int16_t)coord;
+/* Set bits are the source pixels kept by the Neo Geo horizontal shrinker. */
+static const uint16_t ng_neogeo_video_hshrink_masks[16] = {
+    0x0080u, 0x0880u, 0x0888u, 0x2888u,
+    0x288Au, 0x2A8Au, 0x2AAAu, 0xAAAAu,
+    0xAAEAu, 0xBAEAu, 0xBAEBu, 0xBBEBu,
+    0xBBEFu, 0xFBEFu, 0xFBFFu, 0xFFFFu,
+};
+
+static uint16_t ng_neogeo_video_sprite_y(uint16_t scb3_word) {
+    return (uint16_t)((496u - ((scb3_word >> 7) & 0x01FFu)) & 0x01FFu);
 }
 
-static uint8_t ng_neogeo_video_sprite_height_tiles(uint16_t scb3_word) {
-    uint8_t size = (uint8_t)(scb3_word & 0x3Fu);
-    if (size == 0u) {
-        return 0;
+static int ng_neogeo_video_sprite_on_scanline(uint32_t scanline,
+                                              uint16_t y,
+                                              uint8_t rows) {
+    return rows >= 0x20u ||
+           (((scanline - (uint32_t)y) & 0x01FFu) <
+            (uint32_t)rows * NG_NEO_SPRITE_TILE_PIXELS);
+}
+
+static void ng_neogeo_video_sprite_zoom_source(uint8_t zoom_y,
+                                               uint8_t zoom_line,
+                                               uint8_t *out_tile,
+                                               uint8_t *out_line) {
+    /* Hardware uses the LO zoom ROM as a 256x256 line/tile lookup.  Keep the
+       full-size path exact and use a monotonic approximation for shrunken
+       sprites until the renderer can consume the user-provided LO region. */
+    uint16_t source_line;
+    if (zoom_y == 0xFFu) {
+        source_line = zoom_line;
+    } else if (zoom_line <= zoom_y) {
+        source_line = (uint16_t)(((uint32_t)zoom_line * 256u) /
+                                 ((uint32_t)zoom_y + 1u));
+    } else {
+        source_line = 0xFFu;
     }
-    if (size == 33u) {
-        return 32;
+
+    *out_tile = (uint8_t)(source_line >> 4);
+    *out_line = (uint8_t)(source_line & 0x0Fu);
+}
+
+static uint8_t ng_neogeo_video_build_active_sprite_list(
+    const uint16_t *vram_words,
+    uint32_t scanline,
+    uint16_t active_sprites[NG_NEO_SPRITES_PER_SCANLINE]) {
+    uint16_t y = 0;
+    uint8_t rows = 0;
+    uint8_t active_count = 0;
+
+    for (uint16_t sprite = 0; sprite < NG_NEO_SPRITE_DISPLAY_LIMIT; ++sprite) {
+        uint16_t scb3 = vram_words[0x8200u + sprite];
+        if (((scb3 >> 6) & 1u) == 0u) {
+            y = ng_neogeo_video_sprite_y(scb3);
+            rows = (uint8_t)(scb3 & 0x3Fu);
+        }
+
+        if (rows == 0u ||
+            !ng_neogeo_video_sprite_on_scanline(scanline, y, rows)) {
+            continue;
+        }
+
+        active_sprites[active_count++] = sprite;
+        if (active_count == NG_NEO_SPRITES_PER_SCANLINE) {
+            break;
+        }
     }
-    if (size > 32u) {
-        return 32;
+
+    return active_count;
+}
+
+static void ng_neogeo_video_draw_sprite_scanline(
+    const uint8_t *c_rom,
+    uint32_t c_rom_size,
+    const uint16_t *vram_words,
+    const uint16_t *palette_words,
+    uint32_t palette_word_count,
+    uint32_t *dst,
+    uint32_t scanline,
+    uint16_t sprite,
+    uint16_t *chain_x,
+    uint16_t *chain_y,
+    uint8_t *chain_rows,
+    uint8_t *chain_zoom_y,
+    uint8_t *chain_zoom_x) {
+    uint16_t scb2 = vram_words[0x8000u + sprite];
+    uint16_t scb3 = vram_words[0x8200u + sprite];
+    uint16_t scb4 = vram_words[0x8400u + sprite];
+    uint8_t sticky = (uint8_t)((scb3 >> 6) & 1u);
+
+    uint16_t x;
+    uint16_t y;
+    uint8_t rows;
+    uint8_t zoom_y;
+    uint8_t zoom_x;
+    if (sticky) {
+        x = (uint16_t)((*chain_x + (uint16_t)*chain_zoom_x + 1u) & 0x01FFu);
+        y = *chain_y;
+        rows = *chain_rows;
+        zoom_y = *chain_zoom_y;
+        zoom_x = (uint8_t)((scb2 >> 8) & 0x0Fu);
+    } else {
+        x = (uint16_t)((scb4 >> 7) & 0x01FFu);
+        y = ng_neogeo_video_sprite_y(scb3);
+        rows = (uint8_t)(scb3 & 0x3Fu);
+        zoom_y = (uint8_t)(scb2 & 0xFFu);
+        zoom_x = (uint8_t)((scb2 >> 8) & 0x0Fu);
     }
-    return size;
+
+    *chain_x = x;
+    *chain_y = y;
+    *chain_rows = rows;
+    *chain_zoom_y = zoom_y;
+    *chain_zoom_x = zoom_x;
+
+    if (rows == 0u || (x >= NG_NEO_SPRITE_FRAME_WIDTH && x <= 0x01F0u) ||
+        !ng_neogeo_video_sprite_on_scanline(scanline, y, rows)) {
+        return;
+    }
+
+    uint16_t sprite_line = (uint16_t)(((uint32_t)scanline - (uint32_t)y) & 0x01FFu);
+    uint8_t zoom_line = (uint8_t)sprite_line;
+    uint8_t invert = (uint8_t)((sprite_line >> 8) & 1u);
+    if (invert) {
+        zoom_line ^= 0xFFu;
+    }
+
+    if (rows > 0x20u) {
+        uint16_t period = (uint16_t)(((uint16_t)zoom_y + 1u) << 1);
+        if (period != 0u) {
+            zoom_line = (uint8_t)(zoom_line % period);
+            if (zoom_line > zoom_y) {
+                zoom_line = (uint8_t)(period - 1u - zoom_line);
+                invert = (uint8_t)!invert;
+            }
+        }
+    }
+
+    uint8_t tile_y;
+    uint8_t source_y;
+    ng_neogeo_video_sprite_zoom_source(zoom_y, zoom_line, &tile_y, &source_y);
+    if (invert) {
+        tile_y ^= 0x1Fu;
+        source_y ^= 0x0Fu;
+    }
+
+    uint32_t map_addr = (uint32_t)sprite * 64u + (uint32_t)tile_y * 2u;
+    if (map_addr + 1u >= 0x7000u) {
+        return;
+    }
+
+    NgNeoSpriteMapEntry entry = ng_neogeo_video_decode_sprite_map_entry(
+        vram_words[map_addr],
+        vram_words[map_addr + 1u]);
+    if (entry.vflip) {
+        source_y ^= 0x0Fu;
+    }
+
+    uint8_t pixels[NG_NEO_SPRITE_TILE_PIXELS];
+    if (!ng_neogeo_video_decode_sprite_tile_line(c_rom,
+                                                 c_rom_size,
+                                                 entry.tile_index,
+                                                 source_y,
+                                                 entry.hflip,
+                                                 pixels)) {
+        memset(pixels, 0, sizeof(pixels));
+    }
+
+    uint16_t hmask = ng_neogeo_video_hshrink_masks[zoom_x & 0x0Fu];
+    uint16_t palette_base = (uint16_t)((uint16_t)entry.palette << 4);
+    uint16_t wrap_x = x;
+    uint32_t out_x = x <= 0x01F0u ? (uint32_t)x : 0u;
+
+    for (uint8_t px = 0; px < NG_NEO_SPRITE_TILE_PIXELS; ++px) {
+        if ((hmask & 0x8000u) != 0u) {
+            int visible = 1;
+            uint32_t draw_x = out_x;
+            if (x > 0x01F0u) {
+                visible = wrap_x >= 0x0200u;
+                draw_x = out_x;
+                wrap_x = (uint16_t)(wrap_x + 1u);
+            }
+            out_x++;
+
+            uint8_t color = pixels[px] & 0x0Fu;
+            if (visible && draw_x < NG_NEO_SPRITE_FRAME_WIDTH && color != 0u) {
+                dst[draw_x] = ng_neogeo_video_palette_argb(
+                    palette_words,
+                    palette_word_count,
+                    (uint16_t)(palette_base | color));
+            }
+        }
+
+        hmask = (uint16_t)(hmask << 1);
+        if (hmask == 0u) {
+            break;
+        }
+    }
 }
 
 int ng_neogeo_video_render_sprite_frame_argb(const uint8_t *c_rom,
@@ -311,86 +491,33 @@ int ng_neogeo_video_render_sprite_frame_argb(const uint8_t *c_rom,
         }
     }
 
-    int16_t chain_y = 0;
-    uint8_t chain_height_tiles = 0;
-    uint8_t chain_vshrink = 0xFFu;
-    (void)chain_vshrink;
-    int16_t chain_next_x = 0;
+    for (uint32_t scanline = 0; scanline < NG_NEO_SPRITE_FRAME_HEIGHT; ++scanline) {
+        uint16_t active_sprites[NG_NEO_SPRITES_PER_SCANLINE];
+        uint8_t active_count = ng_neogeo_video_build_active_sprite_list(
+            vram_words,
+            scanline,
+            active_sprites);
+        uint16_t chain_x = 0;
+        uint16_t chain_y = 0;
+        uint8_t chain_rows = 0;
+        uint8_t chain_zoom_y = 0xFFu;
+        uint8_t chain_zoom_x = 0x0Fu;
+        uint32_t *dst = out_argb + scanline * out_stride_pixels;
 
-    for (uint32_t sprite = 1; sprite <= NG_NEO_SPRITE_DISPLAY_LIMIT; ++sprite) {
-        uint16_t scb2 = vram_words[0x8000u + sprite];
-        uint16_t scb3 = vram_words[0x8200u + sprite];
-        uint16_t scb4 = vram_words[0x8400u + sprite];
-        uint8_t sticky = (uint8_t)((scb3 >> 6) & 1u);
-
-        int16_t x;
-        int16_t y;
-        uint8_t height_tiles;
-        uint8_t vshrink;
-        if (sticky) {
-            x = chain_next_x;
-            y = chain_y;
-            height_tiles = chain_height_tiles;
-            vshrink = chain_vshrink;
-        } else {
-            x = ng_neogeo_video_wrap_coord((uint16_t)(scb4 >> 7));
-            y = ng_neogeo_video_wrap_coord((uint16_t)(496u - ((scb3 >> 7) & 0x01FFu)));
-            height_tiles = ng_neogeo_video_sprite_height_tiles(scb3);
-            vshrink = (uint8_t)(scb2 & 0xFFu);
-            chain_y = y;
-            chain_height_tiles = height_tiles;
-            chain_vshrink = vshrink;
-        }
-        chain_next_x = (int16_t)(x + NG_NEO_SPRITE_TILE_PIXELS);
-
-        if (height_tiles == 0u || vshrink == 0u) {
-            continue;
-        }
-
-        for (uint8_t tile_y = 0; tile_y < height_tiles; ++tile_y) {
-            uint32_t map_addr = sprite * 64u + (uint32_t)tile_y * 2u;
-            if (map_addr + 1u >= 0x7000u || map_addr + 1u >= vram_word_count) {
-                break;
-            }
-            NgNeoSpriteMapEntry entry = ng_neogeo_video_decode_sprite_map_entry(
-                vram_words[map_addr],
-                vram_words[map_addr + 1u]);
-            for (uint8_t py = 0; py < NG_NEO_SPRITE_TILE_PIXELS; ++py) {
-                uint8_t source_y = entry.vflip ?
-                    (uint8_t)(NG_NEO_SPRITE_TILE_PIXELS - 1u - py) : py;
-                uint8_t pixels[NG_NEO_SPRITE_TILE_PIXELS];
-                if (!ng_neogeo_video_decode_sprite_tile_line(c_rom,
-                                                             c_rom_size,
-                                                             entry.tile_index,
-                                                             source_y,
-                                                             entry.hflip,
-                                                             pixels)) {
-                    memset(pixels, 0, sizeof(pixels));
-                }
-
-                int32_t out_y = (int32_t)y +
-                                (int32_t)tile_y * (int32_t)NG_NEO_SPRITE_TILE_PIXELS +
-                                (int32_t)py;
-                if (out_y < 0 || out_y >= (int32_t)NG_NEO_SPRITE_FRAME_HEIGHT) {
-                    continue;
-                }
-                uint32_t *dst = out_argb + (uint32_t)out_y * out_stride_pixels;
-                uint16_t palette_base = (uint16_t)((uint16_t)entry.palette << 4);
-                for (uint8_t px = 0; px < NG_NEO_SPRITE_TILE_PIXELS; ++px) {
-                    uint8_t color = pixels[px] & 0x0Fu;
-                    if (color == 0u) {
-                        continue;
-                    }
-                    int32_t out_x = (int32_t)x + (int32_t)px;
-                    if (out_x < 0 || out_x >= (int32_t)NG_NEO_SPRITE_FRAME_WIDTH) {
-                        continue;
-                    }
-                    dst[out_x] = ng_neogeo_video_palette_argb(
-                        palette_words,
-                        palette_word_count,
-                        (uint16_t)(palette_base | color));
-                }
-            }
+        for (uint8_t i = 0; i < active_count; ++i) {
+            ng_neogeo_video_draw_sprite_scanline(c_rom,
+                                                 c_rom_size,
+                                                 vram_words,
+                                                 palette_words,
+                                                 palette_word_count,
+                                                 dst,
+                                                 scanline,
+                                                 active_sprites[i],
+                                                 &chain_x,
+                                                 &chain_y,
+                                                 &chain_rows,
+                                                 &chain_zoom_y,
+                                                 &chain_zoom_x);
         }
     }
 

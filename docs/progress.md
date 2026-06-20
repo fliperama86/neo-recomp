@@ -312,13 +312,15 @@ build/neo-render-snapshot --mode frame --palette-bank auto \
 ```
 
 The renderer applies the same `.neo` C-region byte swizzle used by the MiSTer
-loader, draws SCB1-SCB4 positioned sprite strips, then overlays the visible
-224-line fix layer. `build/mslug_snapshot_render_path/frame_auto.png` is now a
-recognizable Metal Slug title/credits image from a headless CPU snapshot; the
-newer `build/mslug_snapshot_500k_current/frame_auto.png` renders an in-game
-background/credits frame. This is still an offline snapshot renderer: sprite
-shrink and line-buffer priority are intentionally approximate, and there is no
-live SDL gameplay loop yet.
+loader, builds a 96-sprite scanline active list from SCB3, draws SCB1-SCB4
+positioned sprites with the hardware horizontal shrink masks and sticky-chain X
+stepping, then overlays the visible 224-line fix layer.
+`build/mslug_snapshot_render_path/frame_auto.png` is now a recognizable Metal
+Slug title/credits image from a headless CPU snapshot; the newer
+`build/mslug_snapshot_500k_current/frame_auto.png` renders an in-game
+background/credits frame. This is still an offline snapshot renderer: vertical
+shrink is approximated until the LO zoom table is loaded, line-buffer priority
+is intentionally approximate, and there is no live SDL gameplay loop yet.
 
 The optional SDL snapshot host now consumes the same renderer when passed a
 `.neo` image:

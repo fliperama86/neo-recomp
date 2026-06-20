@@ -205,10 +205,12 @@ build/neo-render-snapshot --mode frame --palette-bank auto \
   build/mslug_snapshot/frame.ppm
 ```
 
-This is still an offline snapshot renderer, not a live emulator loop. Sprite
-shrink and line-buffer priority are not exact yet, but the C-region swizzle,
-sprite positioning, palette lookup, and fix overlay are isolated and covered by
-tests.
+This is still an offline snapshot renderer, not a live emulator loop. The
+sprite path now uses a scanline active-list pass with the hardware horizontal
+shrink masks and sticky-chain X stepping; vertical shrink is still approximate
+until the LO zoom table is loaded. Line-buffer priority is not exact yet, but
+the C-region swizzle, sprite positioning/shrink, palette lookup, and fix overlay
+are isolated and covered by tests.
 
 If SDL2 is available through `pkg-config`, CMake also builds an optional
 interactive snapshot host:
