@@ -236,6 +236,46 @@ static int run_dispatch_slice(uint64_t dispatches, uint32_t fallback_entry) {
     return run_until_dispatch_count(current + dispatches, addr);
 }
 
+static int run_fast_forward(uint64_t target_dispatches, uint32_t entry_addr) {
+    if (target_dispatches == 0u) {
+        return 1;
+    }
+
+    uint64_t current = ng_generated_smoke_dispatch_count();
+    if (current >= target_dispatches) {
+        return 1;
+    }
+
+    uint64_t step = target_dispatches / 10u;
+    if (step < 10000u) {
+        step = target_dispatches;
+    } else if (step > 100000u) {
+        step = 100000u;
+    }
+
+    fprintf(stderr, "fast-forwarding %llu dispatches before opening SDL...\n",
+            (unsigned long long)target_dispatches);
+    while (current < target_dispatches) {
+        uint64_t next = current + step;
+        if (next < current || next > target_dispatches) {
+            next = target_dispatches;
+        }
+        uint32_t addr = current == 0u ? entry_addr : (g_ng_m68k.pc & 0x00FFFFFFu);
+        if (!run_until_dispatch_count(next, addr)) {
+            return 0;
+        }
+        current = ng_generated_smoke_dispatch_count();
+        fprintf(stderr,
+                "  fast-forward %llu/%llu dispatches (frame=%u scanline=%u)\n",
+                (unsigned long long)current,
+                (unsigned long long)target_dispatches,
+                ng_neogeo_frame_count(),
+                ng_neogeo_current_scanline());
+    }
+
+    return 1;
+}
+
 static int render_live_frame(const NgNeoRomImage *image,
                              const uint8_t *zoom_rom,
                              uint32_t zoom_rom_size,
@@ -409,15 +449,11 @@ int main(int argc, char **argv) {
     ng_generated_smoke_reset_dispatch_stats();
     ng_generated_smoke_set_scanline_poll_interval((uint32_t)scanline_poll_interval);
 
-    if (fast_forward != 0u) {
-        fprintf(stderr, "fast-forwarding %llu dispatches...\n",
-                (unsigned long long)fast_forward);
-        if (!run_until_dispatch_count(fast_forward, cart_entry)) {
-            ng_neo_rom_image_free(&image);
-            free(bios_data);
-            free(zoom_rom);
-            return 1;
-        }
+    if (!run_fast_forward(fast_forward, cart_entry)) {
+        ng_neo_rom_image_free(&image);
+        free(bios_data);
+        free(zoom_rom);
+        return 1;
     }
 
     const uint32_t width = NG_NEO_SPRITE_FRAME_WIDTH;
