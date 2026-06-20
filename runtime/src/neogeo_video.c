@@ -468,21 +468,26 @@ static void ng_neogeo_video_draw_sprite_scanline(
 
     for (uint8_t px = 0; px < NG_NEO_SPRITE_TILE_PIXELS; ++px) {
         if ((hmask & 0x8000u) != 0u) {
-            int visible = 1;
-            uint32_t draw_x = out_x;
-            if (x > 0x01F0u) {
-                visible = wrap_x >= 0x0200u;
-                draw_x = out_x;
-                wrap_x = (uint16_t)(wrap_x + 1u);
-            }
-            out_x++;
-
             uint8_t color = pixels[px] & 0x0Fu;
-            if (visible && draw_x < NG_NEO_SPRITE_FRAME_WIDTH && color != 0u) {
-                dst[draw_x] = ng_neogeo_video_palette_argb(
-                    palette_words,
-                    palette_word_count,
-                    (uint16_t)(palette_base | color));
+            if (x > 0x01F0u) {
+                if (wrap_x >= 0x0200u) {
+                    if (out_x < NG_NEO_SPRITE_FRAME_WIDTH && color != 0u) {
+                        dst[out_x] = ng_neogeo_video_palette_argb(
+                            palette_words,
+                            palette_word_count,
+                            (uint16_t)(palette_base | color));
+                    }
+                    out_x++;
+                }
+                wrap_x = (uint16_t)(wrap_x + 1u);
+            } else {
+                if (out_x < NG_NEO_SPRITE_FRAME_WIDTH && color != 0u) {
+                    dst[out_x] = ng_neogeo_video_palette_argb(
+                        palette_words,
+                        palette_word_count,
+                        (uint16_t)(palette_base | color));
+                }
+                out_x++;
             }
         }
 
