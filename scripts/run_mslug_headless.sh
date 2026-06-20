@@ -8,6 +8,8 @@ BIOS_PATH="${2:-$HOME/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1}"
 DISPATCH_BUDGETS="${NG_MSLUG_PROGRESS_BUDGETS:-${NG_MSLUG_DISPATCH_BUDGET:-10000 50000 100000 500000}}"
 SNAPSHOT_DIR="${NG_MSLUG_SNAPSHOT_DIR:-}"
 SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
+SNAPSHOT_SCANLINE="${NG_MSLUG_SNAPSHOT_SCANLINE:-}"
+SNAPSHOT_EXTRA_DISPATCHES="${NG_MSLUG_SNAPSHOT_EXTRA_DISPATCHES:-250000}"
 
 CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
@@ -85,12 +87,21 @@ cc \
   "$BUILD_DIR/p_rom.o" \
   -o "$BUILD_DIR/mslug_bios_smoke_harness"
 
-python3 - "$DISPATCH_BUDGETS" "$BUILD_DIR/mslug_bios_smoke_harness" "$BIOS_PATH" "$NEO_PATH" "$SNAPSHOT_DIR" "$SCANLINE_POLL_INTERVAL" <<'PY'
+python3 - "$DISPATCH_BUDGETS" "$BUILD_DIR/mslug_bios_smoke_harness" "$BIOS_PATH" "$NEO_PATH" "$SNAPSHOT_DIR" "$SCANLINE_POLL_INTERVAL" "$SNAPSHOT_SCANLINE" "$SNAPSHOT_EXTRA_DISPATCHES" <<'PY'
 import re
 import subprocess
 import sys
 
-budget_text, harness, bios_path, neo_path, snapshot_dir, scanline_poll_interval = sys.argv[1:]
+(
+    budget_text,
+    harness,
+    bios_path,
+    neo_path,
+    snapshot_dir,
+    scanline_poll_interval,
+    snapshot_scanline_text,
+    snapshot_extra_dispatches_text,
+) = sys.argv[1:]
 try:
     budgets = [int(part) for part in budget_text.split() if part]
 except ValueError:
@@ -98,6 +109,20 @@ except ValueError:
     raise SystemExit(2)
 if not budgets or any(b <= 0 for b in budgets):
     print("at least one positive dispatch budget is required", file=sys.stderr)
+    raise SystemExit(2)
+try:
+    snapshot_scanline = (
+        int(snapshot_scanline_text) if snapshot_scanline_text else None
+    )
+    snapshot_extra_dispatches = int(snapshot_extra_dispatches_text)
+except ValueError:
+    print("invalid NG_MSLUG_SNAPSHOT_SCANLINE/NG_MSLUG_SNAPSHOT_EXTRA_DISPATCHES", file=sys.stderr)
+    raise SystemExit(2)
+if snapshot_scanline is not None and not (0 <= snapshot_scanline < 264):
+    print("NG_MSLUG_SNAPSHOT_SCANLINE must be 0..263", file=sys.stderr)
+    raise SystemExit(2)
+if snapshot_extra_dispatches < 0:
+    print("NG_MSLUG_SNAPSHOT_EXTRA_DISPATCHES must be non-negative", file=sys.stderr)
     raise SystemExit(2)
 
 summary_re = re.compile(
@@ -152,6 +177,11 @@ for budget in budgets:
     ]
     if snapshot_dir and budget == budgets[-1]:
         cmd.extend(["--snapshot-dir", snapshot_dir])
+        if snapshot_scanline is not None:
+            cmd.extend([
+                "--snapshot-scanline", str(snapshot_scanline),
+                "--snapshot-extra-dispatches", str(snapshot_extra_dispatches),
+            ])
     cmd.append(neo_path)
     proc = subprocess.run(
         cmd,
@@ -178,7 +208,25 @@ for budget in budgets:
         k: int(v, 16) if k in {"last", "last_cart", "last_bios", "pc", "sr", "sp", "lspc", "vram_addr", "vram_mod", "mslug_sync", "mslug_counters", "mslug_vblank", "mslug_bios_flags", "sound", "port", "irq_pending", "last_irq_pc", "wram_sum", "palette_sum", "palette_last_addr", "palette_last_value", "palette_peak_sum", "vram_sum"} else int(v)
         for k, v in summary_match.groupdict().items()
     }
-    if summary["dispatches"] != budget:
+    settle_for_snapshot = bool(
+        snapshot_dir and budget == budgets[-1] and snapshot_scanline is not None
+    )
+    if settle_for_snapshot:
+        if not (budget <= summary["dispatches"] <= budget + snapshot_extra_dispatches):
+            print(
+                f"budget {budget} with snapshot settling ended at "
+                f"{summary['dispatches']} dispatches",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        if summary["scanline"] != snapshot_scanline:
+            print(
+                f"snapshot settling ended at scanline {summary['scanline']}, "
+                f"expected {snapshot_scanline}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+    elif summary["dispatches"] != budget:
         print(f"budget {budget} ended at {summary['dispatches']} dispatches", file=sys.stderr)
         raise SystemExit(1)
     if f"after {budget} dispatches" not in proc.stdout:

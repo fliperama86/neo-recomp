@@ -337,6 +337,20 @@ usable colors and no 96-sprite-per-line clipping, so remaining visual issues are
 more likely timing/line-buffer/positioning than C-region decode or missing
 palette data.
 
+The headless smoke harness can now settle the final snapshot to a requested
+scanline after the normal dispatch-budget stop. Set
+`NG_MSLUG_SNAPSHOT_SCANLINE=<0-263>` (optionally with
+`NG_MSLUG_SNAPSHOT_EXTRA_DISPATCHES=<n>`) and the script will resume from the
+budget stop until that scanline is seen before writing `work_ram.bin`,
+`palette_ram.bin`, and `vram_be.bin`. This gives us a lower-noise way to compare
+rendered snapshots near VBlank or another consistent raster point without
+changing the CPU smoke budgets themselves.
+As a spot check, settling the current 500k Metal Slug snapshot from scanline
+107 to scanline 0 took 146 extra dispatches and produced a byte-identical frame
+to `build/mslug_snapshot_500k_current/frame_lo_auto.png`; that makes the
+remaining in-game offset/misalignment look like a renderer/modeling issue rather
+than just a mid-scanline snapshot artifact.
+
 The optional SDL snapshot host now consumes the same renderer when passed a
 `.neo` image:
 

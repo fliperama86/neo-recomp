@@ -160,6 +160,9 @@ To save inspectable CPU-visible state from the final budget, set
 `NG_MSLUG_SNAPSHOT_DIR=build/mslug_snapshot`. The script writes
 `work_ram.bin` (64 KiB), `palette_ram.bin` (16 KiB), `vram_be.bin` (64K
 big-endian VRAM words), and `summary.txt`.
+Set `NG_MSLUG_SNAPSHOT_SCANLINE=<0-263>` to resume after the final dispatch
+budget until that scanline is observed before dumping the snapshot; cap that
+settle pass with `NG_MSLUG_SNAPSHOT_EXTRA_DISPATCHES` (default: 250000).
 
 Those raw dumps can be turned into dependency-free debug images:
 

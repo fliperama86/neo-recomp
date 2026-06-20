@@ -10,6 +10,7 @@
 #define NG_GENERATED_SMOKE_LOOP_MAX_PERIOD 64u
 #define NG_GENERATED_SMOKE_HOT_SLOTS 32768u
 #define NG_GENERATED_SMOKE_HOT_TOP 5u
+#define NG_GENERATED_SMOKE_SNAPSHOT_SCANLINE_NONE UINT32_MAX
 
 #define NG_GENERATED_SMOKE_DISPATCH_WATCHES(X) \
     X(NG_GENERATED_SMOKE_WATCH_CART_HEADER, 0x000122u, "cart_header") \
@@ -68,6 +69,9 @@ static const NgGeneratedSmokeDispatchWatch g_ng_generated_smoke_dispatch_watch[
 };
 
 static uint32_t g_ng_generated_smoke_scanline_poll_interval = 1u;
+static uint32_t g_ng_generated_smoke_snapshot_scanline =
+    NG_GENERATED_SMOKE_SNAPSHOT_SCANLINE_NONE;
+static uint64_t g_ng_generated_smoke_snapshot_extra_dispatches;
 static uint64_t
     g_ng_generated_smoke_instruction_watch_count[NG_GENERATED_SMOKE_WATCH_COUNT];
 
@@ -97,6 +101,14 @@ uint64_t ng_generated_smoke_instruction_watch_hits(uint32_t index) {
 void ng_generated_smoke_set_scanline_poll_interval(uint32_t interval) {
     g_ng_generated_smoke_scanline_poll_interval = interval;
 }
+
+#ifndef NG_GENERATED_SMOKE_NO_MAIN
+static void ng_generated_smoke_set_snapshot_scanline(uint32_t scanline,
+                                                     uint64_t extra_dispatches) {
+    g_ng_generated_smoke_snapshot_scanline = scanline;
+    g_ng_generated_smoke_snapshot_extra_dispatches = extra_dispatches;
+}
+#endif
 
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
 void ng_bios_generated_call(uint32_t addr);
@@ -671,6 +683,15 @@ static int ng_generated_smoke_write_snapshot_summary(const char *dir) {
     fprintf(f, "vram_nonzero=%u\n", ng_neogeo_vram_nonzero_words());
     fprintf(f, "vram_sum=$%08X\n", ng_neogeo_vram_checksum());
     fprintf(f, "recent_loop=%u\n", ng_generated_smoke_recent_loop_period());
+    if (g_ng_generated_smoke_snapshot_scanline !=
+        NG_GENERATED_SMOKE_SNAPSHOT_SCANLINE_NONE) {
+        fprintf(f,
+                "snapshot_target_scanline=%u\n",
+                g_ng_generated_smoke_snapshot_scanline);
+        fprintf(f,
+                "snapshot_extra_dispatches=%llu\n",
+                (unsigned long long)g_ng_generated_smoke_snapshot_extra_dispatches);
+    }
     for (uint32_t i = 0; i < NG_GENERATED_SMOKE_HOT_TOP; ++i) {
         uint32_t addr = 0;
         uint64_t count = 0;
@@ -749,6 +770,101 @@ static int ng_generated_smoke_write_snapshot(const char *dir) {
     free(vram);
     free(vram_be);
     return ok;
+}
+
+static int ng_generated_smoke_settle_snapshot_scanline(void) {
+    if (g_ng_generated_smoke_snapshot_scanline ==
+        NG_GENERATED_SMOKE_SNAPSHOT_SCANLINE_NONE) {
+        return 1;
+    }
+    if (g_ng_generated_smoke_snapshot_scanline >=
+        NG_NEO_NTSC_SCANLINES_PER_FRAME) {
+        fprintf(stderr,
+                "snapshot scanline must be 0..%u\n",
+                NG_NEO_NTSC_SCANLINES_PER_FRAME - 1u);
+        return 0;
+    }
+#ifndef NG_GENERATED_SMOKE_COMBINED_DISPATCH
+    fprintf(stderr,
+            "snapshot scanline settling requires NG_GENERATED_SMOKE_COMBINED_DISPATCH\n");
+    return 0;
+#else
+    if (!ng_generated_smoke_dispatch_budget_hit()) {
+        fprintf(stderr,
+                "snapshot scanline settling requires an initial dispatch-budget stop\n");
+        return 0;
+    }
+
+    const uint32_t target = g_ng_generated_smoke_snapshot_scanline;
+    const uint64_t start_dispatches = ng_generated_smoke_dispatch_count();
+    const uint16_t start_scanline = ng_neogeo_current_scanline();
+    const uint32_t start_frame = ng_neogeo_frame_count();
+    uint64_t limit = UINT64_MAX;
+    if (g_ng_generated_smoke_snapshot_extra_dispatches <
+        UINT64_MAX - start_dispatches) {
+        limit = start_dispatches +
+                g_ng_generated_smoke_snapshot_extra_dispatches;
+    }
+    int must_leave_target = start_scanline == target;
+
+    fprintf(stderr,
+            "settling snapshot to scanline %u from frame=%u scanline=%u "
+            "with max_extra_dispatches=%llu\n",
+            target,
+            start_frame,
+            start_scanline,
+            (unsigned long long)g_ng_generated_smoke_snapshot_extra_dispatches);
+
+    while (ng_generated_smoke_dispatch_count() < limit) {
+        uint16_t scanline = ng_neogeo_current_scanline();
+        if (must_leave_target && scanline != target) {
+            must_leave_target = 0;
+        }
+        if (!must_leave_target && scanline == target &&
+            ng_generated_smoke_dispatch_count() > start_dispatches) {
+            ng_generated_smoke_set_dispatch_budget(0u);
+            fprintf(stderr,
+                    "snapshot settled at frame=%u scanline=%u after %llu "
+                    "extra dispatches\n",
+                    ng_neogeo_frame_count(),
+                    scanline,
+                    (unsigned long long)(ng_generated_smoke_dispatch_count() -
+                                         start_dispatches));
+            return 1;
+        }
+
+        ng_generated_smoke_set_dispatch_budget(
+            ng_generated_smoke_dispatch_count() + 1u);
+        ng_generated_call(g_ng_m68k.pc);
+        if (!ng_generated_smoke_dispatch_budget_hit()) {
+            break;
+        }
+    }
+
+    uint16_t scanline = ng_neogeo_current_scanline();
+    if (!must_leave_target && scanline == target &&
+        ng_generated_smoke_dispatch_count() > start_dispatches) {
+        ng_generated_smoke_set_dispatch_budget(0u);
+        fprintf(stderr,
+                "snapshot settled at frame=%u scanline=%u after %llu "
+                "extra dispatches\n",
+                ng_neogeo_frame_count(),
+                scanline,
+                (unsigned long long)(ng_generated_smoke_dispatch_count() -
+                                     start_dispatches));
+        return 1;
+    }
+
+    fprintf(stderr,
+            "failed to settle snapshot to scanline %u within %llu extra "
+            "dispatches (ended frame=%u scanline=%u dispatches=%llu)\n",
+            target,
+            (unsigned long long)g_ng_generated_smoke_snapshot_extra_dispatches,
+            ng_neogeo_frame_count(),
+            scanline,
+            (unsigned long long)ng_generated_smoke_dispatch_count());
+    return 0;
+#endif
 }
 
 #ifndef NG_GENERATED_SMOKE_NO_MAIN
@@ -947,13 +1063,26 @@ int ng_generated_smoke_run_with_bios_snapshot(const char *neo_path,
             g_ng_m68k.ssp);
     ng_generated_smoke_reset_dispatch_stats();
     ng_generated_call(cart_entry);
+    int initial_budget_hit = ng_generated_smoke_dispatch_budget_hit();
+    uint32_t initial_budget_stop_addr =
+        ng_generated_smoke_dispatch_budget_stop_addr();
+    uint64_t initial_budget_dispatches = ng_generated_smoke_dispatch_count();
+    int settle_ok = ng_generated_smoke_settle_snapshot_scanline();
     fprintf(stderr,
             "returned pc=$%06X sr=$%04X sp=$%08X\n",
             g_ng_m68k.pc & 0x00FFFFFFu,
             g_ng_m68k.sr,
             g_ng_m68k.a[7]);
     ng_generated_smoke_print_summary();
-    int ok = ng_generated_smoke_write_snapshot(snapshot_dir);
+    if (initial_budget_hit &&
+        g_ng_generated_smoke_snapshot_scanline !=
+            NG_GENERATED_SMOKE_SNAPSHOT_SCANLINE_NONE) {
+        fprintf(stderr,
+                "smoke budget reached at $%06X after %llu dispatches\n",
+                initial_budget_stop_addr & 0x00FFFFFFu,
+                (unsigned long long)initial_budget_dispatches);
+    }
+    int ok = settle_ok && ng_generated_smoke_write_snapshot(snapshot_dir);
 
     ng_neogeo_set_external_dispatch(NULL);
     ng_neogeo_set_auto_scanline_interval(0);
@@ -979,6 +1108,8 @@ static void usage(const char *argv0) {
     fprintf(stderr,
             "usage: %s [--bios <bios.rom>] [--max-dispatches <n>] "
             "[--scanline-poll-interval <n>] [--snapshot-dir <dir>] "
+            "[--snapshot-scanline <0-263>] "
+            "[--snapshot-extra-dispatches <n>] "
             "<game.neo>\n",
             argv0);
 }
@@ -989,6 +1120,8 @@ int main(int argc, char **argv) {
     const char *snapshot_dir = NULL;
     uint64_t max_dispatches = 0;
     uint64_t scanline_poll_interval = g_ng_generated_smoke_scanline_poll_interval;
+    uint64_t snapshot_scanline = NG_GENERATED_SMOKE_SNAPSHOT_SCANLINE_NONE;
+    uint64_t snapshot_extra_dispatches = 250000u;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--bios") == 0) {
@@ -1016,6 +1149,19 @@ int main(int argc, char **argv) {
                 usage(argv[0]);
                 return 2;
             }
+        } else if (strcmp(argv[i], "--snapshot-scanline") == 0) {
+            if (++i >= argc ||
+                !ng_generated_smoke_parse_u64(argv[i], &snapshot_scanline) ||
+                snapshot_scanline >= NG_NEO_NTSC_SCANLINES_PER_FRAME) {
+                usage(argv[0]);
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--snapshot-extra-dispatches") == 0) {
+            if (++i >= argc ||
+                !ng_generated_smoke_parse_u64(argv[i], &snapshot_extra_dispatches)) {
+                usage(argv[0]);
+                return 2;
+            }
         } else if (strcmp(argv[i], "--help") == 0 ||
                    strcmp(argv[i], "-h") == 0) {
             usage(argv[0]);
@@ -1035,6 +1181,10 @@ int main(int argc, char **argv) {
     ng_generated_smoke_set_dispatch_budget(max_dispatches);
     ng_generated_smoke_set_scanline_poll_interval(
         (uint32_t)scanline_poll_interval);
+    if (snapshot_scanline != NG_GENERATED_SMOKE_SNAPSHOT_SCANLINE_NONE) {
+        ng_generated_smoke_set_snapshot_scanline((uint32_t)snapshot_scanline,
+                                                snapshot_extra_dispatches);
+    }
     return ng_generated_smoke_run_with_bios_snapshot(neo_path,
                                                     bios_path,
                                                     snapshot_dir);
