@@ -225,6 +225,13 @@ int main(int argc, char **argv) {
         ng_program_rom_free(&rom);
         return 1;
     }
+    if (game_config.program_map_configured) {
+        ng_program_rom_set_address_map(&rom,
+                                       game_config.program_fixed_base,
+                                       game_config.program_fixed_size,
+                                       game_config.program_bank_window_base,
+                                       game_config.program_bank_window_size);
+    }
 
     printf("game config: %s\n", game_path);
     printf("game config functions: entry=%u extra=%u discovery_files=%u jump_tables=%u runtime_dispatch=%u%s\n",
@@ -235,6 +242,14 @@ int main(int argc, char **argv) {
            game_config.runtime_dispatch_count,
            game_config.truncated ? " (truncated)" : "");
     printf("program image: %u bytes\n", rom.size);
+    if (game_config.program_map_configured) {
+        printf("program map: fixed=$%06X..$%06X bank=$%06X..$%06X\n",
+               game_config.program_fixed_base,
+               game_config.program_fixed_base + game_config.program_fixed_size,
+               game_config.program_bank_window_base,
+               game_config.program_bank_window_base +
+                   game_config.program_bank_window_size);
+    }
     if (rom.size >= 8) {
         uint32_t initial_ssp = ng_program_rom_initial_ssp(&rom);
         uint32_t initial_pc = ng_program_rom_initial_pc(&rom);

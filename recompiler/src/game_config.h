@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#define NG_GAME_CONFIG_MAX_FUNCTIONS 128u
+#define NG_GAME_CONFIG_MAX_FUNCTIONS 512u
 #define NG_GAME_CONFIG_MAX_DISCOVERY_FILES 32u
 #define NG_GAME_CONFIG_MAX_JUMP_TABLES 64u
 #define NG_GAME_CONFIG_MAX_RUNTIME_DISPATCHES 64u
@@ -23,6 +23,11 @@ typedef struct NgGameConfigJumpTable {
 } NgGameConfigJumpTable;
 
 typedef struct NgGameConfig {
+    uint32_t program_fixed_base;
+    uint32_t program_fixed_size;
+    uint32_t program_bank_window_base;
+    uint32_t program_bank_window_size;
+    int program_map_configured;
     uint32_t entry[NG_GAME_CONFIG_MAX_FUNCTIONS];
     uint32_t entry_count;
     uint32_t extra[NG_GAME_CONFIG_MAX_FUNCTIONS];

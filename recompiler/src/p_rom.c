@@ -160,6 +160,7 @@ int ng_program_rom_load(NgProgramRom *rom, const char *p1_path, const char *p2_p
     free(p1);
     free(p2);
 
+    memset(rom, 0, sizeof(*rom));
     rom->data = image;
     rom->size = total;
     return 1;
@@ -242,6 +243,7 @@ int ng_program_rom_load_neo(NgProgramRom *rom, const char *neo_path) {
     byteswap_words(program, header.p_size);
     free(file_data);
 
+    memset(rom, 0, sizeof(*rom));
     rom->data = program;
     rom->size = header.p_size;
     return 1;
@@ -251,10 +253,74 @@ void ng_program_rom_free(NgProgramRom *rom) {
     free(rom->data);
     rom->data = NULL;
     rom->size = 0;
+    rom->fixed_base = 0;
+    rom->fixed_size = 0;
+    rom->bank_window_base = 0;
+    rom->bank_window_size = 0;
+    rom->address_map_enabled = 0;
+}
+
+void ng_program_rom_set_address_map(NgProgramRom *rom,
+                                    uint32_t fixed_base,
+                                    uint32_t fixed_size,
+                                    uint32_t bank_window_base,
+                                    uint32_t bank_window_size) {
+    if (!rom) {
+        return;
+    }
+    rom->fixed_base = fixed_base;
+    rom->fixed_size = fixed_size;
+    rom->bank_window_base = bank_window_base;
+    rom->bank_window_size = bank_window_size;
+    rom->address_map_enabled = fixed_size != 0u || bank_window_size != 0u;
+}
+
+static int ng_program_rom_translate_addr(const NgProgramRom *rom,
+                                         uint32_t addr,
+                                         uint32_t *out_offset) {
+    if (!rom) {
+        return 0;
+    }
+
+    if (!rom->address_map_enabled) {
+        if (addr >= rom->size) {
+            return 0;
+        }
+        if (out_offset) {
+            *out_offset = addr;
+        }
+        return 1;
+    }
+
+    if (rom->fixed_size != 0u && addr >= rom->fixed_base) {
+        uint32_t rel = addr - rom->fixed_base;
+        if (rel < rom->fixed_size && rel < rom->size) {
+            if (out_offset) {
+                *out_offset = rel;
+            }
+            return 1;
+        }
+    }
+
+    if (rom->bank_window_size != 0u && addr >= rom->bank_window_base) {
+        uint32_t rel = addr - rom->bank_window_base;
+        if (rel < rom->bank_window_size) {
+            uint32_t offset = rom->fixed_size + rel;
+            if (offset >= rom->fixed_size && offset < rom->size) {
+                if (out_offset) {
+                    *out_offset = offset;
+                }
+                return 1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 uint8_t ng_program_rom_read8(const NgProgramRom *rom, uint32_t addr) {
-    return addr < rom->size ? rom->data[addr] : 0xFF;
+    uint32_t offset = 0;
+    return ng_program_rom_translate_addr(rom, addr, &offset) ? rom->data[offset] : 0xFF;
 }
 
 uint16_t ng_program_rom_read16(const NgProgramRom *rom, uint32_t addr) {
@@ -278,7 +344,7 @@ uint32_t ng_program_rom_initial_pc(const NgProgramRom *rom) {
 }
 
 int ng_program_rom_addr_is_mapped(const NgProgramRom *rom, uint32_t addr) {
-    return addr < rom->size;
+    return ng_program_rom_translate_addr(rom, addr, NULL);
 }
 
 int ng_program_rom_initial_pc_is_mapped(const NgProgramRom *rom) {

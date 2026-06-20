@@ -11,6 +11,93 @@
 #define NG_GENERATED_SMOKE_HOT_SLOTS 32768u
 #define NG_GENERATED_SMOKE_HOT_TOP 5u
 
+#define NG_GENERATED_SMOKE_DISPATCH_WATCHES(X) \
+    X(NG_GENERATED_SMOKE_WATCH_CART_HEADER, 0x000122u, "cart_header") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MODE_SELECT, 0x0007CCu, "cart_mode_select") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MODE0_COLD, 0x00080Cu, "cart_mode0_cold") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MODE1_START, 0x000832u, "cart_mode1_start") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MODE2_START, 0x000836u, "cart_mode2_start") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MODE3_START, 0x000840u, "cart_mode3_start") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_GAME_ENTRY, 0x000656u, "cart_game_entry") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_CLEAR, 0x000868u, "cart_clear") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_COLD_INIT, 0x024E38u, "cart_cold_init") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MODE23_INIT, 0x00097Au, "cart_mode23_init") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_VBLANK_SETUP, 0x001F84u, "cart_vblank_setup") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MAIN_WAIT, 0x001FE2u, "cart_main_wait") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MAIN_WAIT_BRANCH, 0x00200Au, "cart_main_wait_branch") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MAIN_JSR_INPUT, 0x002012u, "cart_main_jsr_input") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_VBLANK_READY, 0x001EECu, "cart_vblank_ready") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_VBLANK_JSR_VIDEO, 0x001EE6u, "cart_vblank_jsr_video") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_VBLANK_JSR_TASKS, 0x001E84u, "cart_vblank_jsr_tasks") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_MAIN_UPDATE, 0x002018u, "cart_main_update") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_POST_INPUT, 0x013C3Cu, "cart_post_input") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_INPUT_UPDATE, 0x05CC1Au, "cart_input_update") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_INPUT_COPY, 0x025066u, "cart_input_copy") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_VIDEO_GATE, 0x05C9D6u, "cart_video_gate") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_VIDEO_ACTIVE, 0x05C9E0u, "cart_video_active") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_VIDEO_JSR_RENDER, 0x05CA02u, "cart_video_jsr_render") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_VIDEO_SKIP_RETURN, 0x05CA28u, "cart_video_skip_return") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_RENDER_WORKER, 0x05B400u, "cart_render_worker") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_IRQ_VECTOR, 0x0008F6u, "cart_irq_vector") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_IRQ_HANDLER, 0x000906u, "cart_irq_handler") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_IRQ_BIOS_TAIL, 0x000934u, "cart_irq_bios_tail") \
+    X(NG_GENERATED_SMOKE_WATCH_BIOS_VBLANK_FALLBACK, 0xC00438u, "bios_vblank_fallback") \
+    X(NG_GENERATED_SMOKE_WATCH_BIOS_IRQ_TAIL, 0xC0044Au, "bios_irq_tail") \
+    X(NG_GENERATED_SMOKE_WATCH_BIOS_IRQ_RETURN, 0xC004CEu, "bios_irq_return") \
+    X(NG_GENERATED_SMOKE_WATCH_BIOS_SERVICE_SEED, 0xC11142u, "bios_service_seed") \
+    X(NG_GENERATED_SMOKE_WATCH_BIOS_SERVICE_A, 0xC116A4u, "bios_service_a") \
+    X(NG_GENERATED_SMOKE_WATCH_BIOS_SERVICE_B, 0xC1183Cu, "bios_service_b")
+
+typedef struct NgGeneratedSmokeDispatchWatch {
+    uint32_t addr;
+    const char *label;
+} NgGeneratedSmokeDispatchWatch;
+
+enum {
+#define NG_GENERATED_SMOKE_WATCH_ENUM(id, addr, label) id,
+    NG_GENERATED_SMOKE_DISPATCH_WATCHES(NG_GENERATED_SMOKE_WATCH_ENUM)
+#undef NG_GENERATED_SMOKE_WATCH_ENUM
+    NG_GENERATED_SMOKE_WATCH_COUNT
+};
+
+static const NgGeneratedSmokeDispatchWatch g_ng_generated_smoke_dispatch_watch[
+    NG_GENERATED_SMOKE_WATCH_COUNT] = {
+#define NG_GENERATED_SMOKE_WATCH_INIT(id, addr, label) [id] = {addr, label},
+    NG_GENERATED_SMOKE_DISPATCH_WATCHES(NG_GENERATED_SMOKE_WATCH_INIT)
+#undef NG_GENERATED_SMOKE_WATCH_INIT
+};
+
+static uint32_t g_ng_generated_smoke_scanline_poll_interval = 1u;
+static uint64_t
+    g_ng_generated_smoke_instruction_watch_count[NG_GENERATED_SMOKE_WATCH_COUNT];
+
+static void ng_generated_smoke_note_instruction_watch(uint32_t addr) {
+    switch (addr & 0x00FFFFFFu) {
+#define NG_GENERATED_SMOKE_INSTRUCTION_WATCH_CASE(id, watch_addr, label) \
+    case watch_addr: \
+        ++g_ng_generated_smoke_instruction_watch_count[id]; \
+        break;
+        NG_GENERATED_SMOKE_DISPATCH_WATCHES(
+            NG_GENERATED_SMOKE_INSTRUCTION_WATCH_CASE)
+#undef NG_GENERATED_SMOKE_INSTRUCTION_WATCH_CASE
+    default:
+        break;
+    }
+}
+
+void ng_generated_instruction_hook(uint32_t addr) {
+    ng_generated_smoke_note_instruction_watch(addr);
+}
+
+uint64_t ng_generated_smoke_instruction_watch_hits(uint32_t index) {
+    return index < NG_GENERATED_SMOKE_WATCH_COUNT ?
+        g_ng_generated_smoke_instruction_watch_count[index] : 0u;
+}
+
+void ng_generated_smoke_set_scanline_poll_interval(uint32_t interval) {
+    g_ng_generated_smoke_scanline_poll_interval = interval;
+}
+
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
 void ng_bios_generated_call(uint32_t addr);
 
@@ -39,6 +126,8 @@ static uint32_t g_ng_generated_smoke_last_bios_dispatch_addr;
 static uint32_t g_ng_generated_smoke_recent_dispatches[NG_GENERATED_SMOKE_RECENT_DISPATCHES];
 static uint32_t g_ng_generated_smoke_hot_addr[NG_GENERATED_SMOKE_HOT_SLOTS];
 static uint64_t g_ng_generated_smoke_hot_count[NG_GENERATED_SMOKE_HOT_SLOTS];
+static uint64_t
+    g_ng_generated_smoke_dispatch_watch_count[NG_GENERATED_SMOKE_WATCH_COUNT];
 static uint32_t g_ng_generated_smoke_unique_dispatch_count;
 static int g_ng_generated_smoke_hot_overflow;
 static uint32_t g_ng_generated_smoke_budget_stop_addr;
@@ -60,6 +149,12 @@ void ng_generated_smoke_reset_dispatch_stats(void) {
     memset(g_ng_generated_smoke_hot_count,
            0,
            sizeof(g_ng_generated_smoke_hot_count));
+    memset(g_ng_generated_smoke_dispatch_watch_count,
+           0,
+           sizeof(g_ng_generated_smoke_dispatch_watch_count));
+    memset(g_ng_generated_smoke_instruction_watch_count,
+           0,
+           sizeof(g_ng_generated_smoke_instruction_watch_count));
     g_ng_generated_smoke_unique_dispatch_count = 0;
     g_ng_generated_smoke_hot_overflow = 0;
     g_ng_generated_smoke_budget_stop_addr = 0;
@@ -111,6 +206,25 @@ uint32_t ng_generated_smoke_last_bios_dispatch_addr(void) {
     return g_ng_generated_smoke_last_bios_dispatch_addr;
 }
 
+uint32_t ng_generated_smoke_dispatch_watch_count(void) {
+    return NG_GENERATED_SMOKE_WATCH_COUNT;
+}
+
+uint32_t ng_generated_smoke_dispatch_watch_addr(uint32_t index) {
+    return index < NG_GENERATED_SMOKE_WATCH_COUNT ?
+        g_ng_generated_smoke_dispatch_watch[index].addr : 0u;
+}
+
+const char *ng_generated_smoke_dispatch_watch_label(uint32_t index) {
+    return index < NG_GENERATED_SMOKE_WATCH_COUNT ?
+        g_ng_generated_smoke_dispatch_watch[index].label : "";
+}
+
+uint64_t ng_generated_smoke_dispatch_watch_hits(uint32_t index) {
+    return index < NG_GENERATED_SMOKE_WATCH_COUNT ?
+        g_ng_generated_smoke_dispatch_watch_count[index] : 0u;
+}
+
 static uint32_t ng_generated_smoke_recent_from_end(uint32_t offset) {
     if (offset >= NG_GENERATED_SMOKE_RECENT_DISPATCHES ||
         (uint64_t)offset >= g_ng_generated_smoke_dispatch_count) {
@@ -152,8 +266,22 @@ static uint32_t ng_generated_smoke_hot_slot(uint32_t addr) {
     return addr & (NG_GENERATED_SMOKE_HOT_SLOTS - 1u);
 }
 
+static void ng_generated_smoke_note_dispatch_watch(uint32_t addr) {
+    switch (addr & 0x00FFFFFFu) {
+#define NG_GENERATED_SMOKE_WATCH_CASE(id, watch_addr, label) \
+    case watch_addr: \
+        ++g_ng_generated_smoke_dispatch_watch_count[id]; \
+        break;
+        NG_GENERATED_SMOKE_DISPATCH_WATCHES(NG_GENERATED_SMOKE_WATCH_CASE)
+#undef NG_GENERATED_SMOKE_WATCH_CASE
+    default:
+        break;
+    }
+}
+
 static void ng_generated_smoke_note_dispatch(uint32_t addr) {
     addr &= 0x00FFFFFFu;
+    ng_generated_smoke_note_dispatch_watch(addr);
     uint32_t slot = ng_generated_smoke_hot_slot(addr);
     for (uint32_t probe = 0; probe < NG_GENERATED_SMOKE_HOT_SLOTS; ++probe) {
         uint32_t idx = (slot + probe) & (NG_GENERATED_SMOKE_HOT_SLOTS - 1u);
@@ -222,6 +350,9 @@ void ng_generated_call(uint32_t addr) {
 void ng_generated_call(uint32_t addr);
 
 void ng_generated_smoke_reset_dispatch_stats(void) {
+    memset(g_ng_generated_smoke_instruction_watch_count,
+           0,
+           sizeof(g_ng_generated_smoke_instruction_watch_count));
 }
 
 void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches) {
@@ -270,6 +401,25 @@ uint32_t ng_generated_smoke_last_bios_dispatch_addr(void) {
 
 uint32_t ng_generated_smoke_recent_loop_period(void) {
     return 0;
+}
+
+uint32_t ng_generated_smoke_dispatch_watch_count(void) {
+    return NG_GENERATED_SMOKE_WATCH_COUNT;
+}
+
+uint32_t ng_generated_smoke_dispatch_watch_addr(uint32_t index) {
+    return index < NG_GENERATED_SMOKE_WATCH_COUNT ?
+        g_ng_generated_smoke_dispatch_watch[index].addr : 0u;
+}
+
+const char *ng_generated_smoke_dispatch_watch_label(uint32_t index) {
+    return index < NG_GENERATED_SMOKE_WATCH_COUNT ?
+        g_ng_generated_smoke_dispatch_watch[index].label : "";
+}
+
+uint64_t ng_generated_smoke_dispatch_watch_hits(uint32_t index) {
+    (void)index;
+    return 0u;
 }
 #endif
 
@@ -533,6 +683,18 @@ static int ng_generated_smoke_write_snapshot_summary(const char *dir) {
                 addr & 0x00FFFFFFu,
                 (unsigned long long)count);
     }
+    for (uint32_t i = 0; i < ng_generated_smoke_dispatch_watch_count(); ++i) {
+        fprintf(f,
+                "watch_%06X_%s=%llu\n",
+                ng_generated_smoke_dispatch_watch_addr(i) & 0x00FFFFFFu,
+                ng_generated_smoke_dispatch_watch_label(i),
+                (unsigned long long)ng_generated_smoke_dispatch_watch_hits(i));
+        fprintf(f,
+                "instr_%06X_%s=%llu\n",
+                ng_generated_smoke_dispatch_watch_addr(i) & 0x00FFFFFFu,
+                ng_generated_smoke_dispatch_watch_label(i),
+                (unsigned long long)ng_generated_smoke_instruction_watch_hits(i));
+    }
 
     if (fclose(f) != 0) {
         fprintf(stderr, "failed to close snapshot file: %s\n", path);
@@ -692,6 +854,24 @@ static void ng_generated_smoke_print_summary(void) {
                 (unsigned long long)count);
     }
     fprintf(stderr, "\n");
+    fprintf(stderr, "dispatch watch:");
+    for (uint32_t i = 0; i < ng_generated_smoke_dispatch_watch_count(); ++i) {
+        fprintf(stderr,
+                " $%06X:%s=%llu",
+                ng_generated_smoke_dispatch_watch_addr(i) & 0x00FFFFFFu,
+                ng_generated_smoke_dispatch_watch_label(i),
+                (unsigned long long)ng_generated_smoke_dispatch_watch_hits(i));
+    }
+    fprintf(stderr, "\n");
+    fprintf(stderr, "instruction watch:");
+    for (uint32_t i = 0; i < ng_generated_smoke_dispatch_watch_count(); ++i) {
+        fprintf(stderr,
+                " $%06X:%s=%llu",
+                ng_generated_smoke_dispatch_watch_addr(i) & 0x00FFFFFFu,
+                ng_generated_smoke_dispatch_watch_label(i),
+                (unsigned long long)ng_generated_smoke_instruction_watch_hits(i));
+    }
+    fprintf(stderr, "\n");
     if (ng_generated_smoke_dispatch_budget_hit()) {
         fprintf(stderr,
                 "smoke budget reached at $%06X after %llu dispatches\n",
@@ -740,7 +920,8 @@ int ng_generated_smoke_run_with_bios_snapshot(const char *neo_path,
 
     ng_neogeo_reset_runtime();
     ng_neogeo_set_auto_vblank_interval(0);
-    ng_neogeo_set_auto_scanline_interval(bios_path ? 1u : 0u);
+    ng_neogeo_set_auto_scanline_interval(
+        bios_path ? g_ng_generated_smoke_scanline_poll_interval : 0u);
     ng_neogeo_set_program_rom(rom.data, rom.size);
     ng_neogeo_set_system_rom(bios_data, bios_size);
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
@@ -797,7 +978,8 @@ int ng_generated_smoke_run(const char *neo_path) {
 static void usage(const char *argv0) {
     fprintf(stderr,
             "usage: %s [--bios <bios.rom>] [--max-dispatches <n>] "
-            "[--snapshot-dir <dir>] <game.neo>\n",
+            "[--scanline-poll-interval <n>] [--snapshot-dir <dir>] "
+            "<game.neo>\n",
             argv0);
 }
 
@@ -806,6 +988,7 @@ int main(int argc, char **argv) {
     const char *neo_path = NULL;
     const char *snapshot_dir = NULL;
     uint64_t max_dispatches = 0;
+    uint64_t scanline_poll_interval = g_ng_generated_smoke_scanline_poll_interval;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--bios") == 0) {
@@ -826,6 +1009,13 @@ int main(int argc, char **argv) {
                 usage(argv[0]);
                 return 2;
             }
+        } else if (strcmp(argv[i], "--scanline-poll-interval") == 0) {
+            if (++i >= argc ||
+                !ng_generated_smoke_parse_u64(argv[i], &scanline_poll_interval) ||
+                scanline_poll_interval > UINT32_MAX) {
+                usage(argv[0]);
+                return 2;
+            }
         } else if (strcmp(argv[i], "--help") == 0 ||
                    strcmp(argv[i], "-h") == 0) {
             usage(argv[0]);
@@ -843,6 +1033,8 @@ int main(int argc, char **argv) {
         return 2;
     }
     ng_generated_smoke_set_dispatch_budget(max_dispatches);
+    ng_generated_smoke_set_scanline_poll_interval(
+        (uint32_t)scanline_poll_interval);
     return ng_generated_smoke_run_with_bios_snapshot(neo_path,
                                                     bios_path,
                                                     snapshot_dir);

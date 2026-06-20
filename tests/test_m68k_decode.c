@@ -14,6 +14,7 @@
 
 static NgProgramRom make_rom_at(const unsigned char *bytes, uint32_t size, uint32_t addr) {
     NgProgramRom rom;
+    memset(&rom, 0, sizeof(rom));
     rom.size = addr + size;
     rom.data = (uint8_t *)calloc(rom.size ? rom.size : 1u, 1);
     if (rom.data) {

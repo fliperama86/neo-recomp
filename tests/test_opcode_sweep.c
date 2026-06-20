@@ -48,6 +48,7 @@ int main(void) {
         NgFunctionDiscovery discovery;
         FILE *out;
 
+        memset(&rom, 0, sizeof(rom));
         rom.size = ROM_SIZE;
         rom.data = (uint8_t *)calloc(ROM_SIZE, 1);
         CHECK(rom.data != NULL);

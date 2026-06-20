@@ -53,69 +53,39 @@ expecting byte-identical machine code is not a useful invariant.
 
 ## Real ROM Frontier
 
-Latest local Metal Slug smoke used:
+Latest local Metal Slug headless/render-discovery smoke used:
 
 ```sh
-./build/neo-recomp --game games/mslug.toml \
-  --neo ~/Documents/Games/Mister/NEOGEO/mslug.neo \
-  --emit-c build/mslug_recomp.c \
-  --emit-dispatch-audit build/mslug_dispatch_audit.txt \
-  --fail-on-dispatch-gaps
-cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
-  -c build/mslug_recomp.c -o build/mslug_recomp.o
+NG_MSLUG_PROGRESS_BUDGETS='500000 5000000' \
+NG_MSLUG_SNAPSHOT_DIR=build/mslug_snapshot_render_path \
+scripts/run_mslug_headless.sh
 ```
 
-The generated C now compiles to an object, and the current Metal Slug smoke
-passes `--fail-on-dispatch-gaps`. The current dispatch audit is:
+The script regenerates Metal Slug C, compiles the cart and user-provided BIOS
+slice, links the reusable smoke harness/runtime, then runs the deterministic
+headless budgets. Generated cart C still compiles, and the static dispatch audit
+is clean:
 
 ```text
-function candidates: 1155
-dispatch audit: sites=73 direct=69 missing_direct=0 external_direct=5 computed=0 runtime_computed=3 jump_tables=1 table_resolved=4 table_missing=0
-$000900 DIRECT JMP target=$C00438 discovered=no external=yes
-$00092E DIRECT JSR target=$C004CE discovered=no external=yes
-$000940 DIRECT JSR target=$C0044A discovered=no external=yes
-$000862 DIRECT JMP target=$C00444 discovered=no external=yes
-$000984 DIRECT JSR target=$C004C2 discovered=no external=yes
-$0006C8 COMPUTED JSR target=<runtime> allowed=yes
-$001F3C COMPUTED JSR target=<runtime> allowed=yes
-$05BF8A COMPUTED JMP target=<runtime> allowed=yes
+function candidates: 22893
+dispatch audit: sites=2782 missing_direct=0 external_direct=15 computed=0 runtime_computed=40 jump_tables=1
+BIOS candidates: 32768 (truncated)
 ```
 
-The discovery candidate cap is now 8192; Metal Slug currently discovers 1155
-candidate entry/instruction-boundary addresses without truncation after seeding
-the cart VBlank vector handler (`$0008F6`), the cartridge header start
-trampoline (`$000122`), and the BIOS-reached init callback (`$001F84`). The previous
-missing direct P-ROM targets (`$05DC1C`, `$05DC34`, `$024FB8`) are now
-discovered. Direct BIOS/system-ROM targets are classified as external runtime
-fallbacks instead of missing P-ROM discovery; the current external BIOS targets
-visible from cart code are `$C00438`, `$C00444`, `$C0044A`, `$C004C2`, and
-`$C004CE`. The RAM-loaded callback at
-`$0006C8` (`MOVEA.L (A6),A0; JSR (A0)`) and the additional VBlank-reached
-computed sites (`$001F3C`, `$05BF8A`) are explicitly classified in
-`games/mslug.toml` as runtime-computed dispatch sites, so they remain visible in
-the audit without failing the static P-ROM dispatch-gap check.
+The discovery candidate cap and audit storage were raised to keep this explicit
+instead of silently truncating. `games/mslug.toml` now declares the Neo Geo
+program address map (`$000000-$0FFFFF` fixed P-ROM and `$200000-$2FFFFF` bank
+window), seeds additional structured task/callback tables, and marks currently
+visible dynamic dispatch sites as runtime-computed. Function discovery also
+recognizes common Neo task patterns such as `LEA target,Ax; MOVE.L Ax,(A6)` and
+`LEA target,A1; JSR $0004AE/$0006FE`, which is why the cart candidate count is
+much larger. The BIOS slice still truncates at 32768 candidates; that is not
+blocking the current smoke, but it remains a cleanup item.
 
-The generated executable checkpoint uses the reusable smoke harness:
-
-```sh
-cc -std=c99 -Wall -Wextra -Iinclude -Irecompiler/src \
-  tools/generated_smoke_harness.c build/mslug_recomp.c \
-  runtime/src/neogeo_runtime.c recompiler/src/p_rom.c \
-  -o build/mslug_smoke_harness
-./build/mslug_smoke_harness ~/Documents/Games/Mister/NEOGEO/mslug.neo
-```
-
-Current result:
-
-```text
-starting cart entry $0007CC ssp=$0010F300
-dispatch miss at $C00444
-returned pc=$C00444 sr=$2004 sp=$0010F300
-```
-
-So static CPU recompilation reaches executable cartridge code without BIOS and
-the non-BIOS frontier is the expected runtime/BIOS fallback at `$C00444`, not a
-generated-C or static P-ROM dispatch gap.
+An earlier no-BIOS executable checkpoint remains useful as a boundary proof:
+generated cart code reaches cartridge execution and then stops at the expected
+BIOS/system-ROM dispatch fallback (`$C00444`) rather than at a generated-C or
+static P-ROM dispatch gap.
 
 The BIOS-backed smoke path now has a small BIOS recompilation tool plus a
 runtime external-dispatch hook. Users must provide their own BIOS; local testing
@@ -202,12 +172,11 @@ as a headless sound command/reply latch, preserving the previous default
 `0xFF` read value and recording 68000->Z80 commands without emulating the Z80 or
 YM2610. The next BIOS step exposed a wider port-output mirror at `$380021`, so
 the port-output latch now accepts odd addresses under the documented
-`$380000/$390000` mirror. With the 8192-candidate budget, cart seeds for
-`$000122`/`$001F84`, all currently visible cart->BIOS direct targets
-(`$C00438`, `$C00444`, `$C0044A`, `$C004C2`, `$C004CE`), and further local-only
-BIOS seeds through the `$C187xx`/`$C180xx` helper chain, the latest local probe
-now reaches the deterministic 500k dispatch budget instead of relying on a
-wall-clock timeout, and it gets far enough to write headless VRAM:
+`$380000/$390000` mirror. At that historical 8192-candidate stage, cart seeds
+for `$000122`/`$001F84`, the then-visible cart->BIOS direct targets, and
+local-only BIOS seeds through the `$C187xx`/`$C180xx` helper chain produced the
+first deterministic 500k dispatch budget instead of relying on a wall-clock
+timeout, far enough to write headless VRAM:
 
 ```text
 starting cart entry $0007CC ssp=$0010F300
@@ -218,17 +187,13 @@ smoke budget reached at $C11646 after 500000 dispatches
 progress oracle: ok budgets=500000,5000000 final_pc=$C116C8 cart=943807 bios=4056193 last_cart=$000934 last_bios=$C116A4 unique=369 polls=23700433 vblank=89774 frame=89774 scanline=97 lspc=$0000 vram_addr=$0000 vram_mod=$0001 irqack=77854 last_irq=$001FE2:L1/V25 mslug_sync=$01310000003100 mslug_counters=$000401300000 mslug_vblank=$0000 mslug_bios_flags=$8202 watchdog=19149 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 palette_writes=16684 palette_nonzero_writes=274 palette_last=$400002:$0000:bank0 palette_peak_nonzero=14 palette_peak_sum=$0000070A vram_nonzero=2304 vram_sum=$01A0C140 final_recent_loop=0 max_recent_loop=0
 ```
 
-That is the first controlled "keeps running headless" checkpoint: no dispatch
-or bus miss before the budget. It is not yet a boot/attract correctness proof:
-the expanded BIOS probe still reports `BIOS candidates: 8192 (truncated)`, and
-the harness only has a first-pass state oracle (multi-budget dispatch counts,
-cart/BIOS dispatch growth, unique dispatch coverage, hot dispatch rankings,
-RAM/VRAM checksums,
+That was the first controlled "keeps running headless" checkpoint: no dispatch
+or bus miss before the budget. Later smoke iterations replaced this as the
+current frontier, but the same first-pass state oracle remains useful:
+multi-budget dispatch counts, cart/BIOS dispatch growth, unique dispatch
+coverage, hot dispatch rankings, RAM/VRAM checksums,
 watchdog/poll/VBlank/frame/IRQACK growth, pending-IRQ state, current scanline,
-and a short recent-dispatch loop detector), not a boot/attract-mode success
-oracle. The 50k checkpoint can stop in a short BIOS polling loop, but the 500k
-and 5M checkpoints leave that loop (`final_recent_loop=0`) and now require
-nonzero VRAM writes.
+and a short recent-dispatch loop detector.
 
 The smoke can also save final-budget CPU-visible state for offline inspection:
 
@@ -237,8 +202,8 @@ NG_MSLUG_SNAPSHOT_DIR=build/mslug_snapshot scripts/run_mslug_headless.sh
 ```
 
 That produces `work_ram.bin` (64 KiB), `palette_ram.bin` (16 KiB),
-`vram_be.bin` (64K big-endian VRAM words), and `summary.txt`. The current
-500k snapshot summary matches the smoke output above and gives us concrete
+`vram_be.bin` (64K big-endian VRAM words), and `summary.txt`. The final-budget
+snapshot summary mirrors the latest smoke frontier and gives us concrete
 artifacts to feed a minimal visualizer/debug viewer:
 
 ```sh
@@ -250,17 +215,29 @@ The visualizer writes dependency-free PPM diagnostics under
 color hashes, a nonzero-VRAM mask/tint, approximate palette swatches, and a
 short text report. These are intentionally not accurate Neo Geo rendering yet;
 they are a bridge from headless numeric counters to inspectable artifacts.
-Both the 500k and 5M snapshots still end with `palette_nonzero=0`, but richer
-palette telemetry shows this is no longer "no palette writes": the current run
-does `palette_writes=16684`, including `palette_nonzero_writes=274`, with a
-small peak of `palette_peak_nonzero=14` bytes before later zeroing it again.
-The display-facing blocker is therefore not palette address decoding; it is
-why this headless path has not reached durable game palette/video init yet.
-The 5M checkpoint also records the cart-side VBlank/main-sync state
-`mslug_sync=$01310000003100`, counters `mslug_counters=$000401300000`, and the
-last interrupt returning to cart PC `$001FE2`, so the game VBlank handshake is
-alive enough to set `$106ED8` but still not enough to produce renderable
-palette state.
+The current render-path smoke is now materially past the old "palette never
+becomes nonzero" problem. At the 500k checkpoint it reaches main/video update
+code with durable palette and VRAM state:
+
+```text
+smoke summary: dispatches=500000 cart=410150 bios=89850 unique=1037 last=$05B714 pc=$05B3A4 vblank=1135 frame=1135 irqack=1140 mslug_sync=$010200FF000301 wram_nonzero=25760 palette_nonzero=9265 palette_writes=23975 palette_nonzero_writes=6499 palette_peak_nonzero=9265 vram_nonzero=8900 recent_loop=0
+instruction watch: ... $05C9E0:cart_video_active=148 $05CA02:cart_video_jsr_render=148 $05B400:cart_render_worker=296 ...
+```
+
+A deeper 5M-budget probe no longer reaches the full guard; it advances to a new
+cart dispatch frontier after about 1.09M dispatches:
+
+```text
+dispatch miss at $03BEA0
+smoke summary: dispatches=1088115 cart=964779 bios=123336 unique=1923 last=$03BEA0 pc=$03BEA0 vblank=1776 frame=1776 irqack=1781 mslug_sync=$01000000000001 wram_nonzero=26603 palette_nonzero=9723 palette_writes=33095 palette_nonzero_writes=12268 palette_peak_nonzero=9787 vram_nonzero=7643 recent_loop=0
+instruction watch: ... $05C9E0:cart_video_active=448 $05CA02:cart_video_jsr_render=448 $05B400:cart_render_worker=896 ...
+```
+
+This is real progress toward headless game execution: the cart main loop, VBlank
+handler, input update, video gate, and render worker all execute repeatedly, and
+the final snapshot has nonzero work RAM, palette RAM, and VRAM. It is still not
+a frame renderer or boot/attract success oracle; the next CPU-side blocker is
+the missing generated/runtime dispatch target at `$03BEA0`.
 
 This snapshot/debug-render path is also the cleanest seam for a real SDL host.
 When SDL2 is available through `pkg-config`, CMake builds the optional
@@ -269,20 +246,11 @@ files with raw VRAM, nonzero-VRAM, work-RAM, and palette modes. It remains an
 offline diagnostic scaffold, not a live emulator loop, so there is still no
 mandatory SDL dependency or added CI surface.
 
-The next real-frame prerequisite is loading the cartridge asset regions that a
-renderer will actually need. The `.neo` loader now has a tested full-container
-path for P/S/M/V1/V2/C regions: P is still normalized for 68000 recompilation,
-while S fix-layer and interleaved C sprite data are preserved for future video
-decode/rendering work.
-
-A manual single-budget deep probe also reaches its guard without a dispatch or
-bus miss:
-
-```text
-smoke summary: dispatches=5000000 cart=943807 bios=4056193 unique=369 hot_overflow=0 last=$C116A4 last_cart=$000934 last_bios=$C116A4 pc=$C116C8 sr=$2108 sp=$0010F2B2 polls=23700433 watchdog=19149 vblank=89774 frame=89774 timer_irq=0 irqack=77854 irq_pending=$0004 last_irq_pc=$001FE2 last_irq_level=1 last_irq_vector=25 scanline=97 lspc=$0000 vram_addr=$0000 vram_mod=$0001 mslug_sync=$01310000003100 mslug_counters=$000401300000 mslug_vblank=$0000 mslug_bios_flags=$8202 sound=$04 port=$00 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 palette_writes=16684 palette_nonzero_writes=274 palette_last_addr=$400002 palette_last_value=$0000 palette_last_bank=0 palette_peak_nonzero=14 palette_peak_sum=$0000070A vram_nonzero=2304 vram_sum=$01A0C140 recent_loop=0
-dispatch hot: unique=369 overflow=0 top0=$C18500:622816 top1=$C184FC:155706 top2=$C184F8:155705 top3=$C184F4:155701 top4=$C1866C:155698
-progress oracle: ok budgets=500000,5000000 final_pc=$C116C8 cart=943807 bios=4056193 last_cart=$000934 last_bios=$C116A4 unique=369 polls=23700433 vblank=89774 frame=89774 scanline=97 lspc=$0000 vram_addr=$0000 vram_mod=$0001 irqack=77854 last_irq=$001FE2:L1/V25 mslug_sync=$01310000003100 mslug_counters=$000401300000 mslug_vblank=$0000 mslug_bios_flags=$8202 watchdog=19149 wram_nonzero=20380 wram_sum=$004BE705 palette_nonzero=0 palette_sum=$00000000 palette_writes=16684 palette_nonzero_writes=274 palette_last=$400002:$0000:bank0 palette_peak_nonzero=14 palette_peak_sum=$0000070A vram_nonzero=2304 vram_sum=$01A0C140 final_recent_loop=0 max_recent_loop=0
-```
+The next real-frame prerequisite is loading and decoding the cartridge asset
+regions that a renderer will actually need. The `.neo` loader already has a
+tested full-container path for P/S/M/V1/V2/C regions: P is normalized for 68000
+recompilation, while S fix-layer and interleaved C sprite data are preserved for
+future video decode/rendering work.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
@@ -500,6 +468,14 @@ and `V` are only trusted where generated-exec tests cover them.
 
 ## Recent Green Slices
 
+- local: Advanced the Metal Slug headless/render-discovery path. The cart
+  recompile now uses an explicit Neo Geo P-ROM address map, expanded discovery
+  and dispatch-audit capacities, task callback/spawn heuristics, instruction
+  watch telemetry, and a less aggressive scanline-poll interval so synthetic
+  VBlank no longer starves the main loop. The 500k smoke reaches repeated
+  cart video/render worker activity with nonzero palette/VRAM state; the deeper
+  5M probe now advances to dispatch frontier `$03BEA0` after 1088115
+  dispatches, with the static audit still clean.
 - local: Fixed generic `MOVE` destination-predecrement source capture. The
   generated-exec fixture covered `MOVE.L A7,-(A7)` red first and now checks
   that the pushed longword is the old stack pointer value, not the
@@ -1487,20 +1463,25 @@ Use this loop:
 
 Immediate next slice:
 
-- Decide whether to stop the CPU-only scope here or start runtime fallback work:
-  the executable Metal Slug checkpoint now reaches BIOS/system-ROM dispatch
-  `$C00444`.
-- Keep NeoGeo timer/VBlank integration queued until the current CPU dispatch
-  backlog is narrower.
+- Resolve the current headless Metal Slug CPU frontier at `$03BEA0` while
+  keeping the runtime/hardware surface minimal.
+- Keep the next work isolated: classify the target as a missing callback/table
+  seed, runtime-computed dispatch site, or a real unsupported generated path
+  before adding any larger renderer/SDL loop.
 
 Near follow-ups:
 
-- Parse `games/*.toml` beyond function/discovery-file/jump-table metadata into machine-checkable discovery/runtime metadata.
-- Add interior-label checks and broaden dispatch-audit target patterns beyond direct/computed/current table cases.
+- Tighten the large Metal Slug discovery set so task/callback heuristics remain
+  useful without letting code/data ambiguity grow unchecked.
+- Add interior-label checks and broaden dispatch-audit target patterns beyond
+  direct/computed/current table cases.
 - Migrate more instruction families onto the generic EA helpers instead of adding bespoke forms.
 - Continue broadening the decode/codegen legality layer so every remaining invalid source/destination EA combination fails loudly.
 - Add byte/word/long helpers for arithmetic flags instead of ad hoc emitted flag code.
 - Replace narrow condition handling with a tested condition-code helper table.
 - Start separating instruction semantics into reusable generated helper functions when repeated emitted C becomes noisy.
 - Add a tiny standalone ROM-like fixture that is closer to a hand-authored mini program than the current unit fixture.
-- Continue runtime bus coverage for VRAM-facing ports, inputs, sound latch/Z80 communication, watchdog, protection/bank-switch variants, BIOS/system registers beyond current latch bits, and persistent save backing.
+- Continue runtime bus coverage only when a smoke frontier proves it is needed:
+  VRAM/display behavior, full inputs, sound latch/Z80 communication, watchdog,
+  protection/bank-switch variants, BIOS/system registers beyond current latch
+  bits, and persistent save backing.

@@ -128,6 +128,71 @@ static int is_branch_target_candidate(const NgM68kInstr *instr) {
     return 0;
 }
 
+static int has_static_code_target(const NgM68kInstr *instr) {
+    if (!instr) {
+        return 0;
+    }
+    switch (instr->src.mode) {
+    case NG_M68K_EA_ABS_W:
+    case NG_M68K_EA_ABS_L:
+    case NG_M68K_EA_PC_DISP:
+    case NG_M68K_EA_PC_INDEX:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int is_task_state_store(const NgM68kInstr *load,
+                               const NgM68kInstr *store,
+                               uint32_t *target) {
+    if (!load || !store || !target) {
+        return 0;
+    }
+    if (load->mnemonic != NG_M68K_LEA ||
+        load->dst.mode != NG_M68K_EA_AREG ||
+        !has_static_code_target(load)) {
+        return 0;
+    }
+    if (store->mnemonic != NG_M68K_MOVE ||
+        store->size != 4u ||
+        store->src.mode != NG_M68K_EA_AREG ||
+        store->src.reg != load->dst.reg ||
+        store->dst.mode != NG_M68K_EA_AIND ||
+        store->dst.reg != 6u) {
+        return 0;
+    }
+
+    *target = load->target;
+    return 1;
+}
+
+static int is_task_spawn_call(const NgM68kInstr *load,
+                              const NgM68kInstr *call,
+                              uint32_t *target) {
+    if (!load || !call || !target) {
+        return 0;
+    }
+    if (load->mnemonic != NG_M68K_LEA ||
+        load->dst.mode != NG_M68K_EA_AREG ||
+        load->dst.reg != 1u ||
+        !has_static_code_target(load)) {
+        return 0;
+    }
+    if (call->mnemonic != NG_M68K_JSR ||
+        call->src.mode != NG_M68K_EA_ABS_L) {
+        return 0;
+    }
+
+    uint32_t helper = call->target & 0x00FFFFFFu;
+    if (helper != 0x0004AEu && helper != 0x0006FEu) {
+        return 0;
+    }
+
+    *target = load->target;
+    return 1;
+}
+
 static void scan_function_candidate(const NgProgramRom *rom,
                                     uint32_t start_addr,
                                     NgFunctionDiscovery *out) {
@@ -156,6 +221,13 @@ static void scan_function_candidate(const NgProgramRom *rom,
             NgM68kJumpTablePattern pattern;
             if (ng_m68k_match_pc_index_jump_table(&previous, &instr, &pattern)) {
                 add_jump_table_targets(rom, &pattern, out);
+            } else {
+                uint32_t target = 0;
+                if (is_task_state_store(&previous, &instr, &target)) {
+                    ng_function_discovery_add(out, rom, target);
+                } else if (is_task_spawn_call(&previous, &instr, &target)) {
+                    ng_function_discovery_add(out, rom, target);
+                }
             }
         }
 

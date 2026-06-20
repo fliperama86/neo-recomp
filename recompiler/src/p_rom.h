@@ -5,6 +5,11 @@
 typedef struct NgProgramRom {
     uint8_t *data;
     uint32_t size;
+    uint32_t fixed_base;
+    uint32_t fixed_size;
+    uint32_t bank_window_base;
+    uint32_t bank_window_size;
+    int address_map_enabled;
 } NgProgramRom;
 
 typedef struct NgNeoRomRegion {
@@ -27,6 +32,11 @@ typedef struct NgNeoRomImage {
 int ng_program_rom_load(NgProgramRom *rom, const char *p1_path, const char *p2_path);
 int ng_program_rom_load_neo(NgProgramRom *rom, const char *neo_path);
 void ng_program_rom_free(NgProgramRom *rom);
+void ng_program_rom_set_address_map(NgProgramRom *rom,
+                                    uint32_t fixed_base,
+                                    uint32_t fixed_size,
+                                    uint32_t bank_window_base,
+                                    uint32_t bank_window_size);
 
 int ng_neo_rom_image_load(NgNeoRomImage *image, const char *neo_path);
 void ng_neo_rom_image_free(NgNeoRomImage *image);

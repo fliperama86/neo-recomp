@@ -78,6 +78,12 @@ int main(void) {
             "[game]\n"
             "name = \"Synthetic\"\n"
             "\n"
+            "[program]\n"
+            "fixed_base = 0x000000\n"
+            "fixed_size = 0x100000\n"
+            "bank_window_base = 0x200000\n"
+            "bank_window_size = 0x100000\n"
+            "\n"
             "[functions]\n"
             "entry = [\n"
             "  0x000040,\n"
@@ -90,6 +96,11 @@ int main(void) {
     CHECK(ng_game_config_load(path, &config));
     remove(path);
 
+    CHECK(config.program_map_configured);
+    CHECK(config.program_fixed_base == 0x000000u);
+    CHECK(config.program_fixed_size == 0x100000u);
+    CHECK(config.program_bank_window_base == 0x200000u);
+    CHECK(config.program_bank_window_size == 0x100000u);
     CHECK(config.entry_count == 2u);
     CHECK(config.entry[0] == 0x000040u);
     CHECK(config.entry[1] == 0x000080u);
@@ -195,6 +206,7 @@ int main(void) {
     CHECK(config.discovery_file_count == 0u);
     CHECK(config.runtime_dispatch_count == 0u);
     CHECK(config.jump_table_count == 0u);
+    CHECK(!config.program_map_configured);
     CHECK(!config.truncated);
 
     return 0;

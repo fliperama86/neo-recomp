@@ -150,6 +150,7 @@ int main(int argc, char **argv) {
     }
 
     NgProgramRom rom;
+    memset(&rom, 0, sizeof(rom));
     rom.size = NG_BIOS_BASE + bios_size;
     rom.data = (uint8_t *)malloc(rom.size ? rom.size : 1u);
     if (!rom.data) {

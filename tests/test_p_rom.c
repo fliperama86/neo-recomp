@@ -177,6 +177,14 @@ int main(void) {
     CHECK(ng_program_rom_cart_entry(&rom, &cart_entry));
     CHECK(cart_entry == 0x00001234u);
 
+    ng_program_rom_set_address_map(&rom, 0x000000u, 0x1000u, 0x200000u, 0x238u);
+    CHECK(ng_program_rom_addr_is_mapped(&rom, 0x00000FFEu));
+    CHECK(!ng_program_rom_addr_is_mapped(&rom, 0x00001000u));
+    CHECK(ng_program_rom_addr_is_mapped(&rom, 0x200000u));
+    CHECK(ng_program_rom_addr_is_mapped(&rom, 0x200237u));
+    CHECK(!ng_program_rom_addr_is_mapped(&rom, 0x200238u));
+    CHECK(ng_program_rom_read8(&rom, 0x200000u) == rom.data[0x1000u]);
+
     ng_program_rom_free(&rom);
 
     const char *neo_path = "synthetic.neo";

@@ -33,6 +33,7 @@ static int read_file(FILE *f, char *out, size_t out_size) {
 
 static NgProgramRom make_rom(uint32_t size) {
     NgProgramRom rom;
+    memset(&rom, 0, sizeof(rom));
     rom.size = size;
     rom.data = (uint8_t *)calloc(size ? size : 1u, 1);
     return rom;
@@ -52,7 +53,7 @@ int main(void) {
     char symbol[32];
     NgFunctionDiscovery discovery;
     FILE *out;
-    char text[65536];
+    char text[262144];
 
     ng_c_symbol_for_addr(0x000007CCu, symbol, (unsigned)sizeof(symbol));
     CHECK(strcmp(symbol, "ng_func_0007CC") == 0);
@@ -74,6 +75,7 @@ int main(void) {
     CHECK(strstr(text, "#define NG_GENERATED_CALL ng_generated_call") != NULL);
     CHECK(strstr(text, "#define NG_GENERATED_STEP ng_generated_step") != NULL);
     CHECK(strstr(text, "#define NG_GENERATED_DISPATCH NG_GENERATED_CALL") != NULL);
+    CHECK(strstr(text, "#define NG_GENERATED_INSTRUCTION_HOOK(addr) ((void)(addr))") != NULL);
     CHECK(strstr(text, "static void NG_GENERATED_STEP(uint32_t addr);") != NULL);
     CHECK(strstr(text, "static int ng_generated_dispatch_active;") != NULL);
     CHECK(strstr(text, "static int ng_generated_dispatch_pending;") != NULL);
@@ -122,11 +124,13 @@ int main(void) {
         fclose(out);
 
         CHECK(strstr(text, "/* $000000: MOVEQ #5,D0 */") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_INSTRUCTION_HOOK(0x00000000u);") != NULL);
         CHECK(strstr(text, "if (ng_service_interrupt(0x00000000u)) return;") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = 0x00000005u;") != NULL);
         CHECK(strstr(text, "ng_trace_sr = g_ng_m68k.sr;") != NULL);
         CHECK(strstr(text, "if (ng_service_trace(0x00000002u, ng_trace_sr)) return;") != NULL);
         CHECK(strstr(text, "/* $000002: ADD.W D0,D0 */") != NULL);
+        CHECK(strstr(text, "NG_GENERATED_INSTRUCTION_HOOK(0x00000002u);") != NULL);
         CHECK(strstr(text, "if (ng_service_interrupt(0x00000002u)) return;") != NULL);
         CHECK(strstr(text, "uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src;") != NULL);
         CHECK(strstr(text, "if (ng_full > 0x0000FFFFu) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);
