@@ -18,6 +18,12 @@
 #define NG_LIVE_DEFAULT_SCALE 3u
 #define NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS 250000u
 #define NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES 16u
+#define NG_LIVE_DEFAULT_FRAME_HOLD 1u
+#define NG_LIVE_MAME_MASTER_CLOCK_HZ 24000000ull
+#define NG_LIVE_MAME_PIXEL_CLOCK_HZ (NG_LIVE_MAME_MASTER_CLOCK_HZ / 4u)
+#define NG_LIVE_MAME_HTOTAL 0x180u
+#define NG_LIVE_MAME_VTOTAL 0x108u
+#define NG_LIVE_MAX_CATCHUP_FRAMES 5u
 #define NG_LIVE_MSLUG_VIDEO_PRESENT_ADDR 0x0005CA28u
 
 void ng_generated_call(uint32_t addr);
@@ -50,6 +56,55 @@ uint64_t ng_generated_smoke_dispatch_watch_hits(uint32_t index);
 uint64_t ng_generated_smoke_instruction_watch_hits(uint32_t index);
 
 static int live_mslug_video_update_pending(void);
+
+static uint64_t live_neo_frame_perf_ticks(uint64_t perf_frequency) {
+    /* MAME Neo Geo timing:
+       NEOGEO_MASTER_CLOCK = 24 MHz, NEOGEO_PIXEL_CLOCK = master / 4,
+       screen().set_raw(pixel_clock, NEOGEO_HTOTAL=0x180, ...,
+       NEOGEO_VTOTAL=0x108, ...).  That yields ~59.1856 Hz. */
+    uint64_t frame_pixels =
+        (uint64_t)NG_LIVE_MAME_HTOTAL * (uint64_t)NG_LIVE_MAME_VTOTAL;
+    uint64_t ticks =
+        (perf_frequency * frame_pixels + NG_LIVE_MAME_PIXEL_CLOCK_HZ / 2u) /
+        NG_LIVE_MAME_PIXEL_CLOCK_HZ;
+    return ticks != 0u ? ticks : 1u;
+}
+
+static void throttle_to_next_neo_frame(uint64_t *next_tick,
+                                       uint64_t perf_frequency,
+                                       uint64_t frame_ticks,
+                                       int no_throttle) {
+    if (no_throttle || !next_tick || perf_frequency == 0u ||
+        frame_ticks == 0u) {
+        return;
+    }
+
+    uint64_t now = SDL_GetPerformanceCounter();
+    if (*next_tick == 0u) {
+        *next_tick = now + frame_ticks;
+    }
+
+    while (now < *next_tick) {
+        uint64_t remaining = *next_tick - now;
+        uint64_t remaining_us = (remaining * 1000000u) / perf_frequency;
+        (void)remaining_us;
+        /* SDL_Delay(0/1) can overshoot by several milliseconds on some hosts.
+           Use a short spin so MAME's 59.19 Hz cadence does not degrade into a
+           visibly slower rate. */
+        now = SDL_GetPerformanceCounter();
+    }
+
+    now = SDL_GetPerformanceCounter();
+    if (now > *next_tick &&
+        now - *next_tick > frame_ticks * NG_LIVE_MAX_CATCHUP_FRAMES) {
+        /* If the host is massively late, reset the phase to avoid a long
+           burst.  Smaller misses are caught up by skipping sleep only; we still
+           render each emulated frame instead of intentionally dropping frames. */
+        *next_tick = now + frame_ticks;
+    } else {
+        *next_tick += frame_ticks;
+    }
+}
 
 static int read_file(const char *path, uint8_t **out_data, uint32_t *out_size) {
     FILE *f = fopen(path, "rb");
@@ -936,6 +991,7 @@ static void usage(const char *argv0) {
             "  --present-mode <frame|video|slice>\n"
             "                                  frame-boundary, video-update-settled, or fixed-slice presentation (default: frame)\n"
             "  --video-settle-dispatches <n>  extra cap for video-update settle mode (default: %u)\n"
+            "  --frame-hold <n>               present each emulated frame n times for slow inspection (default: %u)\n"
             "  --palette-bank <active|auto|0|1>\n"
             "                                  displayed palette bank (default: active latch)\n"
             "  --scanline-poll-interval <n>   runtime scanline poll interval (default: 64)\n"
@@ -950,6 +1006,7 @@ static void usage(const char *argv0) {
             argv0,
             NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH,
             NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES,
+            NG_LIVE_DEFAULT_FRAME_HOLD,
             NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS,
             NG_LIVE_DEFAULT_SCALE);
 }
@@ -965,6 +1022,7 @@ int main(int argc, char **argv) {
     uint64_t scanline_poll_interval = 64u;
     uint64_t watchdog_timeout_polls = NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS;
     uint64_t video_settle_dispatches = NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES;
+    uint64_t frame_hold = NG_LIVE_DEFAULT_FRAME_HOLD;
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
     int start_bios = 0;
     NgLivePresentMode present_mode = NG_LIVE_PRESENT_FRAME;
@@ -1013,6 +1071,10 @@ int main(int argc, char **argv) {
             target = &watchdog_timeout_polls;
         } else if (strcmp(option, "--video-settle-dispatches") == 0) {
             target = &video_settle_dispatches;
+        } else if (strcmp(option, "--frame-hold") == 0 ||
+                   strcmp(option, "--hold") == 0 ||
+                   strcmp(option, "--slowmo") == 0) {
+            target = &frame_hold;
         } else if (strcmp(option, "--start-bios") == 0) {
             start_bios = 1;
             continue;
@@ -1048,7 +1110,8 @@ int main(int argc, char **argv) {
         usage(argv[0]);
         return 2;
     }
-    if (dispatches_per_refresh == 0u || scanline_poll_interval > UINT32_MAX ||
+    if (dispatches_per_refresh == 0u || frame_hold == 0u ||
+        scanline_poll_interval > UINT32_MAX ||
         watchdog_timeout_polls > UINT32_MAX ||
         scale == 0u || scale > 16u) {
         usage(argv[0]);
@@ -1175,7 +1238,7 @@ int main(int argc, char **argv) {
     fprintf(stderr,
             "live host started: entry=$%06X cart_entry=$%06X dispatches=%llu "
             "frame=%u scanline=%u present=%s palette=%s watchdog_timeout=%llu "
-            "video_settle=%llu\n",
+            "video_settle=%llu frame_hold=%llu\n",
             initial_entry & 0x00FFFFFFu,
             cart_entry & 0x00FFFFFFu,
             (unsigned long long)ng_generated_smoke_dispatch_count(),
@@ -1184,19 +1247,24 @@ int main(int argc, char **argv) {
             present_mode_name(present_mode),
             palette_bank_mode_name(palette_bank_mode),
             (unsigned long long)watchdog_timeout_polls,
-            (unsigned long long)video_settle_dispatches);
+            (unsigned long long)video_settle_dispatches,
+            (unsigned long long)frame_hold);
     fprintf(stderr,
-            "keys: q/Escape quit, Space pause/resume, +/- adjust dispatch cap per refresh\n");
+            "keys: q/Escape quit, Space pause/resume, n/. step one frame, +/- adjust dispatch cap per refresh\n");
 
     int quit = 0;
     int paused = 0;
+    int step_requested = 0;
     int stall_reported = 0;
     uint64_t stagnant_refreshes = 0;
+    uint64_t hold_phase = 0;
+    uint64_t perf_frequency = SDL_GetPerformanceFrequency();
+    uint64_t neo_frame_ticks = live_neo_frame_perf_ticks(perf_frequency);
+    uint64_t next_present_tick = SDL_GetPerformanceCounter() + neo_frame_ticks;
     uint32_t last_progress_frame = ng_neogeo_frame_count();
     uint16_t last_progress_scanline = ng_neogeo_current_scanline();
     uint64_t refreshes = 0;
     while (!quit) {
-        uint32_t tick_start = SDL_GetTicks();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
@@ -1207,6 +1275,9 @@ int main(int argc, char **argv) {
                     quit = 1;
                 } else if (key == SDLK_SPACE) {
                     paused = !paused;
+                } else if (key == SDLK_n || key == SDLK_PERIOD) {
+                    step_requested = 1;
+                    hold_phase = 0;
                 } else if (key == SDLK_EQUALS || key == SDLK_PLUS) {
                     dispatches_per_refresh += dispatches_per_refresh / 4u + 1u;
                 } else if (key == SDLK_MINUS && dispatches_per_refresh > 1u) {
@@ -1218,7 +1289,8 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (!paused) {
+        int should_advance = (!paused || step_requested) && hold_phase == 0u;
+        if (should_advance) {
             int ok;
             if (present_mode == NG_LIVE_PRESENT_VIDEO) {
                 ok = run_video_synced_slice(dispatches_per_refresh,
@@ -1232,6 +1304,7 @@ int main(int argc, char **argv) {
             if (!ok) {
                 quit = 1;
             }
+            step_requested = 0;
         }
         if (!render_live_frame(&image,
                                zoom_rom,
@@ -1289,24 +1362,30 @@ int main(int argc, char **argv) {
             char title[256];
             snprintf(title,
                      sizeof(title),
-                     "neo-recomp live - dispatches=%llu frame=%u scanline=%u dpf=%llu %s%s",
+                     "neo-recomp live - dispatches=%llu frame=%u scanline=%u dpf=%llu hold=%llu %s%s",
                      (unsigned long long)ng_generated_smoke_dispatch_count(),
                      ng_neogeo_frame_count(),
                      ng_neogeo_current_scanline(),
                      (unsigned long long)dispatches_per_refresh,
+                     (unsigned long long)frame_hold,
                      present_mode_name(present_mode),
                      paused ? " paused" : "");
             SDL_SetWindowTitle(window, title);
         }
 
         ++refreshes;
+        if (!paused && frame_hold > 1u) {
+            hold_phase = (hold_phase + 1u) % frame_hold;
+        } else if (paused) {
+            hold_phase = 0;
+        }
         if (max_refreshes != 0u && refreshes >= max_refreshes) {
             quit = 1;
         }
-        uint32_t elapsed = SDL_GetTicks() - tick_start;
-        if (!no_throttle && elapsed < 16u) {
-            SDL_Delay(16u - elapsed);
-        }
+        throttle_to_next_neo_frame(&next_present_tick,
+                                   perf_frequency,
+                                   neo_frame_ticks,
+                                   no_throttle != 0u);
     }
 
     fprintf(stderr,

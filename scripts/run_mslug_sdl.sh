@@ -13,6 +13,7 @@ PALETTE_BANK="${NG_MSLUG_SDL_PALETTE_BANK:-active}"
 SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
 WATCHDOG_TIMEOUT_POLLS="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
 VIDEO_SETTLE_DISPATCHES="${NG_MSLUG_SDL_VIDEO_SETTLE_DISPATCHES:-16}"
+FRAME_HOLD="${NG_MSLUG_SDL_FRAME_HOLD:-1}"
 START_MODE="${NG_MSLUG_START_MODE:-cart}"
 SCALE="${NG_MSLUG_SDL_SCALE:-3}"
 MAX_REFRESHES="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
@@ -77,6 +78,7 @@ log_note "present mode: $PRESENT_MODE"
 log_note "palette bank: $PALETTE_BANK"
 log_note "watchdog timeout polls: $WATCHDOG_TIMEOUT_POLLS"
 log_note "video settle dispatches: $VIDEO_SETTLE_DISPATCHES"
+log_note "frame hold: $FRAME_HOLD"
 log_note "start mode: $START_MODE"
 
 log_step "Configuring/building recompiler tools"
@@ -192,6 +194,7 @@ HOST_ARGS=(
   --scanline-poll-interval "$SCANLINE_POLL_INTERVAL"
   --watchdog-timeout-polls "$WATCHDOG_TIMEOUT_POLLS"
   --video-settle-dispatches "$VIDEO_SETTLE_DISPATCHES"
+  --frame-hold "$FRAME_HOLD"
   --scale "$SCALE"
 )
 if [[ -n "$MAX_REFRESHES" ]]; then

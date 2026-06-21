@@ -12,7 +12,7 @@ export NG_MSLUG_SDL_FAST_FORWARD
 
 usage() {
   cat >&2 <<USAGE
-usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|video|slice|--video-settle N|--palette-bank active|auto|0|1|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
+usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|video|slice|--video-settle N|--frame-hold N|--palette-bank active|auto|0|1|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
 
 Default paths:
   ~/Documents/Games/Mister/NEOGEO/mslug.neo
@@ -47,6 +47,7 @@ launch_cached_host() {
   local scanline_poll="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
   local watchdog_timeout="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
   local video_settle="${NG_MSLUG_SDL_VIDEO_SETTLE_DISPATCHES:-16}"
+  local frame_hold="${NG_MSLUG_SDL_FRAME_HOLD:-1}"
   local start_mode="${NG_MSLUG_START_MODE:-cart}"
   local scale="${NG_MSLUG_SDL_SCALE:-3}"
   local max_refreshes="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
@@ -77,6 +78,7 @@ launch_cached_host() {
     --scanline-poll-interval "$scanline_poll"
     --watchdog-timeout-polls "$watchdog_timeout"
     --video-settle-dispatches "$video_settle"
+    --frame-hold "$frame_hold"
     --scale "$scale"
   )
   if [[ -n "$max_refreshes" ]]; then
@@ -106,6 +108,7 @@ launch_cached_host() {
   printf '    fast-forward: %s dispatches\n' "$fast_forward" >&2
   printf '    dispatches/refresh: %s\n' "$dpf" >&2
   printf '    present mode: %s\n' "$present_mode" >&2
+  printf '    frame hold: %s\n' "$frame_hold" >&2
   printf '    palette bank: %s\n' "$palette_bank" >&2
   exec "$HOST_BIN" "${host_args[@]}"
 }
@@ -209,6 +212,15 @@ while (($#)); do
         exit 2
       fi
       export NG_MSLUG_SDL_VIDEO_SETTLE_DISPATCHES="$1"
+      ;;
+    --frame-hold|--hold|--slowmo)
+      shift
+      if (($# == 0)); then
+        echo "--frame-hold needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_FRAME_HOLD="$1"
       ;;
     --start-bios)
       export NG_MSLUG_START_MODE=bios

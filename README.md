@@ -262,7 +262,12 @@ defaults to instruction-yielded frame-boundary presentation with a
 5000-dispatch cap per presented refresh. In this mode `--dpf N` / the `+`/`-`
 keys adjust the per-frame cap instead of intentionally skipping emulated
 frames; use `./run.sh --present-slice` to return to the older fixed-dispatch
-presentation mode for comparison. `./run.sh --present-video` enables a bounded
+presentation mode for comparison. The host throttles from MAME's Neo Geo
+raw-screen timing (`24 MHz / 4` pixel clock, `HTOTAL=0x180`, `VTOTAL=0x108`,
+~59.19 Hz). Small host overruns catch up by skipping sleep, not by dropping
+emulated frames; only large backlogs reset the throttle phase. Use
+`./run.sh --frame-hold N` (or `--slowmo N`) only when you intentionally want
+slow inspection, and Space + `n`/`.` for frame-by-frame inspection. `./run.sh --present-video` enables a bounded
 post-vblank Metal Slug video-update settle path (default 16 extra dispatches,
 or `--video-settle N`) for A/B testing layer-lag hypotheses against the cart's
 own video routine. The live renderer now defaults to the runtime PALBANK latch; use

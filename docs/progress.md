@@ -1717,6 +1717,12 @@ and `V` are only trusted where generated-exec tests cover them.
   testing confirmed this removes the previously observed front-layer lag, so
   that bug is now classified as a presentation/capture-timing issue rather than
   a sprite ordering or palette-bank problem.
+- local: Reworked live SDL pacing around MAME's Neo Geo raw-screen timing
+  (`NEOGEO_PIXEL_CLOCK = 24 MHz / 4`, `HTOTAL=0x180`, `VTOTAL=0x108`,
+  ~59.19 Hz) instead of a hard 16 ms delay. Small host overruns catch up by
+  skipping sleep without dropping emulated frames; only large backlogs reset the
+  throttle phase. Added `--frame-hold`/`--slowmo` plus Space + `n`/`.` stepping
+  for intentional slow/frame-by-frame inspection.
 
 ## Next Steps
 
