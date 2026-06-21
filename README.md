@@ -258,10 +258,12 @@ attract` for the deeper 500k-dispatch pre-window fast-forward, or
 `scripts/mslug rebuild` to force a build and then launch. The wrapper defaults
 to `~/Documents/Games/Mister/NEOGEO/mslug.neo` and
 `~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. The live host currently
-defaults to 2000 dispatches per refresh, which is the first locally observed
-full-speed-ish range; tune it with `./run.sh --dpf N` or the `+`/`-` keys while
-running. For noninteractive transition debugging, pass `./run.sh --diag N` (or
-set `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) to print the detailed live runtime,
+defaults to frame-boundary presentation with a 5000-dispatch cap per presented
+refresh. In this mode `--dpf N` / the `+`/`-` keys adjust the per-frame cap
+instead of intentionally skipping emulated frames; use `./run.sh
+--present-slice` to return to the older fixed-dispatch presentation mode for
+comparison. For noninteractive transition debugging, pass `./run.sh --diag N`
+(or set `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) to print the detailed live runtime,
 write-latch, memory/video, register, recent-dispatch, and watch-counter state
 every `N` refreshes. The underlying script
 recompiles Metal Slug, builds the user-provided BIOS slice, links a temporary

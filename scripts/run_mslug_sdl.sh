@@ -7,7 +7,8 @@ NEO_PATH="${1:-$HOME/Documents/Games/Mister/NEOGEO/mslug.neo}"
 BIOS_PATH="${2:-$HOME/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1}"
 LO_ROM_PATH="${3:-}"
 FAST_FORWARD="${NG_MSLUG_SDL_FAST_FORWARD:-500000}"
-DISPATCHES_PER_REFRESH="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-2000}"
+DISPATCHES_PER_REFRESH="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-5000}"
+PRESENT_MODE="${NG_MSLUG_SDL_PRESENT_MODE:-frame}"
 SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
 WATCHDOG_TIMEOUT_POLLS="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
 START_MODE="${NG_MSLUG_START_MODE:-cart}"
@@ -69,7 +70,8 @@ else
   log_note "lo/zoom ROM: auto-detect near game path if present"
 fi
 log_note "fast-forward: $FAST_FORWARD dispatches (set NG_MSLUG_SDL_FAST_FORWARD=10000 for faster startup)"
-log_note "dispatches/refresh: $DISPATCHES_PER_REFRESH"
+log_note "dispatch cap/refresh: $DISPATCHES_PER_REFRESH"
+log_note "present mode: $PRESENT_MODE"
 log_note "watchdog timeout polls: $WATCHDOG_TIMEOUT_POLLS"
 log_note "start mode: $START_MODE"
 
@@ -181,6 +183,7 @@ fi
 HOST_ARGS=(
   --fast-forward "$FAST_FORWARD"
   --dispatches-per-refresh "$DISPATCHES_PER_REFRESH"
+  --present-mode "$PRESENT_MODE"
   --scanline-poll-interval "$SCANLINE_POLL_INTERVAL"
   --watchdog-timeout-polls "$WATCHDOG_TIMEOUT_POLLS"
   --scale "$SCALE"

@@ -58,10 +58,9 @@ Latest local Metal Slug build/live-smoke sequence used:
 ```sh
 scripts/mslug build
 SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 \
-  NG_MSLUG_SDL_STATUS_INTERVAL=1500 \
-  NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=1500 \
-  NG_MSLUG_SDL_MAX_REFRESHES=4500 scripts/mslug \
-  > /tmp/mslug_final_4500.log 2>&1
+  NG_MSLUG_SDL_STATUS_INTERVAL=300 \
+  NG_MSLUG_SDL_MAX_REFRESHES=1200 scripts/mslug \
+  > /tmp/mslug_frame_present_1200_dpf5000.log 2>&1
 ```
 
 `scripts/mslug` / `./run.sh` launches the cached live SDL host;
@@ -101,9 +100,12 @@ are created. A dummy no-throttle run then reached `refresh=4500` and stopped
 cleanly at `dispatches=9000000 frame=6754 scanline=215 budget_stop=$00065C`; a
 longer spot-check reached `refresh=6000` / `frame=8865`. The old `$FFFFFF` miss
 is gone, and the `$80000A`/`$A0000A` memory-card probes are now modeled as
-absent-card reads instead of unmapped-bus spam. This is still not a playable
-boot oracle, but the immediate blocker is no longer a strict generated-CPU
-dispatch gap or the former BIOS reset loop.
+absent-card reads instead of unmapped-bus spam. The live host now presents on
+emulated frame boundaries by default: with a 5000-dispatch cap, a dummy
+no-throttle smoke reached `refresh=1200 frame=1200 scanline=0` instead of
+skipping BIOS/logo animation states via fixed dispatch slices. This is still not
+a playable boot oracle, but the immediate blocker is no longer a strict
+generated-CPU dispatch gap or the former BIOS reset loop.
 
 An earlier no-BIOS executable checkpoint remains useful as a boundary proof:
 generated cart code reaches cartridge execution and then stops at the expected
@@ -413,17 +415,20 @@ expensive generated-code/relink work, while `./run.sh` only launches the cached
 `./run.sh quick` uses a 10k-dispatch pre-window fast-forward, `./run.sh attract`
 uses the deeper 500k-dispatch pre-window fast-forward, and `scripts/mslug
 rebuild` forces a build and then launches. The wrapper defaults to the local
-MiSTer-style Metal Slug and BIOS paths. The live host currently defaults to 2000
-dispatches per refresh for a full-speed-ish local baseline, tunable via
-`./run.sh --dpf N` or the `+`/`-` keys while running. The script uses the same
-Metal Slug recompilation and
-user-provided BIOS slice as the headless smoke, then links
+MiSTer-style Metal Slug and BIOS paths. The live host currently defaults to
+frame-boundary presentation with a 5000-dispatch cap per presented refresh. In
+this mode `./run.sh --dpf N` or the `+`/`-` keys tune the per-frame cap instead
+of deliberately skipping emulated frames; `./run.sh --present-slice` returns to
+the older fixed-dispatch presentation mode for comparison. The script uses the
+same Metal Slug recompilation and user-provided BIOS slice as the headless smoke,
+then links
 `tools/sdl_live_host.c` with the generated cart/BIOS objects, runtime, video
 renderer, and shared dispatch trampoline. The host initializes the runtime,
 optionally fast-forwards to the current useful frontier
 (`NG_MSLUG_SDL_FAST_FORWARD`, default 500000 dispatches), then advances
-generated CPU dispatches each SDL refresh and renders directly from live
-runtime VRAM/palette state. `NG_MSLUG_SDL_MAX_REFRESHES` plus
+generated CPU dispatches until the next emulated frame boundary, or until the
+per-refresh dispatch cap is reached, and renders directly from live runtime
+VRAM/palette state. `NG_MSLUG_SDL_MAX_REFRESHES` plus
 `SDL_VIDEODRIVER=dummy` gives a noninteractive smoke path; locally this now
 runs past the previously observed dispatch/frontier stalls and the former
 soft-reset white-screen loop. This is still using the approximate headless

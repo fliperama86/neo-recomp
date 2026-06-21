@@ -12,7 +12,7 @@ export NG_MSLUG_SDL_FAST_FORWARD
 
 usage() {
   cat >&2 <<USAGE
-usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
+usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|slice|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
 
 Default paths:
   ~/Documents/Games/Mister/NEOGEO/mslug.neo
@@ -41,7 +41,8 @@ launch_cached_host() {
   local bios="${2:-$DEFAULT_BIOS}"
   local lo_rom="${3:-}"
   local fast_forward="${NG_MSLUG_SDL_FAST_FORWARD:-0}"
-  local dpf="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-2000}"
+  local dpf="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-5000}"
+  local present_mode="${NG_MSLUG_SDL_PRESENT_MODE:-frame}"
   local scanline_poll="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
   local watchdog_timeout="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
   local start_mode="${NG_MSLUG_START_MODE:-cart}"
@@ -69,6 +70,7 @@ launch_cached_host() {
   local host_args=(
     --fast-forward "$fast_forward"
     --dispatches-per-refresh "$dpf"
+    --present-mode "$present_mode"
     --scanline-poll-interval "$scanline_poll"
     --watchdog-timeout-polls "$watchdog_timeout"
     --scale "$scale"
@@ -99,6 +101,7 @@ launch_cached_host() {
   printf '==> Launching cached Metal Slug host\n' >&2
   printf '    fast-forward: %s dispatches\n' "$fast_forward" >&2
   printf '    dispatches/refresh: %s\n' "$dpf" >&2
+  printf '    present mode: %s\n' "$present_mode" >&2
   exec "$HOST_BIN" "${host_args[@]}"
 }
 
@@ -147,6 +150,21 @@ while (($#)); do
         exit 2
       fi
       export NG_MSLUG_SDL_DISPATCHES_PER_REFRESH="$1"
+      ;;
+    --present-mode)
+      shift
+      if (($# == 0)); then
+        echo "--present-mode needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_PRESENT_MODE="$1"
+      ;;
+    --present-frame|--frame-sync)
+      export NG_MSLUG_SDL_PRESENT_MODE=frame
+      ;;
+    --present-slice|--slice)
+      export NG_MSLUG_SDL_PRESENT_MODE=slice
       ;;
     --diag|--diagnostics-interval)
       shift

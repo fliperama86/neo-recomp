@@ -12,10 +12,11 @@
 
 #define NG_LIVE_PALETTE_WORDS (NG_NEO_PALETTE_RAM_BYTES / 2u)
 #define NG_LIVE_PALETTE_BANK_AUTO UINT32_MAX
-#define NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH 2000u
+#define NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH 5000u
 #define NG_LIVE_DEFAULT_FAST_FORWARD 0u
 #define NG_LIVE_DEFAULT_SCALE 3u
 #define NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS 250000u
+#define NG_LIVE_FRAME_SYNC_DISPATCH_CHUNK 16u
 
 void ng_generated_call(uint32_t addr);
 void ng_generated_smoke_reset_dispatch_stats(void);
@@ -251,6 +252,33 @@ static int run_dispatch_slice(uint64_t dispatches, uint32_t fallback_entry) {
     return run_until_dispatch_count(current + dispatches, addr);
 }
 
+static int run_frame_synced_slice(uint64_t max_dispatches, uint32_t fallback_entry) {
+    uint32_t start_frame = ng_neogeo_frame_count();
+    uint64_t start = ng_generated_smoke_dispatch_count();
+    uint64_t limit = UINT64_MAX;
+    if (max_dispatches < UINT64_MAX - start) {
+        limit = start + max_dispatches;
+    }
+
+    while (ng_generated_smoke_dispatch_count() < limit) {
+        uint64_t current = ng_generated_smoke_dispatch_count();
+        uint64_t remaining = limit - current;
+        uint64_t step = remaining < NG_LIVE_FRAME_SYNC_DISPATCH_CHUNK ?
+            remaining :
+            NG_LIVE_FRAME_SYNC_DISPATCH_CHUNK;
+        uint32_t addr = current == 0u ?
+            fallback_entry :
+            (g_ng_m68k.pc & 0x00FFFFFFu);
+        if (step == 0u || !run_until_dispatch_count(current + step, addr)) {
+            return 0;
+        }
+        if (ng_neogeo_frame_count() != start_frame) {
+            return 1;
+        }
+    }
+    return 1;
+}
+
 static int run_fast_forward(uint64_t target_dispatches, uint32_t entry_addr) {
     if (target_dispatches == 0u) {
         return 1;
@@ -341,6 +369,15 @@ typedef struct NgLivePixelStats {
     uint32_t nonzero;
     uint32_t nonblack;
 } NgLivePixelStats;
+
+typedef enum NgLivePresentMode {
+    NG_LIVE_PRESENT_FRAME,
+    NG_LIVE_PRESENT_SLICE
+} NgLivePresentMode;
+
+static const char *present_mode_name(NgLivePresentMode mode) {
+    return mode == NG_LIVE_PRESENT_SLICE ? "slice" : "frame";
+}
 
 static uint64_t live_fnv1a64_u32(uint64_t hash, uint32_t value) {
     for (uint32_t shift = 0; shift < 32u; shift += 8u) {
@@ -653,13 +690,26 @@ static int parse_u64(const char *text, uint64_t *out) {
     return 1;
 }
 
+static int parse_present_mode(const char *text, NgLivePresentMode *out) {
+    if (strcmp(text, "frame") == 0 || strcmp(text, "sync") == 0) {
+        *out = NG_LIVE_PRESENT_FRAME;
+        return 1;
+    }
+    if (strcmp(text, "slice") == 0 || strcmp(text, "fixed") == 0) {
+        *out = NG_LIVE_PRESENT_SLICE;
+        return 1;
+    }
+    return 0;
+}
+
 static void usage(const char *argv0) {
     fprintf(stderr,
             "usage: %s [options] <game.neo> <bios.rom> [lo-rom]\n"
             "\n"
             "Options:\n"
             "  --fast-forward <n>             dispatches before opening the loop (default: 0)\n"
-            "  --dispatches-per-refresh <n>   dispatches per rendered refresh (default: %u)\n"
+            "  --dispatches-per-refresh <n>   dispatch cap per rendered refresh (default: %u)\n"
+            "  --present-mode <frame|slice>   frame-boundary or fixed-slice presentation (default: frame)\n"
             "  --scanline-poll-interval <n>   runtime scanline poll interval (default: 64)\n"
             "  --watchdog-timeout-polls <n>   reset after n interrupt polls without watchdog kick (default: %u, 0 disables)\n"
             "  --start-bios                   enter through the BIOS reset vector instead of cart header\n"
@@ -687,6 +737,7 @@ int main(int argc, char **argv) {
     uint64_t watchdog_timeout_polls = NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS;
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
     int start_bios = 0;
+    NgLivePresentMode present_mode = NG_LIVE_PRESENT_FRAME;
 
     int argi = 1;
     while (argi < argc && strncmp(argv[argi], "--", 2) == 0) {
@@ -696,6 +747,22 @@ int main(int argc, char **argv) {
             target = &fast_forward;
         } else if (strcmp(option, "--dispatches-per-refresh") == 0) {
             target = &dispatches_per_refresh;
+        } else if (strcmp(option, "--present-mode") == 0) {
+            if (argi >= argc ||
+                !parse_present_mode(argv[argi++], &present_mode)) {
+                fprintf(stderr,
+                        "%s requires one of: frame, slice\n",
+                        option);
+                usage(argv[0]);
+                return 2;
+            }
+            continue;
+        } else if (strcmp(option, "--present-frame") == 0) {
+            present_mode = NG_LIVE_PRESENT_FRAME;
+            continue;
+        } else if (strcmp(option, "--present-slice") == 0) {
+            present_mode = NG_LIVE_PRESENT_SLICE;
+            continue;
         } else if (strcmp(option, "--scanline-poll-interval") == 0) {
             target = &scanline_poll_interval;
         } else if (strcmp(option, "--watchdog-timeout-polls") == 0) {
@@ -861,14 +928,16 @@ int main(int argc, char **argv) {
 
     fprintf(stderr,
             "live host started: entry=$%06X cart_entry=$%06X dispatches=%llu "
-            "frame=%u scanline=%u watchdog_timeout=%llu\n",
+            "frame=%u scanline=%u present=%s watchdog_timeout=%llu\n",
             initial_entry & 0x00FFFFFFu,
             cart_entry & 0x00FFFFFFu,
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             ng_neogeo_frame_count(),
             ng_neogeo_current_scanline(),
+            present_mode_name(present_mode),
             (unsigned long long)watchdog_timeout_polls);
-    fprintf(stderr, "keys: q/Escape quit, Space pause/resume, +/- adjust dispatches per refresh\n");
+    fprintf(stderr,
+            "keys: q/Escape quit, Space pause/resume, +/- adjust dispatch cap per refresh\n");
 
     int quit = 0;
     int paused = 0;
@@ -900,8 +969,13 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (!paused && !run_dispatch_slice(dispatches_per_refresh, initial_entry)) {
-            quit = 1;
+        if (!paused) {
+            int ok = present_mode == NG_LIVE_PRESENT_FRAME ?
+                run_frame_synced_slice(dispatches_per_refresh, initial_entry) :
+                run_dispatch_slice(dispatches_per_refresh, initial_entry);
+            if (!ok) {
+                quit = 1;
+            }
         }
         if (!render_live_frame(&image, zoom_rom, zoom_rom_size, pixels, width, height)) {
             quit = 1;
@@ -951,11 +1025,12 @@ int main(int argc, char **argv) {
             char title[256];
             snprintf(title,
                      sizeof(title),
-                     "neo-recomp live - dispatches=%llu frame=%u scanline=%u dpf=%llu%s",
+                     "neo-recomp live - dispatches=%llu frame=%u scanline=%u dpf=%llu %s%s",
                      (unsigned long long)ng_generated_smoke_dispatch_count(),
                      ng_neogeo_frame_count(),
                      ng_neogeo_current_scanline(),
                      (unsigned long long)dispatches_per_refresh,
+                     present_mode_name(present_mode),
                      paused ? " paused" : "");
             SDL_SetWindowTitle(window, title);
         }
