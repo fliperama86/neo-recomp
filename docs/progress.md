@@ -1713,7 +1713,10 @@ and `V` are only trusted where generated-exec tests cover them.
   polling in coarse dispatch chunks. A new `--present-video` mode can then
   spend a bounded post-vblank settle window (default `--video-settle 16`) toward
   Metal Slug's `$05CA28` video-update return, while falling back to frame
-  presentation when the cart video-pending flag at `$10E1EC` is clear.
+  presentation when the cart video-pending flag at `$10E1EC` is clear. Operator
+  testing confirmed this removes the previously observed front-layer lag, so
+  that bug is now classified as a presentation/capture-timing issue rather than
+  a sprite ordering or palette-bank problem.
 
 ## Next Steps
 
