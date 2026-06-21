@@ -91,6 +91,19 @@ extra = [
   0x039E54,
   0x03A514,
   0x03A560,
+  # Adjacent fixed-code child sprite/action callbacks reached by later attract
+  # mode object records; each calls the local $03C710/$03C872 setup helper and
+  # stamps sprite state fields on the spawned child.
+  0x03C588,
+  0x03C6C4,
+  0x03C836,
+  0x03C854,
+  0x03C8DE,
+  0x03C904,
+  0x03C91A,
+  0x03C942,
+  0x03C968,
+  0x03C996,
   # Banked mixed command records around $281E24-$2822D4 embed these fixed-code
   # callbacks; they are not part of a clean uniform pointer table.
   0x03CA26,
@@ -128,6 +141,10 @@ extra = [
   0x03FF14,
   0x03FE5A,
   0x0442E6,
+  # Later attract-mode enemy/object initializer pair; each selects the same
+  # shared setup body at $0488A6 after stamping the $80 variant byte.
+  0x048898,
+  0x0488A0,
   # Mixed command data embeds this fixed-code callback; it is reached through
   # the runtime object dispatcher rather than a normal direct branch.
   0x04B052,
@@ -147,6 +164,35 @@ extra = [
   0x0524AA,
   0x0524B6,
   0x052514,
+  # Attract/mission object action records reached around frames 17908-18163.
+  # These are real initializer entry points (usually MOVEA.L ($3C,A6),A1 /
+  # JSR $02942A) that store PC-relative continuations into (A6); seed the
+  # adjacent variant family together so indirect object dispatches do not stop
+  # one sibling at a time.
+  0x0528BC,
+  0x052902,
+  0x052A26,
+  0x052B8A,
+  0x052CEA,
+  0x052E20,
+  0x052E44,
+  0x052E68,
+  0x052E8C,
+  0x052F06,
+  0x052F16,
+  0x052F3A,
+  0x052FB4,
+  0x0530CC,
+  0x0530F6,
+  0x053120,
+  0x05314A,
+  0x053174,
+  0x05319E,
+  0x0531C8,
+  0x0531F2,
+  0x05321C,
+  0x053246,
+  0x053964,
   0x0573A2,
   # Banked object record at $29BCEA embeds this spawn callback.
   0x056844,
@@ -208,6 +254,18 @@ extra = [
   0x060B7A,
   0x060B84,
   0x0670D2,
+  # Large attract-mode object state entered after the $067692 setup/cleanup
+  # state; it fans out through PC-relative continuations ($0676D8/$067780/...).
+  0x0676BA,
+  # Indirect helper spawned by the $0676BA attract-mode object state; it
+  # creates paired child objects from $067E1A/$067D6E.
+  0x068206,
+  # Runtime object helper after the $07A3EE state cleanup; reached as an
+  # indirect callback and updates the child object's $72 field from RNG.
+  0x07A41C,
+  # Runtime object action records can enter this init helper at the second
+  # sibling entry ($079EC2), then fall through to the shared body at $079EC8.
+  0x079EC2,
   0x079298,
   0x05B5F8,
   0x05B5FC,

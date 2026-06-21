@@ -35,7 +35,7 @@ if ! "$BUILD_DIR/neo-recomp" \
   cat "$RECOMP_LOG" >&2
   exit 1
 fi
-grep -E "function candidates|generated C:|dispatch audit:" "$RECOMP_LOG"
+grep -E "game config functions|function candidates|generated C:|dispatch audit:" "$RECOMP_LOG"
 
 if [[ ! -f "$BIOS_PATH" ]]; then
   echo "BIOS not found: $BIOS_PATH" >&2

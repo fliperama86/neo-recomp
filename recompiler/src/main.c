@@ -241,6 +241,13 @@ int main(int argc, char **argv) {
            game_config.jump_table_count,
            game_config.runtime_dispatch_count,
            game_config.truncated ? " (truncated)" : "");
+    if (game_config.truncated) {
+        fprintf(stderr,
+                "game config exceeded compiled-in limits; refusing to run with "
+                "a truncated seed list\n");
+        ng_program_rom_free(&rom);
+        return 1;
+    }
     printf("program image: %u bytes\n", rom.size);
     if (game_config.program_map_configured) {
         printf("program map: fixed=$%06X..$%06X bank=$%06X..$%06X\n",
