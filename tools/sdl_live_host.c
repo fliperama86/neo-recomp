@@ -26,6 +26,14 @@
 #define NG_LIVE_MAX_CATCHUP_FRAMES 5u
 #define NG_LIVE_MSLUG_VIDEO_PRESENT_ADDR 0x0005CA28u
 
+typedef struct NgLivePerfWindow {
+    uint64_t cpu_ticks;
+    uint64_t render_ticks;
+    uint64_t sdl_ticks;
+    uint64_t throttle_ticks;
+    uint64_t refreshes;
+} NgLivePerfWindow;
+
 void ng_generated_call(uint32_t addr);
 void ng_generated_smoke_reset_dispatch_stats(void);
 void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches);
@@ -56,6 +64,26 @@ uint64_t ng_generated_smoke_dispatch_watch_hits(uint32_t index);
 uint64_t ng_generated_smoke_instruction_watch_hits(uint32_t index);
 
 static int live_mslug_video_update_pending(void);
+
+static uint64_t live_perf_delta(uint64_t start, uint64_t end) {
+    return end >= start ? end - start : 0u;
+}
+
+static double live_perf_average_ms(uint64_t ticks,
+                                   uint64_t refreshes,
+                                   uint64_t perf_frequency) {
+    if (ticks == 0u || refreshes == 0u || perf_frequency == 0u) {
+        return 0.0;
+    }
+    return ((double)ticks * 1000.0) /
+           ((double)perf_frequency * (double)refreshes);
+}
+
+static void live_perf_reset(NgLivePerfWindow *window) {
+    if (window) {
+        memset(window, 0, sizeof(*window));
+    }
+}
 
 static uint64_t live_neo_frame_perf_ticks(uint64_t perf_frequency) {
     /* MAME Neo Geo timing:
@@ -1013,6 +1041,7 @@ static void usage(const char *argv0) {
             "  --max-refreshes <n>            exit after n presented frames\n"
             "  --status-interval <n>          log status every n presented frames\n"
             "  --diagnostics-interval <n>     log detailed diagnostics every n frames\n"
+            "  --perf-log                     log rolling CPU/render/SDL frame costs\n"
             "  --stall-refreshes <n>          log if scanline/frame stalls for n refreshes (default: 180, 0 disables)\n"
             "  --no-throttle                  do not sleep to ~60Hz after each refresh\n"
             "  --scale <n>                    integer window scale (default: %u)\n",
@@ -1039,6 +1068,7 @@ int main(int argc, char **argv) {
     uint64_t frame_hold = NG_LIVE_DEFAULT_FRAME_HOLD;
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
     int start_bios = 0;
+    int perf_log = 0;
     NgLivePresentMode present_mode = NG_LIVE_PRESENT_FRAME;
     uint32_t palette_bank_mode = NG_LIVE_PALETTE_BANK_ACTIVE;
 
@@ -1100,6 +1130,9 @@ int main(int argc, char **argv) {
             target = &status_interval;
         } else if (strcmp(option, "--diagnostics-interval") == 0) {
             target = &diagnostics_interval;
+        } else if (strcmp(option, "--perf-log") == 0) {
+            perf_log = 1;
+            continue;
         } else if (strcmp(option, "--stall-refreshes") == 0) {
             target = &stall_refreshes;
         } else if (strcmp(option, "--scale") == 0) {
@@ -1284,6 +1317,12 @@ int main(int argc, char **argv) {
     uint32_t fps_last_frame = ng_neogeo_frame_count();
     double present_fps = 0.0;
     double emulated_fps = 0.0;
+    double perf_cpu_ms = 0.0;
+    double perf_render_ms = 0.0;
+    double perf_sdl_ms = 0.0;
+    double perf_throttle_ms = 0.0;
+    NgLivePerfWindow perf_window;
+    live_perf_reset(&perf_window);
     uint32_t last_progress_frame = ng_neogeo_frame_count();
     uint16_t last_progress_scanline = ng_neogeo_current_scanline();
     uint64_t refreshes = 0;
@@ -1312,6 +1351,7 @@ int main(int argc, char **argv) {
             }
         }
 
+        uint64_t perf_start = SDL_GetPerformanceCounter();
         int should_advance = (!paused || step_requested) && hold_phase == 0u;
         if (should_advance) {
             int ok;
@@ -1329,6 +1369,7 @@ int main(int argc, char **argv) {
             }
             step_requested = 0;
         }
+        uint64_t perf_after_cpu = SDL_GetPerformanceCounter();
         if (!render_live_frame(&image,
                                zoom_rom,
                                zoom_rom_size,
@@ -1338,11 +1379,17 @@ int main(int argc, char **argv) {
                                height)) {
             quit = 1;
         }
+        uint64_t perf_after_render = SDL_GetPerformanceCounter();
 
         SDL_UpdateTexture(texture, NULL, pixels, (int)(width * sizeof(uint32_t)));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);
+        uint64_t perf_after_sdl = SDL_GetPerformanceCounter();
+        perf_window.cpu_ticks += live_perf_delta(perf_start, perf_after_cpu);
+        perf_window.render_ticks += live_perf_delta(perf_after_cpu, perf_after_render);
+        perf_window.sdl_ticks += live_perf_delta(perf_after_render, perf_after_sdl);
+        ++perf_window.refreshes;
 
         uint64_t presented_refreshes = refreshes + 1u;
         uint64_t fps_now = SDL_GetPerformanceCounter();
@@ -1360,6 +1407,31 @@ int main(int argc, char **argv) {
                 emulated_fps =
                     (double)(frame_now - fps_last_frame) / elapsed;
             }
+            perf_cpu_ms = live_perf_average_ms(perf_window.cpu_ticks,
+                                               perf_window.refreshes,
+                                               perf_frequency);
+            perf_render_ms = live_perf_average_ms(perf_window.render_ticks,
+                                                  perf_window.refreshes,
+                                                  perf_frequency);
+            perf_sdl_ms = live_perf_average_ms(perf_window.sdl_ticks,
+                                               perf_window.refreshes,
+                                               perf_frequency);
+            perf_throttle_ms = live_perf_average_ms(perf_window.throttle_ticks,
+                                                    perf_window.refreshes,
+                                                    perf_frequency);
+            if (perf_log) {
+                fprintf(stderr,
+                        "live perf refresh=%llu fps=%.1f emu=%.1f "
+                        "cpu=%.3fms render=%.3fms sdl=%.3fms wait=%.3fms\n",
+                        (unsigned long long)presented_refreshes,
+                        present_fps,
+                        emulated_fps,
+                        perf_cpu_ms,
+                        perf_render_ms,
+                        perf_sdl_ms,
+                        perf_throttle_ms);
+            }
+            live_perf_reset(&perf_window);
             fps_last_tick = fps_now;
             fps_last_refreshes = presented_refreshes;
             fps_last_frame = frame_now;
@@ -1407,9 +1479,12 @@ int main(int argc, char **argv) {
             char title[256];
             snprintf(title,
                      sizeof(title),
-                     "neo-recomp live - %.1f fps / %.1f emu - dispatches=%llu frame=%u scanline=%u cap=%llu hold=%llu %s%s",
+                     "neo-recomp live - %.1f fps / %.1f emu - cpu %.1f render %.1f sdl %.1f ms - dispatches=%llu frame=%u scanline=%u cap=%llu hold=%llu %s%s",
                      present_fps,
                      emulated_fps,
+                     perf_cpu_ms,
+                     perf_render_ms,
+                     perf_sdl_ms,
                      (unsigned long long)ng_generated_smoke_dispatch_count(),
                      ng_neogeo_frame_count(),
                      ng_neogeo_current_scanline(),
@@ -1429,10 +1504,14 @@ int main(int argc, char **argv) {
         if (max_refreshes != 0u && refreshes >= max_refreshes) {
             quit = 1;
         }
+        uint64_t perf_before_throttle = SDL_GetPerformanceCounter();
         throttle_to_next_neo_frame(&next_present_tick,
                                    perf_frequency,
                                    neo_frame_ticks,
                                    no_throttle != 0u);
+        uint64_t perf_after_throttle = SDL_GetPerformanceCounter();
+        perf_window.throttle_ticks += live_perf_delta(perf_before_throttle,
+                                                      perf_after_throttle);
     }
 
     fprintf(stderr,

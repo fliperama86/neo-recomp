@@ -68,7 +68,11 @@ SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 \
 ```
 
 `scripts/mslug` / `./run.sh` launches the cached live SDL host;
-`scripts/mslug build` owns the expensive generated-code/relink work. Generated
+`scripts/mslug build` owns the expensive generated-code/relink work. The live
+host build now compiles the generated cart/BIOS C with native optimization
+(`-O1 -DNDEBUG` by default, overridable via `NG_MSLUG_SDL_OPTFLAGS`) so cached
+launches spend almost all idle time in the Neo Geo 59.19 Hz throttle instead of
+interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
@@ -443,7 +447,8 @@ scripts/mslug build
 ```
 
 This mirrors the reference recomp-project split: the explicit build step owns
-expensive generated-code/relink work, while `./run.sh` only launches the cached
+expensive generated-code/relink work, including native optimization of the
+generated cart/BIOS C, while `./run.sh` only launches the cached
 `build/mslug_sdl_host` and tells you to build first if it is missing. Plain
 `./run.sh` uses no pre-window fast-forward so the window appears quickly;
 `./run.sh quick` uses a 10k-dispatch pre-window fast-forward, `./run.sh attract`
@@ -460,7 +465,10 @@ Metal Slug video-update settle path (default `--video-settle 16`) for A/B
 testing the "front layer lags behind" hypothesis against the cart's own
 `$05C9D6`/`$05CA28` video routine without letting the settle loop run away
 across many frames. The renderer defaults to the runtime PALBANK latch rather than the old richest-bank heuristic, with
-`./run.sh --palette-bank auto|0|1` kept for A/B tests. The script uses the same
+`./run.sh --palette-bank auto|0|1` kept for A/B tests. The SDL title reports
+present FPS, emulated FPS, and rolling CPU/render/SDL costs; pass
+`./run.sh --perf-log` or set `NG_MSLUG_SDL_PERF_LOG=1` to print those buckets
+to stderr while profiling. The script uses the same
 Metal Slug recompilation and user-provided BIOS slice as the headless smoke,
 then links
 `tools/sdl_live_host.c` with the generated cart/BIOS objects, runtime, video

@@ -12,7 +12,7 @@ export NG_MSLUG_SDL_FAST_FORWARD
 
 usage() {
   cat >&2 <<USAGE
-usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|video|slice|--video-settle N|--frame-hold N|--palette-bank active|auto|0|1|--watchdog-cycles N|--start-bios] [game.neo bios.rom [lo-rom]]
+usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--perf-log|--present-mode frame|video|slice|--video-settle N|--frame-hold N|--palette-bank active|auto|0|1|--watchdog-cycles N|--start-bios] [game.neo bios.rom [lo-rom]]
 
 Default paths:
   ~/Documents/Games/Mister/NEOGEO/mslug.neo
@@ -54,6 +54,7 @@ launch_cached_host() {
   local max_refreshes="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
   local status_interval="${NG_MSLUG_SDL_STATUS_INTERVAL:-}"
   local diagnostics_interval="${NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL:-}"
+  local perf_log="${NG_MSLUG_SDL_PERF_LOG:-0}"
   local stall_refreshes="${NG_MSLUG_SDL_STALL_REFRESHES:-}"
   local no_throttle="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
 
@@ -89,6 +90,9 @@ launch_cached_host() {
   fi
   if [[ -n "$diagnostics_interval" ]]; then
     host_args+=(--diagnostics-interval "$diagnostics_interval")
+  fi
+  if [[ "$perf_log" != "0" ]]; then
+    host_args+=(--perf-log)
   fi
   if [[ -n "$stall_refreshes" ]]; then
     host_args+=(--stall-refreshes "$stall_refreshes")
@@ -200,6 +204,9 @@ while (($#)); do
         exit 2
       fi
       export NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL="$1"
+      ;;
+    --perf-log)
+      export NG_MSLUG_SDL_PERF_LOG=1
       ;;
     --watchdog-cycles|--watchdog-timeout-cycles)
       shift

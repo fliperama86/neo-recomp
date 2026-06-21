@@ -250,8 +250,10 @@ scripts/mslug build
 ```
 
 This follows the same split as the recomp reference projects: the explicit build
-step owns expensive generated-code/relink work, while `./run.sh` only launches
-the cached `build/mslug_sdl_host` and tells you to build first if it is missing.
+step owns expensive generated-code/relink work, including native optimization of
+the generated cart/BIOS C (`-O1 -DNDEBUG` by default, overridable with
+`NG_MSLUG_SDL_OPTFLAGS`), while `./run.sh` only launches the cached
+`build/mslug_sdl_host` and tells you to build first if it is missing.
 Plain `./run.sh` uses no pre-window fast-forward so the window appears quickly;
 use `./run.sh quick` for the 10k-dispatch pre-window fast-forward, `./run.sh
 attract` for the deeper 500k-dispatch pre-window fast-forward, or
@@ -279,7 +281,9 @@ banks while debugging flicker. For noninteractive transition debugging, pass
 `./run.sh --diag N` (or set `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) to
 print the detailed live runtime, write-latch, memory/video, sprite saturation,
 register, recent-dispatch, and watch-counter state every `N` refreshes. The SDL
-window title includes live present FPS plus emulated-frame FPS while running. The
+window title includes live present FPS, emulated-frame FPS, and rolling
+CPU/render/SDL costs while running; add `./run.sh --perf-log` (or
+`NG_MSLUG_SDL_PERF_LOG=1`) to print those timing buckets to stderr. The
 underlying script recompiles Metal Slug, builds the user-provided BIOS slice,
 links a temporary `build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
 yet; it reuses the headless runtime model and current renderer, but it is a

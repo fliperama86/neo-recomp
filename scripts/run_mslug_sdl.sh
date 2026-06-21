@@ -19,11 +19,15 @@ SCALE="${NG_MSLUG_SDL_SCALE:-3}"
 MAX_REFRESHES="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
 STATUS_INTERVAL="${NG_MSLUG_SDL_STATUS_INTERVAL:-}"
 DIAGNOSTICS_INTERVAL="${NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL:-}"
+PERF_LOG="${NG_MSLUG_SDL_PERF_LOG:-0}"
 STALL_REFRESHES="${NG_MSLUG_SDL_STALL_REFRESHES:-}"
 NO_THROTTLE="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
 BUILD_ONLY="${NG_MSLUG_SDL_BUILD_ONLY:-0}"
 
-CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_CYCLE_HOOK=ng_generated_cycle_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
+OPTFLAGS_VALUE="${NG_MSLUG_SDL_OPTFLAGS:--O1 -DNDEBUG}"
+# shellcheck disable=SC2206
+OPTFLAGS=($OPTFLAGS_VALUE)
+CFLAGS=(-std=c99 -Wall -Wextra "${OPTFLAGS[@]}" -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_CYCLE_HOOK=ng_generated_cycle_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
 log_step() {
   printf '\n==> %s\n' "$*" >&2
@@ -80,6 +84,7 @@ log_note "watchdog timeout cycles: $WATCHDOG_TIMEOUT_CYCLES"
 log_note "video settle dispatches: $VIDEO_SETTLE_DISPATCHES"
 log_note "frame hold: $FRAME_HOLD"
 log_note "start mode: $START_MODE"
+log_note "native C optimization flags: ${OPTFLAGS[*]:-(none)}"
 
 log_step "Configuring/building recompiler tools"
 cmake -S "$ROOT" -B "$BUILD_DIR" >/dev/null
@@ -96,6 +101,12 @@ VIDEO_OBJ="$BUILD_DIR/neogeo_video_live.o"
 P_ROM_OBJ="$BUILD_DIR/p_rom_live.o"
 SDL_HOST_OBJ="$BUILD_DIR/sdl_live_host.o"
 HOST_BIN="$BUILD_DIR/mslug_sdl_host"
+FLAGS_STAMP="$BUILD_DIR/mslug_live_cflags.stamp"
+
+FLAGS_TEXT="$(printf '%q ' "${CFLAGS[@]}")"
+if [[ ! -f "$FLAGS_STAMP" ]] || [[ "$(cat "$FLAGS_STAMP")" != "$FLAGS_TEXT" ]]; then
+  printf '%s\n' "$FLAGS_TEXT" >"$FLAGS_STAMP"
+fi
 
 RECOMP_LOG="$BUILD_DIR/mslug_recomp.log"
 if is_fresh "$CART_C" "$BUILD_DIR/neo-recomp" "$ROOT/games/mslug.toml" "$NEO_PATH"; then
@@ -127,7 +138,7 @@ else
     "$BIOS_C"
 fi
 
-if is_fresh "$CART_OBJ" "$CART_C"; then
+if is_fresh "$CART_OBJ" "$CART_C" "$FLAGS_STAMP"; then
   log_step "Compiling generated cart C"
   log_note "cached: $CART_OBJ"
 else
@@ -138,7 +149,7 @@ else
     -c "$CART_C" \
     -o "$CART_OBJ"
 fi
-if is_fresh "$BIOS_OBJ" "$BIOS_C"; then
+if is_fresh "$BIOS_OBJ" "$BIOS_C" "$FLAGS_STAMP"; then
   log_step "Compiling generated BIOS C"
   log_note "cached: $BIOS_OBJ"
 else
@@ -205,6 +216,9 @@ if [[ -n "$STATUS_INTERVAL" ]]; then
 fi
 if [[ -n "$DIAGNOSTICS_INTERVAL" ]]; then
   HOST_ARGS+=(--diagnostics-interval "$DIAGNOSTICS_INTERVAL")
+fi
+if [[ "$PERF_LOG" != "0" ]]; then
+  HOST_ARGS+=(--perf-log)
 fi
 if [[ -n "$STALL_REFRESHES" ]]; then
   HOST_ARGS+=(--stall-refreshes "$STALL_REFRESHES")
