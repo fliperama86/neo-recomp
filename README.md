@@ -1,10 +1,15 @@
 # neo-recomp
 
-Early scaffold for exploring static recompilation of Neo Geo 68000 program ROMs.
+Experimental static recompilation workbench for Neo Geo 68000 program ROMs.
 
-The first goal is deliberately small: load Neo Geo P-ROM bytes, discover a few candidate 68000 entry points, emit or call placeholder generated functions, and keep all platform behavior behind a runtime API.
+The current focus is still deliberately narrow: keep the 68000 recompiler,
+generated-code ABI, and minimal Neo Geo runtime decoupled enough to validate
+each piece in isolation, while using Metal Slug as the real-ROM integration
+driver.
 
-This is not an emulator yet, and it is not a working recompiler yet.
+This is not a full emulator yet. The generated Metal Slug CPU path can be built
+and run through a live SDL host, but the runtime/video/interrupt model is still
+approximate and the game is not considered playable.
 
 For the current implementation status, latest real-ROM frontier, and next
 TDD slices, see [`docs/progress.md`](docs/progress.md). For the concrete
@@ -261,6 +266,14 @@ recompiles Metal Slug, builds the user-provided BIOS slice, links a temporary
 `build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
 yet; it reuses the headless runtime model and current renderer, but it is a
 real live host loop rather than a saved-snapshot reload.
+
+Current local status: the generated Metal Slug cart build is dispatch-audit
+clean with `function candidates: 46392` and
+`sites=7485 missing_direct=0 computed=0 runtime_computed=59`. The full test
+suite is `15/15` passing. The live host now runs beyond the earlier
+`$C18662`/`$09B90A` dispatch frontiers; the next blocker appears to be
+runtime/video/interrupt state after the game transitions into BIOS/VBlank-heavy
+execution, not a strict generated-CPU dispatch gap.
 
 ## Decoder Slice
 

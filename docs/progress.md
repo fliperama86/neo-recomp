@@ -9,8 +9,8 @@ project orientation; update this file after each meaningful green slice.
 
 - Repository: `https://github.com/fliperama86/neo-recomp.git`
 - Branch: `main`
-- Latest pushed commit: see `git log --oneline -1` after each push
-- Local validation: `ctest --test-dir build --build-config Debug --output-on-failure`
+- Latest pushed commit: `4a37ef6 Seed Metal Slug callback frontiers`
+- Local validation: `ctest --test-dir build --output-on-failure`
 - Current test status: 15/15 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
@@ -53,37 +53,47 @@ expecting byte-identical machine code is not a useful invariant.
 
 ## Real ROM Frontier
 
-Latest local Metal Slug headless/render-discovery smoke used:
+Latest local Metal Slug build/live-smoke sequence used:
 
 ```sh
-NG_MSLUG_PROGRESS_BUDGETS='500000 5000000' \
-NG_MSLUG_SNAPSHOT_DIR=build/mslug_snapshot_render_path \
-scripts/run_mslug_headless.sh
+scripts/mslug build
+SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 \
+  NG_MSLUG_SDL_STATUS_INTERVAL=500 NG_MSLUG_SDL_MAX_REFRESHES=10000 \
+  ./run.sh > /tmp/mslug_02a606_seed.log 2>&1
 ```
 
-The script regenerates Metal Slug C, compiles the cart and user-provided BIOS
-slice, links the reusable smoke harness/runtime, then runs the deterministic
-headless budgets. Generated cart C still compiles, and the static dispatch audit
-is clean:
+`./run.sh` launches the cached live SDL host; `scripts/mslug build` owns the
+expensive generated-code/relink work. Generated cart C still compiles, and the
+static dispatch audit is clean:
 
 ```text
-function candidates: 35164
-dispatch audit: sites=5343 missing_direct=0 external_direct=20 computed=0 runtime_computed=42 jump_tables=1
+game config functions: entry=0 extra=482 discovery_files=0 jump_tables=72 runtime_dispatch=59
+function candidates: 46392
+dispatch audit: sites=7485 missing_direct=0 external_direct=20 computed=0 runtime_computed=59 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
 
-The discovery candidate cap and dispatch-audit seen storage were raised to
-65536 entries so this stays explicit instead of silently truncating; the cart
-audit still fits under the 8192-site audit limit and remains green under
-`--fail-on-dispatch-gaps`. `games/mslug.toml` now declares the Neo Geo program
-address map (`$000000-$0FFFFF` fixed P-ROM and `$200000-$2FFFFF` bank window),
-seeds additional structured task/callback tables, and marks currently visible
+The discovery candidate cap and dispatch-audit seen storage are 65536 entries,
+and game TOML jump-table metadata capacity is now 128 entries so the current 72
+Metal Slug tables are not silently truncated. The cart audit still fits under
+the 8192-site audit limit and remains green under `--fail-on-dispatch-gaps`.
+`games/mslug.toml` declares the Neo Geo program address map (`$000000-$0FFFFF`
+fixed P-ROM and `$200000-$2FFFFF` bank window), seeds structured task/callback
+tables plus the current banked action callback frontiers, and marks visible
 dynamic dispatch sites as runtime-computed. Function discovery also recognizes
 common Neo task patterns such as `LEA target,Ax; MOVE.L Ax,(A6)` and
 `LEA target,A1; JSR $0004AE/$0006FE`; the secondary A6+$70 callback heuristic is
 kept to fixed-P-ROM targets so banked animation/sprite data pointers do not get
 misclassified as code. The BIOS slice still truncates at 65536 candidates; that
 is not blocking the current smoke, but it remains a cleanup item.
+
+The latest live-smoke frontier moved past the older `$C18662`, `$09B90A`,
+`$06B974`, `$02A2F8`, `$031D90`, `$06B9A4`, and `$02A606` dispatch stalls.
+After the `$02A606` seed, a no-throttle dummy run reached frame ~79098 with the
+PC cycling in BIOS/VBlank-heavy code (`$C126B4`, `$C184F4`, `$C1866C`) and no
+`ng68k_read8 miss at $FFFFFF` log. The current blocker therefore looks more
+like runtime/video/interrupt state after the mode transition than a missing
+generated-CPU dispatch target.
 
 An earlier no-BIOS executable checkpoint remains useful as a boundary proof:
 generated cart code reaches cartridge execution and then stops at the expected
@@ -256,9 +266,10 @@ This is real progress toward headless game execution: the cart main loop, VBlank
 handler, input update, video gate, and render worker all execute repeatedly, and
 the final snapshot has nonzero palette RAM and VRAM. It is still not a frame
 renderer or boot/attract success oracle: after the current mode transition the
-longer run spends most of its time in BIOS/VBlank wait code, and the smoke still
-prints known benign byte-read probes at `$FFFFFF`/`$F3000x` that the progress
-script now filters separately from dispatch/write/word-bus misses.
+longer run spends most of its time in BIOS/VBlank wait code. Earlier runs also
+printed benign byte-read probes at `$FFFFFF`/`$F3000x`; the current live smoke
+after the absolute-short address fix and callback frontier seeds no longer logs
+the old `$FFFFFF` read miss.
 
 This snapshot/debug-render path is also the cleanest seam for a real SDL host.
 When SDL2 is available through `pkg-config`, CMake builds the optional
@@ -403,10 +414,11 @@ optionally fast-forwards to the current useful frontier
 (`NG_MSLUG_SDL_FAST_FORWARD`, default 500000 dispatches), then advances
 generated CPU dispatches each SDL refresh and renders directly from live
 runtime VRAM/palette state. `NG_MSLUG_SDL_MAX_REFRESHES` plus
-`SDL_VIDEODRIVER=dummy` gives a noninteractive smoke path; locally this was
-validated with a 10k-dispatch fast-forward and two rendered refreshes. This is
-still using the approximate headless device model, but it is no longer a saved
-snapshot reload loop.
+`SDL_VIDEODRIVER=dummy` gives a noninteractive smoke path; locally this now
+runs past the previously observed dispatch/frontier stalls and into a later
+BIOS/VBlank-heavy loop after a mode transition. This is still using the
+approximate headless device model, but it is no longer a saved snapshot reload
+loop.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
@@ -425,8 +437,9 @@ decode/emission path and/or generated-exec tests, include:
 - `$05DC34: DC.W $4268`
 - `$024FF2: DC.W $4298`
 
-The real `.neo` smoke needs to be rerun to replace this now-stale frontier list
-with the next set of generated-code misses.
+The current real-output/live frontier is no longer one of those opcode decode
+misses. The next proof should focus on the post-transition runtime/video/IRQ
+state described in the Real ROM Frontier section above.
 
 ## Supported Generated Behavior
 
@@ -1635,6 +1648,16 @@ and `V` are only trusted where generated-exec tests cover them.
 - `ceafbdb` Emit absolute `CLR` sizes.
 - `fea7ba6` Emit byte immediate absolute moves.
 - `4ebe4ba` Emit Z-flag conditional branches.
+- `4a37ef6` Seed Metal Slug callback frontiers.
+- `67c081d` Fix 68k absolute address value emission.
+- local: Fixed generated address-value emission for absolute-short `LEA`/`PEA`
+  so `$FFFF.W` produces the architectural sign-extended address
+  `0xFFFFFFFF`, while ordinary bus reads/writes still mask to 24-bit bus
+  addresses.
+- local: Raised game TOML jump-table capacity to 128 entries and seeded the
+  current Metal Slug banked callback frontiers, moving live SDL smoke past the
+  `$C18662`, `$09B90A`, `$06B974`, `$02A2F8`, `$031D90`, `$06B9A4`, and
+  `$02A606` stalls.
 
 ## Next Steps
 
@@ -1652,12 +1675,15 @@ Use this loop:
 
 Immediate next slice:
 
-- Resolve the current headless Metal Slug CPU frontier at `$0572BE` while
-  keeping the runtime/hardware surface minimal.
-- Keep the next work isolated: classify the target as a missing callback/table
-  seed, runtime-computed dispatch site, a generated-control-flow issue, or the
-  first runtime bus/sentinel problem behind the repeated `$FFFFFF`/`$F30001`
-  read misses before adding any larger renderer/SDL loop.
+- Investigate the current live Metal Slug post-frontier behavior while keeping
+  the runtime/hardware surface minimal. The latest dummy no-throttle run no
+  longer reports the old `$FFFFFF` read miss or known callback dispatch stalls;
+  it advances into BIOS/VBlank-heavy PCs around `$C126B4`/`$C184F4`/`$C1866C`
+  with scanline near 0/1 after the mode transition.
+- Keep the next work isolated: decide whether that later white-screen path is a
+  runtime/video/interrupt scheduling problem, a missing input/BIOS device
+  semantic, or another small callback/data classification issue before adding a
+  broader hardware stack.
 
 Near follow-ups:
 
