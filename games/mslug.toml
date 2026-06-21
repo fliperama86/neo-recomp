@@ -164,6 +164,18 @@ extra = [
   0x0524AA,
   0x0524B6,
   0x052514,
+  # Compact object/command utility helpers in the $05273A-$052796 block are
+  # reached via indirect records after the nearby attract-mode objects wake up;
+  # keep the RTS-separated sibling entry points together instead of discovering
+  # one tiny callback per run.
+  0x05273A,
+  0x052756,
+  0x05276C,
+  0x052776,
+  0x052780,
+  0x052788,
+  0x052796,
+  0x05279E,
   # Attract/mission object action records reached around frames 17908-18163.
   # These are real initializer entry points (usually MOVEA.L ($3C,A6),A1 /
   # JSR $02942A) that store PC-relative continuations into (A6); seed the
@@ -253,6 +265,16 @@ extra = [
   0x06034C,
   0x060B7A,
   0x060B84,
+  # Paired attract-mode object initializers immediately before the larger
+  # $0670xx family; $0666AE clears the local mode flag while $0666B6 sets it,
+  # then both fall through into the same state-machine setup.
+  0x0666AE,
+  0x0666B6,
+  # Child-spawn helper variants reached indirectly from the same object data;
+  # they create the $066B6C/$066AB8 child states with small offset variants.
+  0x066C40,
+  0x066C80,
+  0x066CC0,
   0x0670D2,
   # Large attract-mode object state entered after the $067692 setup/cleanup
   # state; it fans out through PC-relative continuations ($0676D8/$067780/...).
@@ -563,9 +585,72 @@ extra = [
   0x09C39A,
   0x09C3D0,
   0x09C3F0,
-  # Script command body reached by the $043906/$043AA4 JSR ($2,A1)
-  # interpreter path when A1 points at the $092250 command record.
+  # Script predicate command bodies reached by the $043906/$043AA4 JSR ($2,A1)
+  # interpreter path.  These mixed command records embed a tiny
+  # CMPI/Scc/LEA-next/RTS body at record+2, so seed the body entries as a
+  # decoded family instead of hitting one dispatch miss per timeline gate.
   0x092252,
+  0x0922A2,
+  0x0922C0,
+  0x09232A,
+  0x092348,
+  0x092366,
+  0x0923BC,
+  0x0923DA,
+  0x0923F8,
+  0x092420,
+  0x09243E,
+  0x092480,
+  0x092786,
+  0x092798,
+  0x0927B6,
+  0x0927C8,
+  0x0927E6,
+  0x0927F8,
+  0x09281C,
+  0x09285E,
+  0x092870,
+  0x092894,
+  0x0928D8,
+  0x092914,
+  0x092958,
+  0x092994,
+  0x0929A6,
+  0x0929CA,
+  0x092A06,
+  0x092A18,
+  0x092A36,
+  0x092A48,
+  0x092A66,
+  0x092A78,
+  0x092A96,
+  0x092AA8,
+  0x092DF0,
+  0x092E08,
+  0x092E20,
+  0x092E32,
+  0x092E56,
+  0x092E6E,
+  0x092E80,
+  0x092E98,
+  0x092F00,
+  0x092F44,
+  0x092F88,
+  0x092F9A,
+  0x092FB8,
+  0x092FFA,
+  0x093012,
+  0x09302A,
+  0x093042,
+  0x09305A,
+  0x0930B6,
+  0x0930FA,
+  0x093118,
+  0x093130,
+  0x093148,
+  0x09315A,
+  0x09317E,
+  0x093190,
   0x0934E2,
   0x0934F4,
   0x093512,
