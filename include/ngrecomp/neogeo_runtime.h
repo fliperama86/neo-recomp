@@ -163,4 +163,6 @@ uint32_t ng_neogeo_vram_nonzero_words(void);
 uint32_t ng_neogeo_vram_checksum(void);
 int ng_neogeo_copy_work_ram(uint8_t *out, uint32_t out_size);
 int ng_neogeo_copy_palette_ram(uint8_t *out, uint32_t out_size);
+int ng_neogeo_copy_backup_ram(uint8_t *out, uint32_t out_size);
 int ng_neogeo_copy_vram(uint16_t *out_words, uint32_t out_word_count);
+void ng_neogeo_seed_mslug_backup_ram(void);

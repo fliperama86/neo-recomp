@@ -1,6 +1,8 @@
 build/
 out/
 roms/
+cfg/
+nvram/
 *.user
 *.suo
 *.vcxproj

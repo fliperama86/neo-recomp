@@ -55,6 +55,7 @@ launch_cached_host() {
   local status_interval="${NG_MSLUG_SDL_STATUS_INTERVAL:-}"
   local diagnostics_interval="${NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL:-}"
   local perf_log="${NG_MSLUG_SDL_PERF_LOG:-0}"
+  local dump_state_dir="${NG_MSLUG_SDL_DUMP_STATE_DIR:-}"
   local stall_refreshes="${NG_MSLUG_SDL_STALL_REFRESHES:-}"
   local no_throttle="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
 
@@ -93,6 +94,10 @@ launch_cached_host() {
   fi
   if [[ "$perf_log" != "0" ]]; then
     host_args+=(--perf-log)
+  fi
+  if [[ -n "$dump_state_dir" ]]; then
+    mkdir -p "$dump_state_dir"
+    host_args+=(--dump-state-dir "$dump_state_dir")
   fi
   if [[ -n "$stall_refreshes" ]]; then
     host_args+=(--stall-refreshes "$stall_refreshes")

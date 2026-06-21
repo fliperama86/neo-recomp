@@ -241,31 +241,108 @@ static void ng_neogeo_update_watchdog_timeout(void) {
 }
 
 static void ng_neogeo_note_backup_ram_write(uint32_t offset, uint8_t value) {
-    /* The MVS BIOS keeps a high-water game table count at $D00047 and scans
-     * 4-byte table entries starting at $D00124 during its reset/service path.
-     * The live host currently enters through the cartridge header instead of a
-     * full cold BIOS boot, so maintain this small piece of BIOS save-RAM
-     * bookkeeping as table entries are created. */
-    enum {
-        NG_NEO_BACKUP_GAME_COUNT_OFFSET = 0x0047u,
-        NG_NEO_BACKUP_GAME_TABLE_OFFSET = 0x0124u,
-        NG_NEO_BACKUP_GAME_TABLE_STRIDE = 4u,
-        NG_NEO_BACKUP_GAME_TABLE_SLOTS = 256u
+    (void)offset;
+    (void)value;
+    /* Directory/high-water synthesis was an early partial-BIOS workaround, but
+     * it aliases real game save data on Metal Slug.  Live hosts that bypass a
+     * full cold BIOS boot should seed the MVS save-RAM directory explicitly. */
+}
+
+typedef struct NgNeoBackupSeedRun {
+    uint16_t offset;
+    uint16_t size;
+    const uint8_t *data;
+} NgNeoBackupSeedRun;
+
+void ng_neogeo_seed_mslug_backup_ram(void) {
+    /* CPU-visible bytes for the minimal Metal Slug MVS save-RAM directory
+     * produced by a fresh MAME boot.  This stops BIOS backup services from
+     * scanning zeroed directory metadata when the live host starts directly at
+     * the cart header; the game-owned high-score block at $D00320 remains
+     * zero here and is initialized/saved by cartridge code. */
+    static const uint8_t run_0010[] = {
+        0x42, 0x41, 0x43, 0x4b, 0x55, 0x50, 0x20, 0x52,
+        0x41, 0x4d, 0x20, 0x4f, 0x4b, 0x20, 0x21, 0x80,
+        0xa0, 0xe0, 0x40
     };
-    if (value == 0u ||
-        offset < NG_NEO_BACKUP_GAME_TABLE_OFFSET ||
-        offset >= NG_NEO_BACKUP_GAME_TABLE_OFFSET +
-            NG_NEO_BACKUP_GAME_TABLE_STRIDE * NG_NEO_BACKUP_GAME_TABLE_SLOTS) {
-        return;
-    }
-    uint32_t rel = offset - NG_NEO_BACKUP_GAME_TABLE_OFFSET;
-    if ((rel % NG_NEO_BACKUP_GAME_TABLE_STRIDE) >= 2u) {
-        return;
-    }
-    uint8_t high_water =
-        (uint8_t)(rel / NG_NEO_BACKUP_GAME_TABLE_STRIDE + 1u);
-    if (g_ng_neogeo_backup_ram[NG_NEO_BACKUP_GAME_COUNT_OFFSET] < high_water) {
-        g_ng_neogeo_backup_ram[NG_NEO_BACKUP_GAME_COUNT_OFFSET] = high_water;
+    static const uint8_t run_003a[] = {
+        0x01, 0x01, 0x01, 0x02, 0x01, 0x01, 0x01, 0x03
+    };
+    static const uint8_t run_0044[] = {0x30, 0x3b};
+    static const uint8_t run_0047[] = {0x02};
+    static const uint8_t run_004c[] = {0x3b};
+    static const uint8_t run_005a[] = {0x48, 0x04, 0x36, 0x14, 0xff, 0xff};
+    static const uint8_t run_0104[] = {0x26, 0x06, 0x21};
+    static const uint8_t run_010b[] = {0xd0, 0x83, 0x20};
+    static const uint8_t run_010f[] = {0xd0, 0x9b, 0x20};
+    static const uint8_t run_0113[] = {0xd0, 0x9b, 0xa0};
+    static const uint8_t run_0117[] = {0xd0, 0xa0, 0x70};
+    static const uint8_t run_0124[] = {0x02, 0x01};
+    static const uint8_t run_012a[] = {0xff, 0xff};
+    static const uint8_t run_012e[] = {0xff, 0xff};
+    static const uint8_t run_0132[] = {0xff, 0xff};
+    static const uint8_t run_0136[] = {0xff, 0xff};
+    static const uint8_t run_013a[] = {0xff, 0xff};
+    static const uint8_t run_013e[] = {0xff, 0xff};
+    static const uint8_t run_0142[] = {0xff, 0xff, 0x26, 0x06, 0x21};
+    static const uint8_t run_0166[] = {0xff, 0xff};
+    static const uint8_t run_016e[] = {0xff, 0xff};
+    static const uint8_t run_0176[] = {0xff, 0xff};
+    static const uint8_t run_017e[] = {0xff, 0xff};
+    static const uint8_t run_0186[] = {0xff, 0xff};
+    static const uint8_t run_018e[] = {0xff, 0xff};
+    static const uint8_t run_0196[] = {0xff, 0xff};
+    static const uint8_t run_019e[] = {0xff, 0xff};
+    static const uint8_t run_01a5[] = {0xd0, 0x95, 0x70};
+    static const uint8_t run_01a9[] = {
+        0xd0, 0xa1, 0xa0, 0xf0, 0xf0, 0xf0, 0xf0, 0xff, 0xff
+    };
+    static const uint8_t run_0220[] = {
+        0xff, 0xff, 0xff, 0xff, 0x03, 0xff, 0x01, 0x03
+    };
+    static const uint8_t run_0229[] = {0x01, 0x01};
+    static const uint8_t run_02a0[] = {
+        0x4d, 0x45, 0x54, 0x41, 0x4c, 0x20, 0x53, 0x4c,
+        0x55, 0x47, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20
+    };
+    static const NgNeoBackupSeedRun runs[] = {
+        {0x0010u, sizeof(run_0010), run_0010},
+        {0x003au, sizeof(run_003a), run_003a},
+        {0x0044u, sizeof(run_0044), run_0044},
+        {0x0047u, sizeof(run_0047), run_0047},
+        {0x004cu, sizeof(run_004c), run_004c},
+        {0x005au, sizeof(run_005a), run_005a},
+        {0x0104u, sizeof(run_0104), run_0104},
+        {0x010bu, sizeof(run_010b), run_010b},
+        {0x010fu, sizeof(run_010f), run_010f},
+        {0x0113u, sizeof(run_0113), run_0113},
+        {0x0117u, sizeof(run_0117), run_0117},
+        {0x0124u, sizeof(run_0124), run_0124},
+        {0x012au, sizeof(run_012a), run_012a},
+        {0x012eu, sizeof(run_012e), run_012e},
+        {0x0132u, sizeof(run_0132), run_0132},
+        {0x0136u, sizeof(run_0136), run_0136},
+        {0x013au, sizeof(run_013a), run_013a},
+        {0x013eu, sizeof(run_013e), run_013e},
+        {0x0142u, sizeof(run_0142), run_0142},
+        {0x0166u, sizeof(run_0166), run_0166},
+        {0x016eu, sizeof(run_016e), run_016e},
+        {0x0176u, sizeof(run_0176), run_0176},
+        {0x017eu, sizeof(run_017e), run_017e},
+        {0x0186u, sizeof(run_0186), run_0186},
+        {0x018eu, sizeof(run_018e), run_018e},
+        {0x0196u, sizeof(run_0196), run_0196},
+        {0x019eu, sizeof(run_019e), run_019e},
+        {0x01a5u, sizeof(run_01a5), run_01a5},
+        {0x01a9u, sizeof(run_01a9), run_01a9},
+        {0x0220u, sizeof(run_0220), run_0220},
+        {0x0229u, sizeof(run_0229), run_0229},
+        {0x02a0u, sizeof(run_02a0), run_02a0},
+    };
+    for (uint32_t i = 0; i < (uint32_t)(sizeof(runs) / sizeof(runs[0])); ++i) {
+        memcpy(&g_ng_neogeo_backup_ram[runs[i].offset],
+               runs[i].data,
+               runs[i].size);
     }
 }
 
@@ -1229,6 +1306,14 @@ int ng_neogeo_copy_palette_ram(uint8_t *out, uint32_t out_size) {
         return 0;
     }
     memcpy(out, g_ng_neogeo_palette_ram, sizeof(g_ng_neogeo_palette_ram));
+    return 1;
+}
+
+int ng_neogeo_copy_backup_ram(uint8_t *out, uint32_t out_size) {
+    if (!out || out_size < (uint32_t)sizeof(g_ng_neogeo_backup_ram)) {
+        return 0;
+    }
+    memcpy(out, g_ng_neogeo_backup_ram, sizeof(g_ng_neogeo_backup_ram));
     return 1;
 }
 

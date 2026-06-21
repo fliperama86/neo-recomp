@@ -283,7 +283,13 @@ print the detailed live runtime, write-latch, memory/video, sprite saturation,
 register, recent-dispatch, and watch-counter state every `N` refreshes. The SDL
 window title includes live present FPS, emulated-frame FPS, and rolling
 CPU/render/SDL costs while running; add `./run.sh --perf-log` (or
-`NG_MSLUG_SDL_PERF_LOG=1`) to print those timing buckets to stderr. The
+`NG_MSLUG_SDL_PERF_LOG=1`) to print those timing buckets to stderr. Set
+`NG_MSLUG_SDL_DUMP_STATE_DIR=build/live_dump` to dump
+`work_ram.bin`, `backup_ram.bin`, `palette_ram.bin`, `vram_be.bin`, and a
+`summary.txt` when the live host exits. The cart-entry live path seeds the
+minimal Metal Slug MVS backup-RAM directory seen in a fresh MAME boot so the
+BIOS save/load services address the correct game block without a full cold BIOS
+initialization pass. The
 underlying script recompiles Metal Slug, builds the user-provided BIOS slice,
 links a temporary `build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
 yet; it reuses the headless runtime model and current renderer, but it is a

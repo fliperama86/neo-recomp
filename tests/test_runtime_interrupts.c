@@ -446,11 +446,19 @@ int main(void) {
     ng_neogeo_reset_runtime();
     ng68k_write8(NG_NEO_REG_SRAMUNLOCK, 0x00u);
     ng68k_write16(0x00D001A4u, 0x00D0u);
-    CHECK(ng68k_read8(0x00D00047u) == 0x21u);
+    CHECK(ng68k_read8(0x00D00047u) == 0x00u);
     CHECK(ng68k_read16(0x00D001A4u) == 0x00D0u);
     CHECK(ng_neogeo_backup_ram_write_count() == 2u);
-    CHECK(ng_neogeo_backup_ram_nonzero_bytes() == 2u);
-    CHECK(ng_neogeo_backup_ram_checksum() == 0x00F1u);
+    CHECK(ng_neogeo_backup_ram_nonzero_bytes() == 1u);
+    CHECK(ng_neogeo_backup_ram_checksum() == 0x00D0u);
+
+    ng_neogeo_reset_runtime();
+    ng_neogeo_seed_mslug_backup_ram();
+    CHECK(ng68k_read8(0x00D00047u) == 0x02u);
+    CHECK(ng68k_read16(0x00D00124u) == 0x0201u);
+    CHECK(ng68k_read16(0x00D00320u) == 0x0000u);
+    CHECK(ng_neogeo_backup_ram_write_count() == 0u);
+    CHECK(ng_neogeo_backup_ram_nonzero_bytes() > 0u);
 
     ng_neogeo_reset_runtime();
     CHECK(ng_neogeo_work_ram_nonzero_bytes() == 0u);

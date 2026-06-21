@@ -493,18 +493,20 @@ checksums, sprite saturation, backup-RAM counters/table probes, Metal Slug RAM
 sentinels, and D/A registers. These diagnostics first classified the
 white-screen path as an intentional cart soft-reset request (`$001838 ->
 $00085E -> $000862 -> $C00444 -> $C112D2 -> $C11300`) and then showed the
-backup-RAM high-water problem described above.
+backup-RAM directory problem described above. For exit-state repros, set
+`NG_MSLUG_SDL_DUMP_STATE_DIR=<dir>`; the live host now writes `work_ram.bin`,
+`backup_ram.bin`, `palette_ram.bin`, `vram_be.bin`, and `summary.txt`.
 
 The runtime now honors `SWPBIOS`/`SWPROM` for the banked 68000 vector window:
 when BIOS vectors are selected, `$000000-$00007F` reads come from the system ROM
 instead of the cartridge P-ROM. It also has targeted live-host device defaults
 for the current frontier: tested backup-RAM lock/write diagnostics plus the
-`$D00047` table high-water maintenance, a split POUTPUT write latch vs.
-system-input read default, a toggling `REG_STATUS_A` RTC pulse bit for BIOS wait
-loops, an absent memory-card range returning `0xFF`, and watchdog-reset ABI /
-timeout scaffolding. `--start-bios` exists as an experimental entry mode, but
-the default and currently useful path remains cart-header entry with a
-user-provided BIOS slice.
+cart-entry live host's MAME-grounded Metal Slug MVS save-RAM directory seed, a
+split POUTPUT write latch vs. system-input read default, a toggling
+`REG_STATUS_A` RTC pulse bit for BIOS wait loops, an absent memory-card range
+returning `0xFF`, and watchdog-reset ABI / timeout scaffolding. `--start-bios`
+exists as an experimental entry mode, but the default and currently useful path
+remains cart-header entry with a user-provided BIOS slice.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
@@ -1760,6 +1762,12 @@ and `V` are only trusted where generated-exec tests cover them.
   skipping sleep without dropping emulated frames; only large backlogs reset the
   throttle phase. Added `--frame-hold`/`--slowmo` plus Space + `n`/`.` stepping
   for intentional slow/frame-by-frame inspection.
+- local: Replaced the synthetic `$D00047` backup-RAM high-water heuristic with a
+  minimal Metal Slug MVS save-RAM directory seed for cart-entry live runs. The
+  old heuristic could alias game-owned save data around `$D00320`, shifting the
+  BIOS backup load source and corrupting the rankings/fix-text data; the seed
+  matches a fresh MAME/MVS directory while leaving the game high-score block for
+  cartridge code to initialize.
 
 ## Next Steps
 
@@ -1778,8 +1786,8 @@ Use this loop:
 Immediate next slice:
 
 - Stay on the rendering/live-host path now that the former BIOS reset loop is
-  cleared. Capture fresh live frames after the backup-RAM high-water fix, compare
-  them with the known-good offline/snapshot frames, and use the smallest
+  cleared. Capture fresh live frames after the backup-RAM directory seed, compare
+  them with the known-good offline/snapshot/MAME frames, and use the smallest
   possible runtime probes to isolate missing/misaligned sprite or fix-layer
   state before adding broader hardware.
 - Keep audio, full input, and full-BIOS boot as follow-ups unless a rendering

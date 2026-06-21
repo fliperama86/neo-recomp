@@ -171,6 +171,113 @@ static int read_file(const char *path, uint8_t **out_data, uint32_t *out_size) {
     return 1;
 }
 
+static int make_child_path(char *out,
+                           size_t out_size,
+                           const char *dir,
+                           const char *name) {
+    if (!out || out_size == 0u || !dir || !*dir || !name || !*name) {
+        return 0;
+    }
+    size_t dir_len = strlen(dir);
+    const char *sep = (dir[dir_len - 1u] == '/' || dir[dir_len - 1u] == '\\') ?
+        "" : "/";
+    int written = snprintf(out, out_size, "%s%s%s", dir, sep, name);
+    return written >= 0 && (size_t)written < out_size;
+}
+
+static int write_file_bytes(const char *path,
+                            const uint8_t *data,
+                            uint32_t size) {
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        fprintf(stderr, "failed to open %s for writing: %s\n", path, strerror(errno));
+        return 0;
+    }
+    int ok = fwrite(data, 1, size, f) == size;
+    if (fclose(f) != 0) {
+        ok = 0;
+    }
+    if (!ok) {
+        fprintf(stderr, "failed to write %s\n", path);
+    }
+    return ok;
+}
+
+static int dump_live_state(const char *dir) {
+    if (!dir || !*dir) {
+        return 1;
+    }
+
+    uint8_t *work_ram = (uint8_t *)malloc(NG_NEO_WORK_RAM_BYTES);
+    uint8_t *palette_ram = (uint8_t *)malloc(NG_NEO_PALETTE_RAM_BYTES);
+    uint8_t *backup_ram = (uint8_t *)malloc(NG_NEO_BACKUP_RAM_BYTES);
+    uint16_t *vram = (uint16_t *)malloc((size_t)NG_NEO_VRAM_WORDS *
+                                        sizeof(*vram));
+    uint8_t *vram_be = (uint8_t *)malloc(NG_NEO_VRAM_BYTES);
+    if (!work_ram || !palette_ram || !backup_ram || !vram || !vram_be) {
+        fprintf(stderr, "failed to allocate live state dump buffers\n");
+        free(work_ram);
+        free(palette_ram);
+        free(backup_ram);
+        free(vram);
+        free(vram_be);
+        return 0;
+    }
+
+    int ok = ng_neogeo_copy_work_ram(work_ram, NG_NEO_WORK_RAM_BYTES) &&
+             ng_neogeo_copy_palette_ram(palette_ram, NG_NEO_PALETTE_RAM_BYTES) &&
+             ng_neogeo_copy_backup_ram(backup_ram, NG_NEO_BACKUP_RAM_BYTES) &&
+             ng_neogeo_copy_vram(vram, NG_NEO_VRAM_WORDS);
+    for (uint32_t i = 0; i < NG_NEO_VRAM_WORDS; ++i) {
+        vram_be[i * 2u] = (uint8_t)(vram[i] >> 8);
+        vram_be[i * 2u + 1u] = (uint8_t)vram[i];
+    }
+
+    char path[4096];
+    if (ok && make_child_path(path, sizeof(path), dir, "work_ram.bin")) {
+        ok = write_file_bytes(path, work_ram, NG_NEO_WORK_RAM_BYTES);
+    }
+    if (ok && make_child_path(path, sizeof(path), dir, "palette_ram.bin")) {
+        ok = write_file_bytes(path, palette_ram, NG_NEO_PALETTE_RAM_BYTES);
+    }
+    if (ok && make_child_path(path, sizeof(path), dir, "backup_ram.bin")) {
+        ok = write_file_bytes(path, backup_ram, NG_NEO_BACKUP_RAM_BYTES);
+    }
+    if (ok && make_child_path(path, sizeof(path), dir, "vram_be.bin")) {
+        ok = write_file_bytes(path, vram_be, NG_NEO_VRAM_BYTES);
+    }
+    if (ok && make_child_path(path, sizeof(path), dir, "summary.txt")) {
+        FILE *f = fopen(path, "w");
+        if (!f) {
+            fprintf(stderr, "failed to open %s for writing: %s\n", path, strerror(errno));
+            ok = 0;
+        } else {
+            fprintf(f, "dispatches=%llu\n",
+                    (unsigned long long)ng_generated_smoke_dispatch_count());
+            fprintf(f, "frame=%u\n", ng_neogeo_frame_count());
+            fprintf(f, "scanline=%u\n", ng_neogeo_current_scanline());
+            fprintf(f, "pc=$%06X\n", g_ng_m68k.pc & 0x00FFFFFFu);
+            fprintf(f, "lspc=$%04X\n", ng_neogeo_lspc_mode());
+            fprintf(f, "palette_bank=%u\n", ng_neogeo_palette_bank());
+            fprintf(f, "vram_addr=$%04X\n", ng_neogeo_vram_addr());
+            fprintf(f, "vram_mod=$%04X\n", ng_neogeo_vram_mod());
+            if (fclose(f) != 0) {
+                ok = 0;
+            }
+        }
+    }
+    if (ok) {
+        fprintf(stderr, "live state dumped to %s\n", dir);
+    }
+
+    free(work_ram);
+    free(palette_ram);
+    free(backup_ram);
+    free(vram);
+    free(vram_be);
+    return ok;
+}
+
 static void byteswap_words(uint8_t *data, uint32_t size) {
     for (uint32_t i = 0; i + 1u < size; i += 2u) {
         uint8_t tmp = data[i];
@@ -1042,6 +1149,7 @@ static void usage(const char *argv0) {
             "  --status-interval <n>          log status every n presented frames\n"
             "  --diagnostics-interval <n>     log detailed diagnostics every n frames\n"
             "  --perf-log                     log rolling CPU/render/SDL frame costs\n"
+            "  --dump-state-dir <dir>         write work/backup/palette/VRAM dumps on exit\n"
             "  --stall-refreshes <n>          log if scanline/frame stalls for n refreshes (default: 180, 0 disables)\n"
             "  --no-throttle                  do not sleep to ~60Hz after each refresh\n"
             "  --scale <n>                    integer window scale (default: %u)\n",
@@ -1069,6 +1177,7 @@ int main(int argc, char **argv) {
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
     int start_bios = 0;
     int perf_log = 0;
+    const char *dump_state_dir = NULL;
     NgLivePresentMode present_mode = NG_LIVE_PRESENT_FRAME;
     uint32_t palette_bank_mode = NG_LIVE_PALETTE_BANK_ACTIVE;
 
@@ -1132,6 +1241,14 @@ int main(int argc, char **argv) {
             target = &diagnostics_interval;
         } else if (strcmp(option, "--perf-log") == 0) {
             perf_log = 1;
+            continue;
+        } else if (strcmp(option, "--dump-state-dir") == 0) {
+            if (argi >= argc) {
+                fprintf(stderr, "%s requires a directory path\n", option);
+                usage(argv[0]);
+                return 2;
+            }
+            dump_state_dir = argv[argi++];
             continue;
         } else if (strcmp(option, "--stall-refreshes") == 0) {
             target = &stall_refreshes;
@@ -1217,6 +1334,14 @@ int main(int argc, char **argv) {
         cart_entry;
 
     ng_neogeo_reset_runtime();
+    if (!start_bios) {
+        /* We enter through the cart header for fast iteration, bypassing the
+         * cold MVS BIOS save-RAM directory setup.  Seed the same minimal
+         * Metal Slug directory that a fresh MAME/MVS boot creates so BIOS
+         * backup-RAM load/save services address the game block at $D00320
+         * instead of scanning uninitialized directory data. */
+        ng_neogeo_seed_mslug_backup_ram();
+    }
     ng_neogeo_set_program_rom(image.p.data, image.p.size);
     ng_neogeo_set_system_rom(bios_data, bios_size);
     ng_neogeo_set_external_dispatch(live_external_dispatch);
@@ -1521,6 +1646,8 @@ int main(int argc, char **argv) {
             ng_neogeo_current_scanline(),
             ng_generated_smoke_dispatch_budget_stop_addr() & 0x00FFFFFFu);
 
+    int dump_ok = dump_live_state(dump_state_dir);
+
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
@@ -1529,5 +1656,5 @@ int main(int argc, char **argv) {
     free(zoom_rom);
     free(bios_data);
     ng_neo_rom_image_free(&image);
-    return 0;
+    return dump_ok ? 0 : 1;
 }
