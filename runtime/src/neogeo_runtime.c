@@ -23,6 +23,9 @@ static uint32_t g_ng_neogeo_palette_peak_nonzero_bytes;
 static uint32_t g_ng_neogeo_palette_peak_checksum;
 static uint8_t g_ng_neogeo_backup_ram[NG_NEO_BACKUP_RAM_BYTES];
 static uint8_t g_ng_neogeo_backup_ram_unlocked;
+static uint32_t g_ng_neogeo_backup_ram_write_count;
+static uint32_t g_ng_neogeo_backup_ram_last_addr;
+static uint8_t g_ng_neogeo_backup_ram_last_value;
 static uint16_t g_ng_neogeo_vram[NG_NEO_VRAM_WORDS];
 static uint16_t g_ng_neogeo_vram_addr;
 static uint16_t g_ng_neogeo_vram_mod;
@@ -32,6 +35,8 @@ static uint8_t g_ng_neogeo_board_fix_enabled;
 static uint8_t g_ng_neogeo_p1cnt = 0xFFu;
 static uint8_t g_ng_neogeo_p2cnt = 0xFFu;
 static uint8_t g_ng_neogeo_status_b = 0xFFu;
+static uint8_t g_ng_neogeo_system_input_low = 0xFFu;
+static uint32_t g_ng_neogeo_status_a_reads;
 static uint8_t g_ng_neogeo_port_output;
 static uint8_t g_ng_neogeo_sound_command;
 static uint8_t g_ng_neogeo_sound_reply = 0xFFu;
@@ -40,6 +45,15 @@ static uint32_t g_ng_neogeo_watchdog_kicks;
 static uint32_t g_ng_neogeo_last_watchdog_pc;
 static uint32_t g_ng_neogeo_last_watchdog_addr;
 static uint8_t g_ng_neogeo_last_watchdog_value;
+static uint32_t g_ng_neogeo_watchdog_timeout_polls;
+static uint32_t g_ng_neogeo_watchdog_last_kick_poll;
+static uint32_t g_ng_neogeo_watchdog_max_gap_polls;
+static uint32_t g_ng_neogeo_watchdog_reset_pc;
+static uint32_t g_ng_neogeo_watchdog_reset_ssp;
+static uint32_t g_ng_neogeo_watchdog_resets;
+static uint8_t g_ng_neogeo_watchdog_reset_pending;
+static uint32_t g_ng_neogeo_watchdog_last_reset_pc;
+static uint32_t g_ng_neogeo_watchdog_last_reset_poll;
 static uint32_t g_ng_neogeo_system_latch_writes;
 static uint32_t g_ng_neogeo_last_system_latch_pc;
 static uint32_t g_ng_neogeo_last_system_latch_addr;
@@ -138,6 +152,10 @@ static int ng_neogeo_is_sound_addr(uint32_t addr) {
     return (addr & 0x00FE0001u) == NG_NEO_REG_SOUND;
 }
 
+static int ng_neogeo_is_status_a_addr(uint32_t addr) {
+    return (addr & 0x00FE0001u) == 0x00320001u;
+}
+
 static int ng_neogeo_is_status_b_addr(uint32_t addr) {
     return (addr & 0x00FE0001u) == NG_NEO_REG_STATUS_B;
 }
@@ -152,6 +170,67 @@ static int ng_neogeo_is_system_latch_addr(uint32_t addr) {
 
 static int ng_neogeo_is_lspc_addr(uint32_t addr) {
     return addr >= NG_NEO_REG_VRAMADDR && addr <= (NG_NEO_REG_TIMERSTOP + 1u);
+}
+
+static int ng_neogeo_is_memcard_addr(uint32_t addr) {
+    return addr >= 0x00800000u && addr <= 0x00BFFFFFu;
+}
+
+static void ng_neogeo_note_watchdog_kick(void) {
+    uint32_t gap =
+        g_ng_neogeo_interrupt_polls - g_ng_neogeo_watchdog_last_kick_poll;
+    if (gap > g_ng_neogeo_watchdog_max_gap_polls) {
+        g_ng_neogeo_watchdog_max_gap_polls = gap;
+    }
+    g_ng_neogeo_watchdog_last_kick_poll = g_ng_neogeo_interrupt_polls;
+    g_ng_neogeo_watchdog_reset_pending = 0u;
+}
+
+static void ng_neogeo_update_watchdog_timeout(void) {
+    if (g_ng_neogeo_watchdog_timeout_polls == 0u ||
+        g_ng_neogeo_watchdog_reset_pending) {
+        return;
+    }
+    uint32_t gap =
+        g_ng_neogeo_interrupt_polls - g_ng_neogeo_watchdog_last_kick_poll;
+    if (gap < g_ng_neogeo_watchdog_timeout_polls) {
+        return;
+    }
+    if (gap > g_ng_neogeo_watchdog_max_gap_polls) {
+        g_ng_neogeo_watchdog_max_gap_polls = gap;
+    }
+    g_ng_neogeo_watchdog_reset_pending = 1u;
+    g_ng_neogeo_watchdog_last_reset_pc = g_ng_m68k.pc & 0x00FFFFFFu;
+    g_ng_neogeo_watchdog_last_reset_poll = g_ng_neogeo_interrupt_polls;
+}
+
+static void ng_neogeo_note_backup_ram_write(uint32_t offset, uint8_t value) {
+    /* The MVS BIOS keeps a high-water game table count at $D00047 and scans
+     * 4-byte table entries starting at $D00124 during its reset/service path.
+     * The live host currently enters through the cartridge header instead of a
+     * full cold BIOS boot, so maintain this small piece of BIOS save-RAM
+     * bookkeeping as table entries are created. */
+    enum {
+        NG_NEO_BACKUP_GAME_COUNT_OFFSET = 0x0047u,
+        NG_NEO_BACKUP_GAME_TABLE_OFFSET = 0x0124u,
+        NG_NEO_BACKUP_GAME_TABLE_STRIDE = 4u,
+        NG_NEO_BACKUP_GAME_TABLE_SLOTS = 256u
+    };
+    if (value == 0u ||
+        offset < NG_NEO_BACKUP_GAME_TABLE_OFFSET ||
+        offset >= NG_NEO_BACKUP_GAME_TABLE_OFFSET +
+            NG_NEO_BACKUP_GAME_TABLE_STRIDE * NG_NEO_BACKUP_GAME_TABLE_SLOTS) {
+        return;
+    }
+    uint32_t rel = offset - NG_NEO_BACKUP_GAME_TABLE_OFFSET;
+    if ((rel % NG_NEO_BACKUP_GAME_TABLE_STRIDE) >= 2u) {
+        return;
+    }
+    uint8_t high_water =
+        (uint8_t)(rel / NG_NEO_BACKUP_GAME_TABLE_STRIDE + 1u);
+    if (g_ng_neogeo_backup_ram[NG_NEO_BACKUP_GAME_COUNT_OFFSET] < high_water) {
+        g_ng_neogeo_backup_ram[NG_NEO_BACKUP_GAME_COUNT_OFFSET] = high_water;
+    }
 }
 
 static uint8_t ng_neogeo_hi_or_lo(uint16_t value, uint32_t addr) {
@@ -246,11 +325,15 @@ uint8_t ng68k_read8(uint32_t addr) {
     if (ng_neogeo_is_sound_addr(addr)) {
         return g_ng_neogeo_sound_reply;
     }
+    if (ng_neogeo_is_status_a_addr(addr)) {
+        ++g_ng_neogeo_status_a_reads;
+        return (uint8_t)(0xBFu | ((g_ng_neogeo_status_a_reads & 1u) ? 0x40u : 0x00u));
+    }
     if (ng_neogeo_is_status_b_addr(addr)) {
         return g_ng_neogeo_status_b;
     }
     if (ng_neogeo_is_port_output_addr(addr)) {
-        return g_ng_neogeo_port_output;
+        return g_ng_neogeo_system_input_low;
     }
     if (ng_neogeo_is_lspc_addr(addr)) {
         switch (addr & 0x00FFFFFEu) {
@@ -270,6 +353,9 @@ uint8_t ng68k_read8(uint32_t addr) {
         default:
             return 0xFFu;
         }
+    }
+    if (ng_neogeo_is_memcard_addr(addr)) {
+        return 0xFFu;
     }
     if (ng_neogeo_is_system_rom_addr(addr)) {
         return ng_neogeo_read_system_rom(addr - 0x00C00000u);
@@ -306,11 +392,19 @@ void ng68k_write8(uint32_t addr, uint8_t value) {
     }
     if (ng_neogeo_is_backup_ram_addr(addr)) {
         if (g_ng_neogeo_backup_ram_unlocked) {
-            g_ng_neogeo_backup_ram[addr & (NG_NEO_BACKUP_RAM_BYTES - 1u)] = value;
+            uint32_t offset = addr & (NG_NEO_BACKUP_RAM_BYTES - 1u);
+            g_ng_neogeo_backup_ram[offset] = value;
+            ng_neogeo_note_backup_ram_write(offset, value);
+            ++g_ng_neogeo_backup_ram_write_count;
+            g_ng_neogeo_backup_ram_last_addr = addr & 0x00FFFFFFu;
+            g_ng_neogeo_backup_ram_last_value = value;
         }
         return;
     }
     if (ng_neogeo_is_system_rom_addr(addr)) {
+        return;
+    }
+    if (ng_neogeo_is_memcard_addr(addr)) {
         return;
     }
     if (ng_neogeo_is_dipswitch_addr(addr)) {
@@ -318,6 +412,7 @@ void ng68k_write8(uint32_t addr, uint8_t value) {
         g_ng_neogeo_last_watchdog_pc = g_ng_m68k.pc & 0x00FFFFFFu;
         g_ng_neogeo_last_watchdog_addr = addr & 0x00FFFFFFu;
         g_ng_neogeo_last_watchdog_value = value;
+        ng_neogeo_note_watchdog_kick();
         return;
     }
     if (ng_neogeo_is_port_output_addr(addr)) {
@@ -536,6 +631,15 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_last_watchdog_pc = 0;
     g_ng_neogeo_last_watchdog_addr = 0;
     g_ng_neogeo_last_watchdog_value = 0;
+    g_ng_neogeo_watchdog_timeout_polls = 0;
+    g_ng_neogeo_watchdog_last_kick_poll = 0;
+    g_ng_neogeo_watchdog_max_gap_polls = 0;
+    g_ng_neogeo_watchdog_reset_pc = 0;
+    g_ng_neogeo_watchdog_reset_ssp = 0;
+    g_ng_neogeo_watchdog_resets = 0;
+    g_ng_neogeo_watchdog_reset_pending = 0;
+    g_ng_neogeo_watchdog_last_reset_pc = 0;
+    g_ng_neogeo_watchdog_last_reset_poll = 0;
     g_ng_neogeo_system_latch_writes = 0;
     g_ng_neogeo_last_system_latch_pc = 0;
     g_ng_neogeo_last_system_latch_addr = 0;
@@ -545,6 +649,11 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_last_bios_vector_pc = 0;
     g_ng_neogeo_last_bios_vector_addr = 0;
     g_ng_neogeo_last_bios_vector_value = 0;
+    g_ng_neogeo_p1cnt = 0xFFu;
+    g_ng_neogeo_p2cnt = 0xFFu;
+    g_ng_neogeo_status_b = 0xFFu;
+    g_ng_neogeo_system_input_low = 0xFFu;
+    g_ng_neogeo_status_a_reads = 0;
     g_ng_neogeo_port_output = 0;
     g_ng_neogeo_last_port_output_pc = 0;
     g_ng_neogeo_last_port_output_addr = 0;
@@ -572,6 +681,9 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_palette_peak_nonzero_bytes = 0;
     g_ng_neogeo_palette_peak_checksum = 0;
     g_ng_neogeo_backup_ram_unlocked = 0;
+    g_ng_neogeo_backup_ram_write_count = 0;
+    g_ng_neogeo_backup_ram_last_addr = 0;
+    g_ng_neogeo_backup_ram_last_value = 0;
     ng_m68k_clear_interrupt_level();
 }
 
@@ -581,6 +693,17 @@ void ng_neogeo_set_auto_vblank_interval(uint32_t interrupt_polls) {
 
 void ng_neogeo_set_auto_scanline_interval(uint32_t interrupt_polls) {
     g_ng_neogeo_auto_scanline_interval = interrupt_polls;
+}
+
+void ng_neogeo_set_watchdog_timeout_polls(uint32_t interrupt_polls) {
+    g_ng_neogeo_watchdog_timeout_polls = interrupt_polls;
+    g_ng_neogeo_watchdog_last_kick_poll = g_ng_neogeo_interrupt_polls;
+    g_ng_neogeo_watchdog_reset_pending = 0u;
+}
+
+void ng_neogeo_set_watchdog_reset_vector(uint32_t pc, uint32_t ssp) {
+    g_ng_neogeo_watchdog_reset_pc = pc & 0x00FFFFFFu;
+    g_ng_neogeo_watchdog_reset_ssp = ssp;
 }
 
 static void ng_neogeo_refresh_interrupt_level(void) {
@@ -670,6 +793,34 @@ void ng_neogeo_advance_frame(void) {
 
 uint32_t ng_neogeo_watchdog_kicks(void) {
     return g_ng_neogeo_watchdog_kicks;
+}
+
+uint32_t ng_neogeo_watchdog_timeout_polls(void) {
+    return g_ng_neogeo_watchdog_timeout_polls;
+}
+
+uint32_t ng_neogeo_watchdog_last_kick_poll(void) {
+    return g_ng_neogeo_watchdog_last_kick_poll;
+}
+
+uint32_t ng_neogeo_watchdog_max_gap_polls(void) {
+    return g_ng_neogeo_watchdog_max_gap_polls;
+}
+
+uint32_t ng_neogeo_watchdog_resets(void) {
+    return g_ng_neogeo_watchdog_resets;
+}
+
+uint8_t ng_neogeo_watchdog_reset_pending(void) {
+    return g_ng_neogeo_watchdog_reset_pending;
+}
+
+uint32_t ng_neogeo_watchdog_last_reset_pc(void) {
+    return g_ng_neogeo_watchdog_last_reset_pc;
+}
+
+uint32_t ng_neogeo_watchdog_last_reset_poll(void) {
+    return g_ng_neogeo_watchdog_last_reset_poll;
 }
 
 uint32_t ng_neogeo_last_watchdog_pc(void) {
@@ -898,6 +1049,40 @@ uint32_t ng_neogeo_palette_peak_checksum(void) {
     return g_ng_neogeo_palette_peak_checksum;
 }
 
+uint8_t ng_neogeo_backup_ram_unlocked(void) {
+    return g_ng_neogeo_backup_ram_unlocked;
+}
+
+uint32_t ng_neogeo_backup_ram_write_count(void) {
+    return g_ng_neogeo_backup_ram_write_count;
+}
+
+uint32_t ng_neogeo_backup_ram_last_addr(void) {
+    return g_ng_neogeo_backup_ram_last_addr;
+}
+
+uint8_t ng_neogeo_backup_ram_last_value(void) {
+    return g_ng_neogeo_backup_ram_last_value;
+}
+
+uint32_t ng_neogeo_backup_ram_nonzero_bytes(void) {
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < sizeof(g_ng_neogeo_backup_ram); ++i) {
+        if (g_ng_neogeo_backup_ram[i] != 0u) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+uint32_t ng_neogeo_backup_ram_checksum(void) {
+    uint32_t sum = 0;
+    for (uint32_t i = 0; i < sizeof(g_ng_neogeo_backup_ram); ++i) {
+        sum += g_ng_neogeo_backup_ram[i];
+    }
+    return sum;
+}
+
 uint32_t ng_neogeo_vram_nonzero_words(void) {
     uint32_t count = 0;
     for (uint32_t i = 0; i < (uint32_t)(sizeof(g_ng_neogeo_vram) /
@@ -944,6 +1129,33 @@ int ng_neogeo_copy_vram(uint16_t *out_words, uint32_t out_word_count) {
     return 1;
 }
 
+int ng_m68k_take_reset(uint32_t *pc, uint32_t *ssp) {
+    if (!g_ng_neogeo_watchdog_reset_pending) {
+        return 0;
+    }
+
+    g_ng_neogeo_watchdog_reset_pending = 0u;
+    ++g_ng_neogeo_watchdog_resets;
+    g_ng_neogeo_watchdog_last_kick_poll = g_ng_neogeo_interrupt_polls;
+
+    if (pc) {
+        *pc = g_ng_neogeo_watchdog_reset_pc != 0u ?
+            g_ng_neogeo_watchdog_reset_pc :
+            (ng68k_read32(4u) & 0x00FFFFFFu);
+    }
+    if (ssp) {
+        *ssp = g_ng_neogeo_watchdog_reset_ssp != 0u ?
+            g_ng_neogeo_watchdog_reset_ssp :
+            ng68k_read32(0u);
+    }
+
+    g_ng_neogeo_irq_pending = 0;
+    g_ng_neogeo_bios_vectors_enabled = 0u;
+    g_ng_neogeo_backup_ram_unlocked = 0u;
+    ng_m68k_clear_interrupt_level();
+    return 1;
+}
+
 int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector) {
     ++g_ng_neogeo_interrupt_polls;
     if (g_ng_neogeo_auto_scanline_interval != 0u &&
@@ -954,6 +1166,7 @@ int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector
         (g_ng_neogeo_interrupt_polls % g_ng_neogeo_auto_vblank_interval) == 0u) {
         ng_neogeo_request_vblank_interrupt();
     }
+    ng_neogeo_update_watchdog_timeout();
 
     uint8_t pending_level = (uint8_t)(g_ng_m68k_interrupt_level & 7u);
 

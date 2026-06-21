@@ -2237,6 +2237,12 @@ int ng_m68k_take_interrupt(uint8_t current_mask, uint8_t *level, uint8_t *vector
     return 1;
 }
 
+int ng_m68k_take_reset(uint32_t *pc, uint32_t *ssp) {
+    (void)pc;
+    (void)ssp;
+    return 0;
+}
+
 void ng_m68k_stop_until_interrupt(uint16_t sr) {
     (void)sr;
     if (g_arm_stop_interrupt_level != 0u) {

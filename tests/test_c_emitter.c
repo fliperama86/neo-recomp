@@ -91,7 +91,10 @@ int main(void) {
     CHECK(strstr(text, "g_ng_m68k.a[7] = (value & NG_SR_S) ? g_ng_m68k.ssp : g_ng_m68k.usp;") != NULL);
     CHECK(strstr(text, "static void ng_push_exception_frame(uint32_t return_pc)") != NULL);
     CHECK(strstr(text, "static int ng_require_supervisor(uint32_t fault_pc)") != NULL);
+    CHECK(strstr(text, "static int ng_service_reset(void)") != NULL);
+    CHECK(strstr(text, "ng_m68k_take_reset(&reset_pc, &reset_ssp)") != NULL);
     CHECK(strstr(text, "static int ng_service_interrupt(uint32_t return_pc)") != NULL);
+    CHECK(strstr(text, "if (ng_service_reset()) return 1;") != NULL);
     CHECK(strstr(text, "static int ng_service_trace(uint32_t return_pc, uint16_t trace_sr)") != NULL);
     CHECK(strstr(text, "static void ng_func_0007CC(void);") != NULL);
     CHECK(strstr(text, "case 0x000007CCu: ng_func_0007CC(); return;") != NULL);

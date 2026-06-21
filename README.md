@@ -273,10 +273,11 @@ Current local status: the generated Metal Slug cart build is dispatch-audit
 clean with `function candidates: 46392` and
 `sites=7485 missing_direct=0 computed=0 runtime_computed=59`. The full test
 suite is `15/15` passing. The live host now runs beyond the earlier
-`$C18662`/`$09B90A` dispatch frontiers; the next blocker appears to be
-BIOS reset/backup-SRAM/device state after the game requests a soft reset path
-(`$001838 -> $00085E -> $000862 -> $C00444 -> $C112D2 -> $C11300`), not a
-strict generated-CPU dispatch gap.
+`$C18662`/`$09B90A` dispatch frontiers and the former cart-requested
+soft-reset/BIOS-reset white-screen loop. The current useful path is still
+cart-header entry plus a user-provided BIOS slice; next work is validating fresh
+live frames and isolating remaining renderer/runtime state, not adding a broad
+audio/input stack yet.
 
 ## Decoder Slice
 

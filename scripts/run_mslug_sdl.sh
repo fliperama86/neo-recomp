@@ -9,6 +9,8 @@ LO_ROM_PATH="${3:-}"
 FAST_FORWARD="${NG_MSLUG_SDL_FAST_FORWARD:-500000}"
 DISPATCHES_PER_REFRESH="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-2000}"
 SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
+WATCHDOG_TIMEOUT_POLLS="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
+START_MODE="${NG_MSLUG_START_MODE:-cart}"
 SCALE="${NG_MSLUG_SDL_SCALE:-3}"
 MAX_REFRESHES="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
 STATUS_INTERVAL="${NG_MSLUG_SDL_STATUS_INTERVAL:-}"
@@ -68,6 +70,8 @@ else
 fi
 log_note "fast-forward: $FAST_FORWARD dispatches (set NG_MSLUG_SDL_FAST_FORWARD=10000 for faster startup)"
 log_note "dispatches/refresh: $DISPATCHES_PER_REFRESH"
+log_note "watchdog timeout polls: $WATCHDOG_TIMEOUT_POLLS"
+log_note "start mode: $START_MODE"
 
 log_step "Configuring/building recompiler tools"
 cmake -S "$ROOT" -B "$BUILD_DIR" >/dev/null
@@ -103,8 +107,8 @@ else
   grep -E "function candidates|generated C:|dispatch audit:" "$RECOMP_LOG" || true
 fi
 
-BIOS_SEEDS="0xC00438,0xC00444,0xC0044A,0xC004C2,0xC004CE,0xC11142,0xC187C4,0xC187CC,0xC187D4,0xC1881A,0xC187B6,0xC17F0E,0xC1868A,0xC18690,0xC18832,0xC18012,0xC18074,0xC18082,0xC180DC,0xC1811A,0xC18194,0xC181AE,0xC18208,0xC188DC,0xC182A6"
-if is_fresh "$BIOS_C" "$BUILD_DIR/generate-bios-recomp" "$BIOS_PATH"; then
+BIOS_SEEDS="0xC00402,0xC00438,0xC00444,0xC0044A,0xC004C2,0xC004CE,0xC11142,0xC187C4,0xC187CC,0xC187D4,0xC18814,0xC1881A,0xC187B6,0xC17F0E,0xC1868A,0xC18690,0xC18832,0xC18012,0xC18074,0xC18082,0xC180DC,0xC1811A,0xC18194,0xC181AE,0xC18208,0xC188DC,0xC182A6"
+if is_fresh "$BIOS_C" "$BUILD_DIR/generate-bios-recomp" "$BIOS_PATH" "$ROOT/scripts/run_mslug_sdl.sh"; then
   log_step "Generating BIOS recomp slice"
   log_note "cached: $BIOS_C"
 else
@@ -178,6 +182,7 @@ HOST_ARGS=(
   --fast-forward "$FAST_FORWARD"
   --dispatches-per-refresh "$DISPATCHES_PER_REFRESH"
   --scanline-poll-interval "$SCANLINE_POLL_INTERVAL"
+  --watchdog-timeout-polls "$WATCHDOG_TIMEOUT_POLLS"
   --scale "$SCALE"
 )
 if [[ -n "$MAX_REFRESHES" ]]; then
@@ -194,6 +199,9 @@ if [[ -n "$STALL_REFRESHES" ]]; then
 fi
 if [[ "$NO_THROTTLE" != "0" ]]; then
   HOST_ARGS+=(--no-throttle)
+fi
+if [[ "$START_MODE" == "bios" ]]; then
+  HOST_ARGS+=(--start-bios)
 fi
 HOST_ARGS+=("$NEO_PATH" "$BIOS_PATH")
 if [[ -n "$LO_ROM_PATH" ]]; then

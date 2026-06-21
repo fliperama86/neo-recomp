@@ -15,6 +15,7 @@
 #define NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH 2000u
 #define NG_LIVE_DEFAULT_FAST_FORWARD 0u
 #define NG_LIVE_DEFAULT_SCALE 3u
+#define NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS 250000u
 
 void ng_generated_call(uint32_t addr);
 void ng_generated_smoke_reset_dispatch_stats(void);
@@ -408,6 +409,30 @@ static uint16_t live_mslug_bios_flags(void) {
                       (uint16_t)ng68k_read8(0x0010FDAEu));
 }
 
+typedef struct NgLiveBackupTableStats {
+    uint32_t nonzero_slots;
+    uint32_t first_nonzero_slot;
+    uint16_t first_nonzero_value;
+} NgLiveBackupTableStats;
+
+static NgLiveBackupTableStats live_backup_table_stats(void) {
+    NgLiveBackupTableStats stats;
+    memset(&stats, 0, sizeof(stats));
+    stats.first_nonzero_slot = UINT32_MAX;
+    for (uint32_t i = 0; i < 256u; ++i) {
+        uint16_t value = ng68k_read16(0x00D00124u + i * 4u);
+        if (value == 0u) {
+            continue;
+        }
+        if (stats.first_nonzero_slot == UINT32_MAX) {
+            stats.first_nonzero_slot = i;
+            stats.first_nonzero_value = value;
+        }
+        ++stats.nonzero_slots;
+    }
+    return stats;
+}
+
 static void print_live_status(const char *label,
                               uint64_t refreshes,
                               uint64_t dispatches_per_refresh) {
@@ -478,6 +503,7 @@ static void print_live_diagnostics(const char *label,
                                    uint32_t width,
                                    uint32_t height) {
     NgLivePixelStats pixel_stats = analyze_live_pixels(pixels, width, height);
+    NgLiveBackupTableStats backup_table = live_backup_table_stats();
     print_live_status(label, refreshes, dispatches_per_refresh);
     fprintf(stderr,
             "live dispatch diag: cart=%llu bios=%llu unique=%u hot_overflow=%u "
@@ -492,6 +518,8 @@ static void print_live_diagnostics(const char *label,
             ng_generated_smoke_recent_loop_period());
     fprintf(stderr,
             "live runtime diag: watchdog=%u vblank=%u timer_irq=%u irqack=%u "
+            "wd_timeout=%u wd_gap=%u wd_max_gap=%u wd_resets=%u "
+            "wd_pending=%u wd_reset=$%06X@%u "
             "lspc=$%04X timer_reload=$%08X timer_counter=$%08X timer_stop=$%04X "
             "vram_addr=$%04X vram_mod=$%04X shadow=%u bios_vectors=%u fix=%u "
             "sound=$%02X port=$%02X\n",
@@ -499,6 +527,13 @@ static void print_live_diagnostics(const char *label,
             ng_neogeo_vblank_interrupts(),
             ng_neogeo_timer_interrupts(),
             ng_neogeo_irq_ack_writes(),
+            ng_neogeo_watchdog_timeout_polls(),
+            ng_neogeo_interrupt_polls() - ng_neogeo_watchdog_last_kick_poll(),
+            ng_neogeo_watchdog_max_gap_polls(),
+            ng_neogeo_watchdog_resets(),
+            ng_neogeo_watchdog_reset_pending(),
+            ng_neogeo_watchdog_last_reset_pc() & 0x00FFFFFFu,
+            ng_neogeo_watchdog_last_reset_poll(),
             ng_neogeo_lspc_mode(),
             ng_neogeo_timer_reload(),
             ng_neogeo_timer_counter(),
@@ -564,6 +599,28 @@ static void print_live_diagnostics(const char *label,
             pixel_stats.nonblack,
             (unsigned long long)pixel_stats.hash);
     fprintf(stderr,
+            "live backup diag: unlocked=%u writes=%u last=$%06X:$%02X "
+            "nonzero=%u sum=$%08X d00047=$%02X d08108=$%02X d08109=$%02X "
+            "table_nonzero=%u table_first=%s",
+            ng_neogeo_backup_ram_unlocked(),
+            ng_neogeo_backup_ram_write_count(),
+            ng_neogeo_backup_ram_last_addr() & 0x00FFFFFFu,
+            ng_neogeo_backup_ram_last_value(),
+            ng_neogeo_backup_ram_nonzero_bytes(),
+            ng_neogeo_backup_ram_checksum(),
+            ng68k_read8(0x00D00047u),
+            ng68k_read8(0x00D08108u),
+            ng68k_read8(0x00D08109u),
+            backup_table.nonzero_slots,
+            backup_table.first_nonzero_slot == UINT32_MAX ? "none" : "$");
+    if (backup_table.first_nonzero_slot != UINT32_MAX) {
+        fprintf(stderr,
+                "%02X:$%04X",
+                backup_table.first_nonzero_slot & 0xFFu,
+                backup_table.first_nonzero_value);
+    }
+    fprintf(stderr, "\n");
+    fprintf(stderr,
             "live mslug diag: sync=$%014llX counters=$%012llX "
             "vblank_selector=$%04X bios_flags=$%04X\n",
             (unsigned long long)live_mslug_sync_flags(),
@@ -604,6 +661,8 @@ static void usage(const char *argv0) {
             "  --fast-forward <n>             dispatches before opening the loop (default: 0)\n"
             "  --dispatches-per-refresh <n>   dispatches per rendered refresh (default: %u)\n"
             "  --scanline-poll-interval <n>   runtime scanline poll interval (default: 64)\n"
+            "  --watchdog-timeout-polls <n>   reset after n interrupt polls without watchdog kick (default: %u, 0 disables)\n"
+            "  --start-bios                   enter through the BIOS reset vector instead of cart header\n"
             "  --max-refreshes <n>            exit after n presented frames\n"
             "  --status-interval <n>          log status every n presented frames\n"
             "  --diagnostics-interval <n>     log detailed diagnostics every n frames\n"
@@ -612,6 +671,7 @@ static void usage(const char *argv0) {
             "  --scale <n>                    integer window scale (default: %u)\n",
             argv0,
             NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH,
+            NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS,
             NG_LIVE_DEFAULT_SCALE);
 }
 
@@ -624,7 +684,9 @@ int main(int argc, char **argv) {
     uint64_t stall_refreshes = 180u;
     uint64_t no_throttle = 0;
     uint64_t scanline_poll_interval = 64u;
+    uint64_t watchdog_timeout_polls = NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS;
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
+    int start_bios = 0;
 
     int argi = 1;
     while (argi < argc && strncmp(argv[argi], "--", 2) == 0) {
@@ -636,6 +698,11 @@ int main(int argc, char **argv) {
             target = &dispatches_per_refresh;
         } else if (strcmp(option, "--scanline-poll-interval") == 0) {
             target = &scanline_poll_interval;
+        } else if (strcmp(option, "--watchdog-timeout-polls") == 0) {
+            target = &watchdog_timeout_polls;
+        } else if (strcmp(option, "--start-bios") == 0) {
+            start_bios = 1;
+            continue;
         } else if (strcmp(option, "--max-refreshes") == 0) {
             target = &max_refreshes;
         } else if (strcmp(option, "--status-interval") == 0) {
@@ -669,6 +736,7 @@ int main(int argc, char **argv) {
         return 2;
     }
     if (dispatches_per_refresh == 0u || scanline_poll_interval > UINT32_MAX ||
+        watchdog_timeout_polls > UINT32_MAX ||
         scale == 0u || scale > 16u) {
         usage(argv[0]);
         return 2;
@@ -718,12 +786,17 @@ int main(int argc, char **argv) {
         free(zoom_rom);
         return 1;
     }
+    uint32_t initial_entry = start_bios ?
+        (ng_program_rom_initial_pc(&rom) & 0x00FFFFFFu) :
+        cart_entry;
 
     ng_neogeo_reset_runtime();
     ng_neogeo_set_program_rom(image.p.data, image.p.size);
     ng_neogeo_set_system_rom(bios_data, bios_size);
     ng_neogeo_set_external_dispatch(live_external_dispatch);
     ng_neogeo_set_auto_scanline_interval((uint32_t)scanline_poll_interval);
+    ng_neogeo_set_watchdog_reset_vector(initial_entry, ng_program_rom_initial_ssp(&rom));
+    ng_neogeo_set_watchdog_timeout_polls((uint32_t)watchdog_timeout_polls);
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
     g_ng_m68k.ssp = ng_program_rom_initial_ssp(&rom);
     g_ng_m68k.a[7] = g_ng_m68k.ssp;
@@ -731,7 +804,7 @@ int main(int argc, char **argv) {
     ng_generated_smoke_reset_dispatch_stats();
     ng_generated_smoke_set_scanline_poll_interval((uint32_t)scanline_poll_interval);
 
-    if (!run_fast_forward(fast_forward, cart_entry)) {
+    if (!run_fast_forward(fast_forward, initial_entry)) {
         ng_neo_rom_image_free(&image);
         free(bios_data);
         free(zoom_rom);
@@ -787,11 +860,14 @@ int main(int argc, char **argv) {
     SDL_RenderSetLogicalSize(renderer, (int)width, (int)height);
 
     fprintf(stderr,
-            "live host started: entry=$%06X dispatches=%llu frame=%u scanline=%u\n",
+            "live host started: entry=$%06X cart_entry=$%06X dispatches=%llu "
+            "frame=%u scanline=%u watchdog_timeout=%llu\n",
+            initial_entry & 0x00FFFFFFu,
             cart_entry & 0x00FFFFFFu,
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             ng_neogeo_frame_count(),
-            ng_neogeo_current_scanline());
+            ng_neogeo_current_scanline(),
+            (unsigned long long)watchdog_timeout_polls);
     fprintf(stderr, "keys: q/Escape quit, Space pause/resume, +/- adjust dispatches per refresh\n");
 
     int quit = 0;
@@ -824,7 +900,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (!paused && !run_dispatch_slice(dispatches_per_refresh, cart_entry)) {
+        if (!paused && !run_dispatch_slice(dispatches_per_refresh, initial_entry)) {
             quit = 1;
         }
         if (!render_live_frame(&image, zoom_rom, zoom_rom_size, pixels, width, height)) {

@@ -12,7 +12,7 @@ export NG_MSLUG_SDL_FAST_FORWARD
 
 usage() {
   cat >&2 <<USAGE
-usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N] [game.neo bios.rom [lo-rom]]
+usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
 
 Default paths:
   ~/Documents/Games/Mister/NEOGEO/mslug.neo
@@ -43,6 +43,8 @@ launch_cached_host() {
   local fast_forward="${NG_MSLUG_SDL_FAST_FORWARD:-0}"
   local dpf="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-2000}"
   local scanline_poll="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
+  local watchdog_timeout="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
+  local start_mode="${NG_MSLUG_START_MODE:-cart}"
   local scale="${NG_MSLUG_SDL_SCALE:-3}"
   local max_refreshes="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
   local status_interval="${NG_MSLUG_SDL_STATUS_INTERVAL:-}"
@@ -68,6 +70,7 @@ launch_cached_host() {
     --fast-forward "$fast_forward"
     --dispatches-per-refresh "$dpf"
     --scanline-poll-interval "$scanline_poll"
+    --watchdog-timeout-polls "$watchdog_timeout"
     --scale "$scale"
   )
   if [[ -n "$max_refreshes" ]]; then
@@ -84,6 +87,9 @@ launch_cached_host() {
   fi
   if [[ "$no_throttle" != "0" ]]; then
     host_args+=(--no-throttle)
+  fi
+  if [[ "$start_mode" == "bios" ]]; then
+    host_args+=(--start-bios)
   fi
   host_args+=("$game" "$bios")
   if [[ -n "$lo_rom" ]]; then
@@ -150,6 +156,21 @@ while (($#)); do
         exit 2
       fi
       export NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL="$1"
+      ;;
+    --watchdog|--watchdog-timeout-polls)
+      shift
+      if (($# == 0)); then
+        echo "--watchdog needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_WATCHDOG_TIMEOUT_POLLS="$1"
+      ;;
+    --start-bios)
+      export NG_MSLUG_START_MODE=bios
+      ;;
+    --start-cart)
+      export NG_MSLUG_START_MODE=cart
       ;;
     --help|-h)
       usage

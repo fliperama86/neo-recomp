@@ -9,7 +9,7 @@ project orientation; update this file after each meaningful green slice.
 
 - Repository: `https://github.com/fliperama86/neo-recomp.git`
 - Branch: `main`
-- Latest pushed commit: `4a37ef6 Seed Metal Slug callback frontiers`
+- Latest pushed commit: `d6b38dd Update Metal Slug progress docs`
 - Local validation: `ctest --test-dir build --output-on-failure`
 - Current test status: 15/15 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
@@ -58,13 +58,15 @@ Latest local Metal Slug build/live-smoke sequence used:
 ```sh
 scripts/mslug build
 SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 \
-  NG_MSLUG_SDL_STATUS_INTERVAL=500 NG_MSLUG_SDL_MAX_REFRESHES=10000 \
-  ./run.sh > /tmp/mslug_02a606_seed.log 2>&1
+  NG_MSLUG_SDL_STATUS_INTERVAL=1500 \
+  NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=1500 \
+  NG_MSLUG_SDL_MAX_REFRESHES=4500 scripts/mslug \
+  > /tmp/mslug_final_4500.log 2>&1
 ```
 
-`./run.sh` launches the cached live SDL host; `scripts/mslug build` owns the
-expensive generated-code/relink work. Generated cart C still compiles, and the
-static dispatch audit is clean:
+`scripts/mslug` / `./run.sh` launches the cached live SDL host;
+`scripts/mslug build` owns the expensive generated-code/relink work. Generated
+cart C still compiles, and the static dispatch audit is clean:
 
 ```text
 game config functions: entry=0 extra=482 discovery_files=0 jump_tables=72 runtime_dispatch=59
@@ -88,12 +90,20 @@ misclassified as code. The BIOS slice still truncates at 65536 candidates; that
 is not blocking the current smoke, but it remains a cleanup item.
 
 The latest live-smoke frontier moved past the older `$C18662`, `$09B90A`,
-`$06B974`, `$02A2F8`, `$031D90`, `$06B9A4`, and `$02A606` dispatch stalls.
-After the `$02A606` seed, a no-throttle dummy run reached frame ~79098 with the
-PC cycling in BIOS/VBlank-heavy code (`$C126B4`, `$C184F4`, `$C1866C`) and no
-`ng68k_read8 miss at $FFFFFF` log. The current blocker therefore looks more
-like runtime/video/interrupt state after the mode transition than a missing
-generated-CPU dispatch target.
+`$06B974`, `$02A2F8`, `$031D90`, `$06B9A4`, and `$02A606` dispatch stalls, and
+now also passes the later cart-requested soft-reset / BIOS-reset loop that had
+ended in a white screen around `$C123DE`/`$C00438`. Diagnostics showed the BIOS
+reset path scanning the MVS backup-RAM game table with a populated first entry
+at slot `$20` but a zero high-water count at `$D00047`. Because the live host
+enters through the cartridge header rather than a full cold BIOS boot, the
+runtime now maintains that small BIOS save-RAM high-water byte as table entries
+are created. A dummy no-throttle run then reached `refresh=4500` and stopped
+cleanly at `dispatches=9000000 frame=6754 scanline=215 budget_stop=$00065C`; a
+longer spot-check reached `refresh=6000` / `frame=8865`. The old `$FFFFFF` miss
+is gone, and the `$80000A`/`$A0000A` memory-card probes are now modeled as
+absent-card reads instead of unmapped-bus spam. This is still not a playable
+boot oracle, but the immediate blocker is no longer a strict generated-CPU
+dispatch gap or the former BIOS reset loop.
 
 An earlier no-BIOS executable checkpoint remains useful as a boundary proof:
 generated cart code reaches cartridge execution and then stops at the expected
@@ -415,31 +425,31 @@ optionally fast-forwards to the current useful frontier
 generated CPU dispatches each SDL refresh and renders directly from live
 runtime VRAM/palette state. `NG_MSLUG_SDL_MAX_REFRESHES` plus
 `SDL_VIDEODRIVER=dummy` gives a noninteractive smoke path; locally this now
-runs past the previously observed dispatch/frontier stalls and into a later
-BIOS/VBlank-heavy loop after a mode transition. This is still using the
-approximate headless device model, but it is no longer a saved snapshot reload
-loop.
+runs past the previously observed dispatch/frontier stalls and the former
+soft-reset white-screen loop. This is still using the approximate headless
+device model, but it is no longer a saved snapshot reload loop.
 
 For live transition diagnostics, `./run.sh --diag N` (or
 `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) prints a detailed status block every `N`
 refreshes. The block includes split cart/BIOS dispatch counts, recent dispatch
-ring entries, watched frontier hit counts, runtime latch state, last watchdog /
-system-latch / BIOS-vector / LSPC / IRQ-ack writes, memory/video checksums,
-Metal Slug RAM sentinels, and D/A registers. A dummy no-throttle run with
-`NG_MSLUG_SDL_MAX_REFRESHES=3100` now classifies the later white-screen path as
-an intentional cart soft-reset request rather than a missing CPU callback:
-`$001838` sets the soft-reset mode, then the run enters
-`$00085E -> $000862 -> $C00444 -> $C112D2 -> $C11300`; `$C11300` writes
-`SWPBIOS`, work RAM drops to a near-reset checksum, and the BIOS/VBlank path
-continues with `bios_vectors=1`.
+ring entries, watched frontier hit counts, runtime latch state, watchdog timeout
+state, system-latch / BIOS-vector / LSPC / IRQ-ack writes, memory/video
+checksums, backup-RAM counters/table probes, Metal Slug RAM sentinels, and D/A
+registers. These diagnostics first classified the white-screen path as an
+intentional cart soft-reset request (`$001838 -> $00085E -> $000862 ->
+$C00444 -> $C112D2 -> $C11300`) and then showed the backup-RAM high-water
+problem described above.
 
 The runtime now honors `SWPBIOS`/`SWPROM` for the banked 68000 vector window:
-when BIOS vectors are selected, `$000000-$00007F` reads come from the system
-ROM instead of the cartridge P-ROM. This matches MAME's Neo Geo vector-bank
-model and is covered by `tests/test_runtime_interrupts.c`. With this fixed, the
-post-reset dummy run takes BIOS vector fetches from the BIOS, but still remains
-in the BIOS reset/VBlank path; the next suspect is now backup-SRAM / BIOS device
-state rather than vector-bank fetches themselves.
+when BIOS vectors are selected, `$000000-$00007F` reads come from the system ROM
+instead of the cartridge P-ROM. It also has targeted live-host device defaults
+for the current frontier: tested backup-RAM lock/write diagnostics plus the
+`$D00047` table high-water maintenance, a split POUTPUT write latch vs.
+system-input read default, a toggling `REG_STATUS_A` RTC pulse bit for BIOS wait
+loops, an absent memory-card range returning `0xFF`, and watchdog-reset ABI /
+timeout scaffolding. `--start-bios` exists as an experimental entry mode, but
+the default and currently useful path remains cart-header entry with a
+user-provided BIOS slice.
 
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
@@ -1692,19 +1702,19 @@ Use this loop:
 6. Regenerate `build\mslug_recomp.c` from `mslug.neo`.
 7. Confirm the real frontier moved forward.
 8. Update this document and [`68k_correctness_tracker.md`](68k_correctness_tracker.md).
-9. Commit and push.
+9. Commit locally when the slice is significant; push only when requested.
 
 Immediate next slice:
 
-- Investigate the BIOS soft-reset return path while keeping the runtime/hardware
-  surface minimal. The latest dummy no-throttle run no longer reports the old
-  `$FFFFFF` read miss or known callback dispatch stalls; it reaches a cart
-  request at `$001838`, enters `$00085E -> $000862 -> $C00444 -> $C112D2`, and
-  writes `SWPBIOS` at `$C11300`. The vector window is now banked correctly, so
-  continue from the BIOS reset/VBlank path around `$C123DE`/`$C00438`.
-- Keep the next work isolated: determine whether the post-reset white-screen
-  state is caused by backup-SRAM contents/locking, BIOS device/input semantics,
-  or VBlank/IRQ scheduling before adding a broader hardware stack.
+- Stay on the rendering/live-host path now that the former BIOS reset loop is
+  cleared. Capture fresh live frames after the backup-RAM high-water fix, compare
+  them with the known-good offline/snapshot frames, and use the smallest
+  possible runtime probes to isolate missing/misaligned sprite or fix-layer
+  state before adding broader hardware.
+- Keep audio, full input, and full-BIOS boot as follow-ups unless a rendering
+  or liveness check proves they are directly blocking real frames. If the live
+  path stalls again, use the new watchdog/backup/memcard/status diagnostics to
+  classify the next blocker before broadening the stack.
 
 Near follow-ups:
 
