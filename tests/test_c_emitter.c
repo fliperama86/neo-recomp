@@ -76,6 +76,7 @@ int main(void) {
     CHECK(strstr(text, "#define NG_GENERATED_STEP ng_generated_step") != NULL);
     CHECK(strstr(text, "#define NG_GENERATED_DISPATCH NG_GENERATED_CALL") != NULL);
     CHECK(strstr(text, "#define NG_GENERATED_INSTRUCTION_HOOK(addr) ((void)(addr))") != NULL);
+    CHECK(strstr(text, "#define NG_GENERATED_SHOULD_YIELD(addr) (0)") != NULL);
     CHECK(strstr(text, "static void NG_GENERATED_STEP(uint32_t addr);") != NULL);
     CHECK(strstr(text, "static int ng_generated_dispatch_active;") != NULL);
     CHECK(strstr(text, "static int ng_generated_dispatch_pending;") != NULL);
@@ -128,12 +129,14 @@ int main(void) {
 
         CHECK(strstr(text, "/* $000000: MOVEQ #5,D0 */") != NULL);
         CHECK(strstr(text, "NG_GENERATED_INSTRUCTION_HOOK(0x00000000u);") != NULL);
+        CHECK(strstr(text, "if (NG_GENERATED_SHOULD_YIELD(0x00000000u)) return;") != NULL);
         CHECK(strstr(text, "if (ng_service_interrupt(0x00000000u)) return;") != NULL);
         CHECK(strstr(text, "g_ng_m68k.d[0] = 0x00000005u;") != NULL);
         CHECK(strstr(text, "ng_trace_sr = g_ng_m68k.sr;") != NULL);
         CHECK(strstr(text, "if (ng_service_trace(0x00000002u, ng_trace_sr)) return;") != NULL);
         CHECK(strstr(text, "/* $000002: ADD.W D0,D0 */") != NULL);
         CHECK(strstr(text, "NG_GENERATED_INSTRUCTION_HOOK(0x00000002u);") != NULL);
+        CHECK(strstr(text, "if (NG_GENERATED_SHOULD_YIELD(0x00000002u)) return;") != NULL);
         CHECK(strstr(text, "if (ng_service_interrupt(0x00000002u)) return;") != NULL);
         CHECK(strstr(text, "uint64_t ng_full = (uint64_t)ng_dst + (uint64_t)ng_src;") != NULL);
         CHECK(strstr(text, "if (ng_full > 0x0000FFFFu) g_ng_m68k.sr |= NG_CCR_C | NG_CCR_X;") != NULL);

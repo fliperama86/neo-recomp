@@ -12,7 +12,7 @@ export NG_MSLUG_SDL_FAST_FORWARD
 
 usage() {
   cat >&2 <<USAGE
-usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|slice|--palette-bank active|auto|0|1|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
+usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|video|slice|--video-settle N|--palette-bank active|auto|0|1|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
 
 Default paths:
   ~/Documents/Games/Mister/NEOGEO/mslug.neo
@@ -46,6 +46,7 @@ launch_cached_host() {
   local palette_bank="${NG_MSLUG_SDL_PALETTE_BANK:-active}"
   local scanline_poll="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
   local watchdog_timeout="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
+  local video_settle="${NG_MSLUG_SDL_VIDEO_SETTLE_DISPATCHES:-16}"
   local start_mode="${NG_MSLUG_START_MODE:-cart}"
   local scale="${NG_MSLUG_SDL_SCALE:-3}"
   local max_refreshes="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
@@ -75,6 +76,7 @@ launch_cached_host() {
     --palette-bank "$palette_bank"
     --scanline-poll-interval "$scanline_poll"
     --watchdog-timeout-polls "$watchdog_timeout"
+    --video-settle-dispatches "$video_settle"
     --scale "$scale"
   )
   if [[ -n "$max_refreshes" ]]; then
@@ -166,6 +168,9 @@ while (($#)); do
     --present-frame|--frame-sync)
       export NG_MSLUG_SDL_PRESENT_MODE=frame
       ;;
+    --present-video|--video-sync)
+      export NG_MSLUG_SDL_PRESENT_MODE=video
+      ;;
     --present-slice|--slice)
       export NG_MSLUG_SDL_PRESENT_MODE=slice
       ;;
@@ -195,6 +200,15 @@ while (($#)); do
         exit 2
       fi
       export NG_MSLUG_WATCHDOG_TIMEOUT_POLLS="$1"
+      ;;
+    --video-settle|--video-settle-dispatches)
+      shift
+      if (($# == 0)); then
+        echo "--video-settle needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_VIDEO_SETTLE_DISPATCHES="$1"
       ;;
     --start-bios)
       export NG_MSLUG_START_MODE=bios

@@ -11,7 +11,7 @@ SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
 SNAPSHOT_SCANLINE="${NG_MSLUG_SNAPSHOT_SCANLINE:-}"
 SNAPSHOT_EXTRA_DISPATCHES="${NG_MSLUG_SNAPSHOT_EXTRA_DISPATCHES:-250000}"
 
-CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -I"$ROOT/include" -I"$ROOT/recompiler/src")
+CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
 if [[ ! -f "$NEO_PATH" ]]; then
   echo "mslug .neo not found: $NEO_PATH" >&2

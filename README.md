@@ -258,11 +258,14 @@ attract` for the deeper 500k-dispatch pre-window fast-forward, or
 `scripts/mslug rebuild` to force a build and then launch. The wrapper defaults
 to `~/Documents/Games/Mister/NEOGEO/mslug.neo` and
 `~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. The live host currently
-defaults to frame-boundary presentation with a 5000-dispatch cap per presented
-refresh. In this mode `--dpf N` / the `+`/`-` keys adjust the per-frame cap
-instead of intentionally skipping emulated frames; use `./run.sh
---present-slice` to return to the older fixed-dispatch presentation mode for
-comparison. The live renderer now defaults to the runtime PALBANK latch; use
+defaults to instruction-yielded frame-boundary presentation with a
+5000-dispatch cap per presented refresh. In this mode `--dpf N` / the `+`/`-`
+keys adjust the per-frame cap instead of intentionally skipping emulated
+frames; use `./run.sh --present-slice` to return to the older fixed-dispatch
+presentation mode for comparison. `./run.sh --present-video` enables a bounded
+post-vblank Metal Slug video-update settle path (default 16 extra dispatches,
+or `--video-settle N`) for A/B testing layer-lag hypotheses against the cart's
+own video routine. The live renderer now defaults to the runtime PALBANK latch; use
 `./run.sh --palette-bank auto|0|1` to compare against the old heuristic or fixed
 banks while debugging flicker. For noninteractive transition debugging, pass
 `./run.sh --diag N` (or set `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) to

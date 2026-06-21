@@ -12,6 +12,7 @@ PRESENT_MODE="${NG_MSLUG_SDL_PRESENT_MODE:-frame}"
 PALETTE_BANK="${NG_MSLUG_SDL_PALETTE_BANK:-active}"
 SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
 WATCHDOG_TIMEOUT_POLLS="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
+VIDEO_SETTLE_DISPATCHES="${NG_MSLUG_SDL_VIDEO_SETTLE_DISPATCHES:-16}"
 START_MODE="${NG_MSLUG_START_MODE:-cart}"
 SCALE="${NG_MSLUG_SDL_SCALE:-3}"
 MAX_REFRESHES="${NG_MSLUG_SDL_MAX_REFRESHES:-}"
@@ -21,7 +22,7 @@ STALL_REFRESHES="${NG_MSLUG_SDL_STALL_REFRESHES:-}"
 NO_THROTTLE="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
 BUILD_ONLY="${NG_MSLUG_SDL_BUILD_ONLY:-0}"
 
-CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -I"$ROOT/include" -I"$ROOT/recompiler/src")
+CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
 log_step() {
   printf '\n==> %s\n' "$*" >&2
@@ -75,6 +76,7 @@ log_note "dispatch cap/refresh: $DISPATCHES_PER_REFRESH"
 log_note "present mode: $PRESENT_MODE"
 log_note "palette bank: $PALETTE_BANK"
 log_note "watchdog timeout polls: $WATCHDOG_TIMEOUT_POLLS"
+log_note "video settle dispatches: $VIDEO_SETTLE_DISPATCHES"
 log_note "start mode: $START_MODE"
 
 log_step "Configuring/building recompiler tools"
@@ -189,6 +191,7 @@ HOST_ARGS=(
   --palette-bank "$PALETTE_BANK"
   --scanline-poll-interval "$SCANLINE_POLL_INTERVAL"
   --watchdog-timeout-polls "$WATCHDOG_TIMEOUT_POLLS"
+  --video-settle-dispatches "$VIDEO_SETTLE_DISPATCHES"
   --scale "$SCALE"
 )
 if [[ -n "$MAX_REFRESHES" ]]; then

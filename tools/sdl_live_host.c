@@ -17,12 +17,20 @@
 #define NG_LIVE_DEFAULT_FAST_FORWARD 0u
 #define NG_LIVE_DEFAULT_SCALE 3u
 #define NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS 250000u
-#define NG_LIVE_FRAME_SYNC_DISPATCH_CHUNK 16u
+#define NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES 16u
+#define NG_LIVE_MSLUG_VIDEO_PRESENT_ADDR 0x0005CA28u
 
 void ng_generated_call(uint32_t addr);
 void ng_generated_smoke_reset_dispatch_stats(void);
 void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches);
 void ng_generated_smoke_set_scanline_poll_interval(uint32_t interval);
+void ng_generated_smoke_clear_instruction_yield(void);
+void ng_generated_smoke_set_instruction_yield(uint32_t addr,
+                                              uint32_t frame_must_differ);
+void ng_generated_smoke_set_instruction_yield_frame_stop(uint32_t frame);
+int ng_generated_smoke_instruction_yield_hit(void);
+uint32_t ng_generated_smoke_instruction_yield_hit_addr(void);
+uint32_t ng_generated_smoke_instruction_yield_hit_frame(void);
 uint64_t ng_generated_smoke_dispatch_count(void);
 uint64_t ng_generated_smoke_cart_dispatch_count(void);
 uint64_t ng_generated_smoke_bios_dispatch_count(void);
@@ -40,6 +48,8 @@ uint32_t ng_generated_smoke_dispatch_watch_addr(uint32_t index);
 const char *ng_generated_smoke_dispatch_watch_label(uint32_t index);
 uint64_t ng_generated_smoke_dispatch_watch_hits(uint32_t index);
 uint64_t ng_generated_smoke_instruction_watch_hits(uint32_t index);
+
+static int live_mslug_video_update_pending(void);
 
 static int read_file(const char *path, uint8_t **out_data, uint32_t *out_size) {
     FILE *f = fopen(path, "rb");
@@ -274,7 +284,74 @@ static int run_dispatch_slice(uint64_t dispatches, uint32_t fallback_entry) {
     return run_until_dispatch_count(current + dispatches, addr);
 }
 
+static int run_until_instruction_or_frame_change(uint64_t target_dispatches,
+                                                 uint32_t fallback_entry,
+                                                 uint32_t yield_addr,
+                                                 uint32_t frame_stop,
+                                                 int *out_target_hit) {
+    uint64_t current = ng_generated_smoke_dispatch_count();
+    uint32_t addr = current == 0u ?
+        fallback_entry :
+        (g_ng_m68k.pc & 0x00FFFFFFu);
+
+    if (out_target_hit) {
+        *out_target_hit = 0;
+    }
+    if (current >= target_dispatches) {
+        return 1;
+    }
+
+    ng_generated_smoke_clear_instruction_yield();
+    ng_generated_smoke_set_instruction_yield(yield_addr, UINT32_MAX);
+    ng_generated_smoke_set_instruction_yield_frame_stop(frame_stop);
+    ng_generated_smoke_set_dispatch_budget(target_dispatches);
+    ng_generated_call(addr);
+
+    int yield_hit = ng_generated_smoke_instruction_yield_hit();
+    uint32_t yield_hit_addr =
+        ng_generated_smoke_instruction_yield_hit_addr() & 0x00FFFFFFu;
+    ng_generated_smoke_clear_instruction_yield();
+    if (yield_hit) {
+        if (out_target_hit) {
+            *out_target_hit =
+                yield_addr != UINT32_MAX &&
+                yield_hit_addr == (yield_addr & 0x00FFFFFFu);
+        }
+        return 1;
+    }
+    if (ng_generated_smoke_dispatch_budget_hit()) {
+        return 1;
+    }
+    if (ng_generated_smoke_dispatch_count() < target_dispatches) {
+        fprintf(stderr,
+                "generated dispatch returned before yield/budget target: "
+                "dispatches=%llu target=%llu pc=$%06X yield=$%06X frame_stop=%u\n",
+                (unsigned long long)ng_generated_smoke_dispatch_count(),
+                (unsigned long long)target_dispatches,
+                g_ng_m68k.pc & 0x00FFFFFFu,
+                yield_addr & 0x00FFFFFFu,
+                frame_stop);
+        return 0;
+    }
+    return 1;
+}
+
 static int run_frame_synced_slice(uint64_t max_dispatches, uint32_t fallback_entry) {
+    uint64_t start = ng_generated_smoke_dispatch_count();
+    uint64_t limit = UINT64_MAX;
+    if (max_dispatches < UINT64_MAX - start) {
+        limit = start + max_dispatches;
+    }
+    return run_until_instruction_or_frame_change(limit,
+                                                 fallback_entry,
+                                                 UINT32_MAX,
+                                                 ng_neogeo_frame_count(),
+                                                 NULL);
+}
+
+static int run_video_synced_slice(uint64_t max_dispatches,
+                                  uint64_t video_settle_dispatches,
+                                  uint32_t fallback_entry) {
     uint32_t start_frame = ng_neogeo_frame_count();
     uint64_t start = ng_generated_smoke_dispatch_count();
     uint64_t limit = UINT64_MAX;
@@ -282,23 +359,29 @@ static int run_frame_synced_slice(uint64_t max_dispatches, uint32_t fallback_ent
         limit = start + max_dispatches;
     }
 
-    while (ng_generated_smoke_dispatch_count() < limit) {
-        uint64_t current = ng_generated_smoke_dispatch_count();
-        uint64_t remaining = limit - current;
-        uint64_t step = remaining < NG_LIVE_FRAME_SYNC_DISPATCH_CHUNK ?
-            remaining :
-            NG_LIVE_FRAME_SYNC_DISPATCH_CHUNK;
-        uint32_t addr = current == 0u ?
-            fallback_entry :
-            (g_ng_m68k.pc & 0x00FFFFFFu);
-        if (step == 0u || !run_until_dispatch_count(current + step, addr)) {
-            return 0;
-        }
-        if (ng_neogeo_frame_count() != start_frame) {
-            return 1;
-        }
+    if (!run_frame_synced_slice(max_dispatches, fallback_entry)) {
+        return 0;
     }
-    return 1;
+    if (ng_neogeo_frame_count() == start_frame ||
+        ng_generated_smoke_dispatch_count() >= limit) {
+        return 1;
+    }
+    if (!live_mslug_video_update_pending()) {
+        return 1;
+    }
+
+    uint64_t settle_limit = limit;
+    uint64_t current = ng_generated_smoke_dispatch_count();
+    if (video_settle_dispatches < settle_limit - current) {
+        settle_limit = current + video_settle_dispatches;
+    }
+
+    return run_until_instruction_or_frame_change(
+        settle_limit,
+        fallback_entry,
+        NG_LIVE_MSLUG_VIDEO_PRESENT_ADDR,
+        ng_neogeo_frame_count(),
+        NULL);
 }
 
 static int run_fast_forward(uint64_t target_dispatches, uint32_t entry_addr) {
@@ -401,11 +484,18 @@ typedef struct NgLiveSpriteStats {
 
 typedef enum NgLivePresentMode {
     NG_LIVE_PRESENT_FRAME,
+    NG_LIVE_PRESENT_VIDEO,
     NG_LIVE_PRESENT_SLICE
 } NgLivePresentMode;
 
 static const char *present_mode_name(NgLivePresentMode mode) {
-    return mode == NG_LIVE_PRESENT_SLICE ? "slice" : "frame";
+    if (mode == NG_LIVE_PRESENT_SLICE) {
+        return "slice";
+    }
+    if (mode == NG_LIVE_PRESENT_VIDEO) {
+        return "video";
+    }
+    return "frame";
 }
 
 static uint64_t live_fnv1a64_u32(uint64_t hash, uint32_t value) {
@@ -521,6 +611,10 @@ static uint64_t live_mslug_sync_flags(void) {
         packed = (packed << 8) | ng68k_read8(addr);
     }
     return packed;
+}
+
+static int live_mslug_video_update_pending(void) {
+    return ng68k_read8(0x0010E1ECu) != 0u;
 }
 
 static uint64_t live_mslug_sync_counters(void) {
@@ -797,6 +891,10 @@ static int parse_u64(const char *text, uint64_t *out) {
 }
 
 static int parse_present_mode(const char *text, NgLivePresentMode *out) {
+    if (strcmp(text, "video") == 0 || strcmp(text, "vblank-video") == 0) {
+        *out = NG_LIVE_PRESENT_VIDEO;
+        return 1;
+    }
     if (strcmp(text, "frame") == 0 || strcmp(text, "sync") == 0) {
         *out = NG_LIVE_PRESENT_FRAME;
         return 1;
@@ -835,7 +933,9 @@ static void usage(const char *argv0) {
             "Options:\n"
             "  --fast-forward <n>             dispatches before opening the loop (default: 0)\n"
             "  --dispatches-per-refresh <n>   dispatch cap per rendered refresh (default: %u)\n"
-            "  --present-mode <frame|slice>   frame-boundary or fixed-slice presentation (default: frame)\n"
+            "  --present-mode <frame|video|slice>\n"
+            "                                  frame-boundary, video-update-settled, or fixed-slice presentation (default: frame)\n"
+            "  --video-settle-dispatches <n>  extra cap for video-update settle mode (default: %u)\n"
             "  --palette-bank <active|auto|0|1>\n"
             "                                  displayed palette bank (default: active latch)\n"
             "  --scanline-poll-interval <n>   runtime scanline poll interval (default: 64)\n"
@@ -849,6 +949,7 @@ static void usage(const char *argv0) {
             "  --scale <n>                    integer window scale (default: %u)\n",
             argv0,
             NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH,
+            NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES,
             NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS,
             NG_LIVE_DEFAULT_SCALE);
 }
@@ -863,6 +964,7 @@ int main(int argc, char **argv) {
     uint64_t no_throttle = 0;
     uint64_t scanline_poll_interval = 64u;
     uint64_t watchdog_timeout_polls = NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS;
+    uint64_t video_settle_dispatches = NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES;
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
     int start_bios = 0;
     NgLivePresentMode present_mode = NG_LIVE_PRESENT_FRAME;
@@ -880,7 +982,7 @@ int main(int argc, char **argv) {
             if (argi >= argc ||
                 !parse_present_mode(argv[argi++], &present_mode)) {
                 fprintf(stderr,
-                        "%s requires one of: frame, slice\n",
+                        "%s requires one of: video, frame, slice\n",
                         option);
                 usage(argv[0]);
                 return 2;
@@ -891,6 +993,9 @@ int main(int argc, char **argv) {
             continue;
         } else if (strcmp(option, "--present-slice") == 0) {
             present_mode = NG_LIVE_PRESENT_SLICE;
+            continue;
+        } else if (strcmp(option, "--present-video") == 0) {
+            present_mode = NG_LIVE_PRESENT_VIDEO;
             continue;
         } else if (strcmp(option, "--palette-bank") == 0) {
             if (argi >= argc ||
@@ -906,6 +1011,8 @@ int main(int argc, char **argv) {
             target = &scanline_poll_interval;
         } else if (strcmp(option, "--watchdog-timeout-polls") == 0) {
             target = &watchdog_timeout_polls;
+        } else if (strcmp(option, "--video-settle-dispatches") == 0) {
+            target = &video_settle_dispatches;
         } else if (strcmp(option, "--start-bios") == 0) {
             start_bios = 1;
             continue;
@@ -1067,7 +1174,8 @@ int main(int argc, char **argv) {
 
     fprintf(stderr,
             "live host started: entry=$%06X cart_entry=$%06X dispatches=%llu "
-            "frame=%u scanline=%u present=%s palette=%s watchdog_timeout=%llu\n",
+            "frame=%u scanline=%u present=%s palette=%s watchdog_timeout=%llu "
+            "video_settle=%llu\n",
             initial_entry & 0x00FFFFFFu,
             cart_entry & 0x00FFFFFFu,
             (unsigned long long)ng_generated_smoke_dispatch_count(),
@@ -1075,7 +1183,8 @@ int main(int argc, char **argv) {
             ng_neogeo_current_scanline(),
             present_mode_name(present_mode),
             palette_bank_mode_name(palette_bank_mode),
-            (unsigned long long)watchdog_timeout_polls);
+            (unsigned long long)watchdog_timeout_polls,
+            (unsigned long long)video_settle_dispatches);
     fprintf(stderr,
             "keys: q/Escape quit, Space pause/resume, +/- adjust dispatch cap per refresh\n");
 
@@ -1110,9 +1219,16 @@ int main(int argc, char **argv) {
         }
 
         if (!paused) {
-            int ok = present_mode == NG_LIVE_PRESENT_FRAME ?
-                run_frame_synced_slice(dispatches_per_refresh, initial_entry) :
-                run_dispatch_slice(dispatches_per_refresh, initial_entry);
+            int ok;
+            if (present_mode == NG_LIVE_PRESENT_VIDEO) {
+                ok = run_video_synced_slice(dispatches_per_refresh,
+                                            video_settle_dispatches,
+                                            initial_entry);
+            } else if (present_mode == NG_LIVE_PRESENT_FRAME) {
+                ok = run_frame_synced_slice(dispatches_per_refresh, initial_entry);
+            } else {
+                ok = run_dispatch_slice(dispatches_per_refresh, initial_entry);
+            }
             if (!ok) {
                 quit = 1;
             }

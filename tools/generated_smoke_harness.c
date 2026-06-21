@@ -11,6 +11,8 @@
 #define NG_GENERATED_SMOKE_HOT_SLOTS 32768u
 #define NG_GENERATED_SMOKE_HOT_TOP 5u
 #define NG_GENERATED_SMOKE_SNAPSHOT_SCANLINE_NONE UINT32_MAX
+#define NG_GENERATED_SMOKE_YIELD_ADDR_NONE UINT32_MAX
+#define NG_GENERATED_SMOKE_YIELD_ANY_FRAME UINT32_MAX
 
 #define NG_GENERATED_SMOKE_DISPATCH_WATCHES(X) \
     X(NG_GENERATED_SMOKE_WATCH_CART_HEADER, 0x000122u, "cart_header") \
@@ -81,6 +83,15 @@ static uint32_t g_ng_generated_smoke_snapshot_scanline =
 static uint64_t g_ng_generated_smoke_snapshot_extra_dispatches;
 static uint64_t
     g_ng_generated_smoke_instruction_watch_count[NG_GENERATED_SMOKE_WATCH_COUNT];
+static uint32_t g_ng_generated_smoke_yield_addr =
+    NG_GENERATED_SMOKE_YIELD_ADDR_NONE;
+static uint32_t g_ng_generated_smoke_yield_frame_must_differ =
+    NG_GENERATED_SMOKE_YIELD_ANY_FRAME;
+static uint32_t g_ng_generated_smoke_yield_stop_on_frame_change =
+    NG_GENERATED_SMOKE_YIELD_ANY_FRAME;
+static int g_ng_generated_smoke_yield_hit;
+static uint32_t g_ng_generated_smoke_yield_hit_addr;
+static uint32_t g_ng_generated_smoke_yield_hit_frame;
 
 static void ng_generated_smoke_note_instruction_watch(uint32_t addr) {
     switch (addr & 0x00FFFFFFu) {
@@ -98,6 +109,78 @@ static void ng_generated_smoke_note_instruction_watch(uint32_t addr) {
 
 void ng_generated_instruction_hook(uint32_t addr) {
     ng_generated_smoke_note_instruction_watch(addr);
+}
+
+void ng_generated_smoke_clear_instruction_yield(void) {
+    g_ng_generated_smoke_yield_addr = NG_GENERATED_SMOKE_YIELD_ADDR_NONE;
+    g_ng_generated_smoke_yield_frame_must_differ =
+        NG_GENERATED_SMOKE_YIELD_ANY_FRAME;
+    g_ng_generated_smoke_yield_stop_on_frame_change =
+        NG_GENERATED_SMOKE_YIELD_ANY_FRAME;
+    g_ng_generated_smoke_yield_hit = 0;
+    g_ng_generated_smoke_yield_hit_addr = 0;
+    g_ng_generated_smoke_yield_hit_frame = 0;
+}
+
+void ng_generated_smoke_set_instruction_yield(uint32_t addr,
+                                              uint32_t frame_must_differ) {
+    g_ng_generated_smoke_yield_addr = addr == NG_GENERATED_SMOKE_YIELD_ADDR_NONE ?
+        NG_GENERATED_SMOKE_YIELD_ADDR_NONE :
+        (addr & 0x00FFFFFFu);
+    g_ng_generated_smoke_yield_frame_must_differ = frame_must_differ;
+    g_ng_generated_smoke_yield_hit = 0;
+    g_ng_generated_smoke_yield_hit_addr = 0;
+    g_ng_generated_smoke_yield_hit_frame = 0;
+}
+
+void ng_generated_smoke_set_instruction_yield_frame_stop(uint32_t frame) {
+    g_ng_generated_smoke_yield_stop_on_frame_change = frame;
+}
+
+int ng_generated_smoke_instruction_yield_hit(void) {
+    return g_ng_generated_smoke_yield_hit;
+}
+
+uint32_t ng_generated_smoke_instruction_yield_hit_addr(void) {
+    return g_ng_generated_smoke_yield_hit_addr;
+}
+
+uint32_t ng_generated_smoke_instruction_yield_hit_frame(void) {
+    return g_ng_generated_smoke_yield_hit_frame;
+}
+
+int ng_generated_should_yield(uint32_t addr) {
+    uint32_t frame = ng_neogeo_frame_count();
+    addr &= 0x00FFFFFFu;
+    if (g_ng_generated_smoke_yield_stop_on_frame_change !=
+            NG_GENERATED_SMOKE_YIELD_ANY_FRAME &&
+        frame != g_ng_generated_smoke_yield_stop_on_frame_change) {
+        g_ng_generated_smoke_yield_addr =
+            NG_GENERATED_SMOKE_YIELD_ADDR_NONE;
+        g_ng_generated_smoke_yield_stop_on_frame_change =
+            NG_GENERATED_SMOKE_YIELD_ANY_FRAME;
+        g_ng_generated_smoke_yield_hit = 1;
+        g_ng_generated_smoke_yield_hit_addr = addr;
+        g_ng_generated_smoke_yield_hit_frame = frame;
+        return 1;
+    }
+    if (g_ng_generated_smoke_yield_addr == NG_GENERATED_SMOKE_YIELD_ADDR_NONE ||
+        addr != g_ng_generated_smoke_yield_addr) {
+        return 0;
+    }
+    if (g_ng_generated_smoke_yield_frame_must_differ !=
+            NG_GENERATED_SMOKE_YIELD_ANY_FRAME &&
+        frame == g_ng_generated_smoke_yield_frame_must_differ) {
+        return 0;
+    }
+
+    g_ng_generated_smoke_yield_addr = NG_GENERATED_SMOKE_YIELD_ADDR_NONE;
+    g_ng_generated_smoke_yield_stop_on_frame_change =
+        NG_GENERATED_SMOKE_YIELD_ANY_FRAME;
+    g_ng_generated_smoke_yield_hit = 1;
+    g_ng_generated_smoke_yield_hit_addr = addr;
+    g_ng_generated_smoke_yield_hit_frame = frame;
+    return 1;
 }
 
 uint64_t ng_generated_smoke_instruction_watch_hits(uint32_t index) {
@@ -174,6 +257,7 @@ void ng_generated_smoke_reset_dispatch_stats(void) {
     memset(g_ng_generated_smoke_instruction_watch_count,
            0,
            sizeof(g_ng_generated_smoke_instruction_watch_count));
+    ng_generated_smoke_clear_instruction_yield();
     g_ng_generated_smoke_unique_dispatch_count = 0;
     g_ng_generated_smoke_hot_overflow = 0;
     g_ng_generated_smoke_budget_stop_addr = 0;
@@ -376,6 +460,7 @@ void ng_generated_smoke_reset_dispatch_stats(void) {
     memset(g_ng_generated_smoke_instruction_watch_count,
            0,
            sizeof(g_ng_generated_smoke_instruction_watch_count));
+    ng_generated_smoke_clear_instruction_yield();
 }
 
 void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches) {

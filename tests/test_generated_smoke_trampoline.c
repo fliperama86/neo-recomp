@@ -19,6 +19,14 @@ int ng_generated_smoke_dispatch_hot_overflow(void);
 int ng_generated_smoke_dispatch_budget_hit(void);
 uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void);
 uint32_t ng_generated_smoke_recent_loop_period(void);
+void ng_generated_smoke_clear_instruction_yield(void);
+void ng_generated_smoke_set_instruction_yield(uint32_t addr,
+                                              uint32_t frame_must_differ);
+void ng_generated_smoke_set_instruction_yield_frame_stop(uint32_t frame);
+int ng_generated_smoke_instruction_yield_hit(void);
+uint32_t ng_generated_smoke_instruction_yield_hit_addr(void);
+uint32_t ng_generated_smoke_instruction_yield_hit_frame(void);
+int ng_generated_should_yield(uint32_t addr);
 
 static uint32_t g_cart_calls;
 static uint32_t g_bios_calls;
@@ -131,5 +139,21 @@ int main(void) {
     CHECK(ng_generated_smoke_recent_loop_period() == 2u);
 
     ng_generated_smoke_set_dispatch_budget(0u);
+    ng_generated_smoke_clear_instruction_yield();
+    CHECK(!ng_generated_should_yield(0x00000102u));
+    CHECK(!ng_generated_smoke_instruction_yield_hit());
+    ng_generated_smoke_set_instruction_yield(0x00000102u, UINT32_MAX);
+    CHECK(!ng_generated_should_yield(0x00000100u));
+    CHECK(!ng_generated_smoke_instruction_yield_hit());
+    CHECK(ng_generated_should_yield(0x00000102u));
+    CHECK(ng_generated_smoke_instruction_yield_hit());
+    CHECK(ng_generated_smoke_instruction_yield_hit_addr() == 0x00000102u);
+    CHECK(ng_generated_smoke_instruction_yield_hit_frame() == 0u);
+    CHECK(!ng_generated_should_yield(0x00000102u));
+    ng_generated_smoke_clear_instruction_yield();
+    ng_generated_smoke_set_instruction_yield_frame_stop(1u);
+    CHECK(ng_generated_should_yield(0x00000104u));
+    CHECK(ng_generated_smoke_instruction_yield_hit());
+    CHECK(ng_generated_smoke_instruction_yield_hit_addr() == 0x00000104u);
     return 0;
 }

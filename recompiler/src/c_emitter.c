@@ -74,6 +74,9 @@ static void emit_header(FILE *out) {
     fprintf(out, "#ifndef NG_GENERATED_INSTRUCTION_HOOK\n");
     fprintf(out, "#define NG_GENERATED_INSTRUCTION_HOOK(addr) ((void)(addr))\n");
     fprintf(out, "#endif\n\n");
+    fprintf(out, "#ifndef NG_GENERATED_SHOULD_YIELD\n");
+    fprintf(out, "#define NG_GENERATED_SHOULD_YIELD(addr) (0)\n");
+    fprintf(out, "#endif\n\n");
     fprintf(out, "void NG_GENERATED_DISPATCH(uint32_t addr);\n\n");
     fprintf(out, "static void NG_GENERATED_STEP(uint32_t addr);\n\n");
     fprintf(out, "static int ng_generated_dispatch_active;\n");
@@ -2730,6 +2733,8 @@ static void emit_function_body(FILE *out,
         fprintf(out, "    g_ng_m68k.pc = 0x%08Xu;\n",
                 instrs[i].addr & 0x00FFFFFFu);
         fprintf(out, "    NG_GENERATED_INSTRUCTION_HOOK(0x%08Xu);\n",
+                instrs[i].addr & 0x00FFFFFFu);
+        fprintf(out, "    if (NG_GENERATED_SHOULD_YIELD(0x%08Xu)) return;\n",
                 instrs[i].addr & 0x00FFFFFFu);
         fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
                 instrs[i].addr & 0x00FFFFFFu);

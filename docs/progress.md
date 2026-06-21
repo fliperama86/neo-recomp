@@ -423,11 +423,15 @@ expensive generated-code/relink work, while `./run.sh` only launches the cached
 uses the deeper 500k-dispatch pre-window fast-forward, and `scripts/mslug
 rebuild` forces a build and then launches. The wrapper defaults to the local
 MiSTer-style Metal Slug and BIOS paths. The live host currently defaults to
-frame-boundary presentation with a 5000-dispatch cap per presented refresh. In
-this mode `./run.sh --dpf N` or the `+`/`-` keys tune the per-frame cap instead
-of deliberately skipping emulated frames; `./run.sh --present-slice` returns to
-the older fixed-dispatch presentation mode for comparison. The renderer defaults
-to the runtime PALBANK latch rather than the old richest-bank heuristic, with
+instruction-yielded frame-boundary presentation with a 5000-dispatch cap per
+presented refresh. In this mode `./run.sh --dpf N` or the `+`/`-` keys tune the
+per-frame cap instead of deliberately skipping emulated frames; `./run.sh
+--present-slice` returns to the older fixed-dispatch presentation mode for
+comparison. `./run.sh --present-video` enables a bounded post-vblank
+Metal Slug video-update settle path (default `--video-settle 16`) for A/B
+testing the "front layer lags behind" hypothesis against the cart's own
+`$05C9D6`/`$05CA28` video routine without letting the settle loop run away
+across many frames. The renderer defaults to the runtime PALBANK latch rather than the old richest-bank heuristic, with
 `./run.sh --palette-bank auto|0|1` kept for A/B tests. The script uses the same
 Metal Slug recompilation and user-provided BIOS slice as the headless smoke,
 then links
@@ -1703,6 +1707,13 @@ and `V` are only trusted where generated-exec tests cover them.
   current Metal Slug banked callback frontiers, moving live SDL smoke past the
   `$C18662`, `$09B90A`, `$06B974`, `$02A2F8`, `$031D90`, `$06B9A4`, and
   `$02A606` stalls.
+- local: Added an emitted `NG_GENERATED_SHOULD_YIELD` hook and live harness
+  one-shot instruction/frame-yield controls. The live SDL host now uses the
+  hook to stop at the first instruction after a runtime frame change instead of
+  polling in coarse dispatch chunks. A new `--present-video` mode can then
+  spend a bounded post-vblank settle window (default `--video-settle 16`) toward
+  Metal Slug's `$05CA28` video-update return, while falling back to frame
+  presentation when the cart video-pending flag at `$10E1EC` is clear.
 
 ## Next Steps
 
