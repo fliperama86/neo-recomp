@@ -260,8 +260,10 @@ to `~/Documents/Games/Mister/NEOGEO/mslug.neo` and
 `~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. The live host currently
 defaults to 2000 dispatches per refresh, which is the first locally observed
 full-speed-ish range; tune it with `./run.sh --dpf N` or the `+`/`-` keys while
-running. The
-underlying script
+running. For noninteractive transition debugging, pass `./run.sh --diag N` (or
+set `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) to print the detailed live runtime,
+write-latch, memory/video, register, recent-dispatch, and watch-counter state
+every `N` refreshes. The underlying script
 recompiles Metal Slug, builds the user-provided BIOS slice, links a temporary
 `build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
 yet; it reuses the headless runtime model and current renderer, but it is a
@@ -272,8 +274,9 @@ clean with `function candidates: 46392` and
 `sites=7485 missing_direct=0 computed=0 runtime_computed=59`. The full test
 suite is `15/15` passing. The live host now runs beyond the earlier
 `$C18662`/`$09B90A` dispatch frontiers; the next blocker appears to be
-runtime/video/interrupt state after the game transitions into BIOS/VBlank-heavy
-execution, not a strict generated-CPU dispatch gap.
+runtime/BIOS-vector/device state after the game requests a soft reset path
+(`$001838 -> $00085E -> $000862 -> $C00444 -> $C112D2 -> $C11300`), not a
+strict generated-CPU dispatch gap.
 
 ## Decoder Slice
 

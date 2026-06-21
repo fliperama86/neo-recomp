@@ -20,7 +20,11 @@
     X(NG_GENERATED_SMOKE_WATCH_CART_MODE2_START, 0x000836u, "cart_mode2_start") \
     X(NG_GENERATED_SMOKE_WATCH_CART_MODE3_START, 0x000840u, "cart_mode3_start") \
     X(NG_GENERATED_SMOKE_WATCH_CART_GAME_ENTRY, 0x000656u, "cart_game_entry") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_REQUEST_SOFT_RESET, 0x001838u, "cart_request_soft_reset") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_SOFT_RESET_JUMP, 0x001840u, "cart_soft_reset_jump") \
     X(NG_GENERATED_SMOKE_WATCH_CART_CLEAR, 0x000868u, "cart_clear") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_SOFT_RESET_CLEAR, 0x00085Eu, "cart_soft_reset_clear") \
+    X(NG_GENERATED_SMOKE_WATCH_CART_BIOS_RESET_JUMP, 0x000862u, "cart_bios_reset_jump") \
     X(NG_GENERATED_SMOKE_WATCH_CART_COLD_INIT, 0x024E38u, "cart_cold_init") \
     X(NG_GENERATED_SMOKE_WATCH_CART_MODE23_INIT, 0x00097Au, "cart_mode23_init") \
     X(NG_GENERATED_SMOKE_WATCH_CART_VBLANK_SETUP, 0x001F84u, "cart_vblank_setup") \
@@ -43,8 +47,11 @@
     X(NG_GENERATED_SMOKE_WATCH_CART_IRQ_HANDLER, 0x000906u, "cart_irq_handler") \
     X(NG_GENERATED_SMOKE_WATCH_CART_IRQ_BIOS_TAIL, 0x000934u, "cart_irq_bios_tail") \
     X(NG_GENERATED_SMOKE_WATCH_BIOS_VBLANK_FALLBACK, 0xC00438u, "bios_vblank_fallback") \
+    X(NG_GENERATED_SMOKE_WATCH_BIOS_RESET_VECTOR, 0xC00444u, "bios_reset_vector") \
     X(NG_GENERATED_SMOKE_WATCH_BIOS_IRQ_TAIL, 0xC0044Au, "bios_irq_tail") \
     X(NG_GENERATED_SMOKE_WATCH_BIOS_IRQ_RETURN, 0xC004CEu, "bios_irq_return") \
+    X(NG_GENERATED_SMOKE_WATCH_BIOS_RESET_SERVICE, 0xC112D2u, "bios_reset_service") \
+    X(NG_GENERATED_SMOKE_WATCH_BIOS_SWPBIOS, 0xC11300u, "bios_swpbios") \
     X(NG_GENERATED_SMOKE_WATCH_BIOS_SERVICE_SEED, 0xC11142u, "bios_service_seed") \
     X(NG_GENERATED_SMOKE_WATCH_BIOS_SERVICE_A, 0xC116A4u, "bios_service_a") \
     X(NG_GENERATED_SMOKE_WATCH_BIOS_SERVICE_B, 0xC1183Cu, "bios_service_b")
@@ -271,6 +278,10 @@ uint32_t ng_generated_smoke_recent_loop_period(void) {
     return 0;
 }
 
+uint32_t ng_generated_smoke_recent_dispatch(uint32_t offset) {
+    return ng_generated_smoke_recent_from_end(offset);
+}
+
 static uint32_t ng_generated_smoke_hot_slot(uint32_t addr) {
     addr &= 0x00FFFFFFu;
     addr ^= addr >> 12;
@@ -412,6 +423,11 @@ uint32_t ng_generated_smoke_last_bios_dispatch_addr(void) {
 }
 
 uint32_t ng_generated_smoke_recent_loop_period(void) {
+    return 0;
+}
+
+uint32_t ng_generated_smoke_recent_dispatch(uint32_t offset) {
+    (void)offset;
     return 0;
 }
 

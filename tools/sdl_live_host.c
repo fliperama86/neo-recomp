@@ -21,8 +21,22 @@ void ng_generated_smoke_reset_dispatch_stats(void);
 void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches);
 void ng_generated_smoke_set_scanline_poll_interval(uint32_t interval);
 uint64_t ng_generated_smoke_dispatch_count(void);
+uint64_t ng_generated_smoke_cart_dispatch_count(void);
+uint64_t ng_generated_smoke_bios_dispatch_count(void);
+uint32_t ng_generated_smoke_unique_dispatch_count(void);
+int ng_generated_smoke_dispatch_hot_overflow(void);
 int ng_generated_smoke_dispatch_budget_hit(void);
 uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void);
+uint32_t ng_generated_smoke_last_dispatch_addr(void);
+uint32_t ng_generated_smoke_last_cart_dispatch_addr(void);
+uint32_t ng_generated_smoke_last_bios_dispatch_addr(void);
+uint32_t ng_generated_smoke_recent_loop_period(void);
+uint32_t ng_generated_smoke_recent_dispatch(uint32_t offset);
+uint32_t ng_generated_smoke_dispatch_watch_count(void);
+uint32_t ng_generated_smoke_dispatch_watch_addr(uint32_t index);
+const char *ng_generated_smoke_dispatch_watch_label(uint32_t index);
+uint64_t ng_generated_smoke_dispatch_watch_hits(uint32_t index);
+uint64_t ng_generated_smoke_instruction_watch_hits(uint32_t index);
 
 static int read_file(const char *path, uint8_t **out_data, uint32_t *out_size) {
     FILE *f = fopen(path, "rb");
@@ -321,6 +335,79 @@ static int render_live_frame(const NgNeoRomImage *image,
         width);
 }
 
+typedef struct NgLivePixelStats {
+    uint64_t hash;
+    uint32_t nonzero;
+    uint32_t nonblack;
+} NgLivePixelStats;
+
+static uint64_t live_fnv1a64_u32(uint64_t hash, uint32_t value) {
+    for (uint32_t shift = 0; shift < 32u; shift += 8u) {
+        hash ^= (uint8_t)(value >> shift);
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+static NgLivePixelStats analyze_live_pixels(const uint32_t *pixels,
+                                            uint32_t width,
+                                            uint32_t height) {
+    NgLivePixelStats stats;
+    memset(&stats, 0, sizeof(stats));
+    stats.hash = 1469598103934665603ull;
+    if (!pixels) {
+        return stats;
+    }
+    uint32_t count = width * height;
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t pixel = pixels[i];
+        stats.hash = live_fnv1a64_u32(stats.hash, pixel);
+        if (pixel != 0u) {
+            ++stats.nonzero;
+        }
+        if (pixel != 0u && pixel != 0xFF000000u) {
+            ++stats.nonblack;
+        }
+    }
+    return stats;
+}
+
+static uint32_t current_live_palette_bank(void) {
+    uint8_t palette_ram[NG_NEO_PALETTE_RAM_BYTES];
+    uint16_t palette_words[NG_LIVE_PALETTE_WORDS];
+    if (!ng_neogeo_copy_palette_ram(palette_ram, sizeof(palette_ram))) {
+        return 0;
+    }
+    for (uint32_t i = 0; i < NG_LIVE_PALETTE_WORDS; ++i) {
+        palette_words[i] = read_be_word(palette_ram, i);
+    }
+    return choose_palette_bank(palette_words);
+}
+
+static uint64_t live_mslug_sync_flags(void) {
+    uint64_t packed = 0;
+    for (uint32_t addr = 0x00106ED8u; addr <= 0x00106EDEu; ++addr) {
+        packed = (packed << 8) | ng68k_read8(addr);
+    }
+    return packed;
+}
+
+static uint64_t live_mslug_sync_counters(void) {
+    return ((uint64_t)ng68k_read16(0x00106EE0u) << 32) |
+           ((uint64_t)ng68k_read16(0x00106EE2u) << 16) |
+           (uint64_t)ng68k_read16(0x00106EE4u);
+}
+
+static uint16_t live_mslug_vblank_selector(void) {
+    return (uint16_t)(((uint16_t)ng68k_read8(0x00106F26u) << 8) |
+                      (uint16_t)ng68k_read8(0x00106F27u));
+}
+
+static uint16_t live_mslug_bios_flags(void) {
+    return (uint16_t)(((uint16_t)ng68k_read8(0x0010FD80u) << 8) |
+                      (uint16_t)ng68k_read8(0x0010FDAEu));
+}
+
 static void print_live_status(const char *label,
                               uint64_t refreshes,
                               uint64_t dispatches_per_refresh) {
@@ -345,6 +432,160 @@ static void print_live_status(const char *label,
             ng_generated_smoke_dispatch_budget_stop_addr() & 0x00FFFFFFu);
 }
 
+static void print_nonzero_watch_counts(const char *label, int instruction) {
+    uint32_t count = ng_generated_smoke_dispatch_watch_count();
+    int printed = 0;
+    fprintf(stderr, "%s:", label);
+    for (uint32_t i = 0; i < count; ++i) {
+        uint64_t hits = instruction ?
+            ng_generated_smoke_instruction_watch_hits(i) :
+            ng_generated_smoke_dispatch_watch_hits(i);
+        if (hits == 0u) {
+            continue;
+        }
+        fprintf(stderr,
+                " $%06X:%s=%llu",
+                ng_generated_smoke_dispatch_watch_addr(i) & 0x00FFFFFFu,
+                ng_generated_smoke_dispatch_watch_label(i),
+                (unsigned long long)hits);
+        printed = 1;
+    }
+    if (!printed) {
+        fprintf(stderr, " none");
+    }
+    fprintf(stderr, "\n");
+}
+
+static void print_recent_dispatches(uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i) {
+        if ((i % 16u) == 0u) {
+            fprintf(stderr, "%srecent dispatches newest[%02u..%02u]:",
+                    i == 0u ? "" : "\n",
+                    i,
+                    i + 15u);
+        }
+        fprintf(stderr,
+                " $%06X",
+                ng_generated_smoke_recent_dispatch(i) & 0x00FFFFFFu);
+    }
+    fprintf(stderr, "\n");
+}
+
+static void print_live_diagnostics(const char *label,
+                                   uint64_t refreshes,
+                                   uint64_t dispatches_per_refresh,
+                                   const uint32_t *pixels,
+                                   uint32_t width,
+                                   uint32_t height) {
+    NgLivePixelStats pixel_stats = analyze_live_pixels(pixels, width, height);
+    print_live_status(label, refreshes, dispatches_per_refresh);
+    fprintf(stderr,
+            "live dispatch diag: cart=%llu bios=%llu unique=%u hot_overflow=%u "
+            "last=$%06X last_cart=$%06X last_bios=$%06X recent_loop=%u\n",
+            (unsigned long long)ng_generated_smoke_cart_dispatch_count(),
+            (unsigned long long)ng_generated_smoke_bios_dispatch_count(),
+            ng_generated_smoke_unique_dispatch_count(),
+            ng_generated_smoke_dispatch_hot_overflow(),
+            ng_generated_smoke_last_dispatch_addr() & 0x00FFFFFFu,
+            ng_generated_smoke_last_cart_dispatch_addr() & 0x00FFFFFFu,
+            ng_generated_smoke_last_bios_dispatch_addr() & 0x00FFFFFFu,
+            ng_generated_smoke_recent_loop_period());
+    fprintf(stderr,
+            "live runtime diag: watchdog=%u vblank=%u timer_irq=%u irqack=%u "
+            "lspc=$%04X timer_reload=$%08X timer_counter=$%08X timer_stop=$%04X "
+            "vram_addr=$%04X vram_mod=$%04X shadow=%u bios_vectors=%u fix=%u "
+            "sound=$%02X port=$%02X\n",
+            ng_neogeo_watchdog_kicks(),
+            ng_neogeo_vblank_interrupts(),
+            ng_neogeo_timer_interrupts(),
+            ng_neogeo_irq_ack_writes(),
+            ng_neogeo_lspc_mode(),
+            ng_neogeo_timer_reload(),
+            ng_neogeo_timer_counter(),
+            ng_neogeo_timer_stop(),
+            ng_neogeo_vram_addr(),
+            ng_neogeo_vram_mod(),
+            ng_neogeo_shadow_enabled(),
+            ng_neogeo_bios_vectors_enabled(),
+            ng_neogeo_board_fix_enabled(),
+            ng_neogeo_sound_command(),
+            ng_neogeo_port_output());
+    fprintf(stderr,
+            "live write diag: watchdog=$%06X:$%02X@%06X "
+            "latch_writes=%u latch=$%06X:$%02X@%06X "
+            "biosvec_set=%u biosvec_clear=%u biosvec=$%06X:$%02X@%06X "
+            "lspc=$%06X:$%04X@%06X irqack=$%04X@%06X "
+            "port=$%06X:$%02X@%06X sound=$%06X:$%02X@%06X\n",
+            ng_neogeo_last_watchdog_addr() & 0x00FFFFFFu,
+            ng_neogeo_last_watchdog_value(),
+            ng_neogeo_last_watchdog_pc() & 0x00FFFFFFu,
+            ng_neogeo_system_latch_writes(),
+            ng_neogeo_last_system_latch_addr() & 0x00FFFFFFu,
+            ng_neogeo_last_system_latch_value(),
+            ng_neogeo_last_system_latch_pc() & 0x00FFFFFFu,
+            ng_neogeo_bios_vector_enable_writes(),
+            ng_neogeo_bios_vector_disable_writes(),
+            ng_neogeo_last_bios_vector_addr() & 0x00FFFFFFu,
+            ng_neogeo_last_bios_vector_value(),
+            ng_neogeo_last_bios_vector_pc() & 0x00FFFFFFu,
+            ng_neogeo_last_lspc_write_addr() & 0x00FFFFFFu,
+            ng_neogeo_last_lspc_write_value(),
+            ng_neogeo_last_lspc_write_pc() & 0x00FFFFFFu,
+            ng_neogeo_last_irq_ack_value(),
+            ng_neogeo_last_irq_ack_pc() & 0x00FFFFFFu,
+            ng_neogeo_last_port_output_addr() & 0x00FFFFFFu,
+            ng_neogeo_port_output(),
+            ng_neogeo_last_port_output_pc() & 0x00FFFFFFu,
+            ng_neogeo_last_sound_addr() & 0x00FFFFFFu,
+            ng_neogeo_sound_command(),
+            ng_neogeo_last_sound_pc() & 0x00FFFFFFu);
+    fprintf(stderr,
+            "live memory/video diag: wram_nonzero=%u wram_sum=$%08X "
+            "palette_nonzero=%u palette_sum=$%08X palette_writes=%u "
+            "palette_nonzero_writes=%u palette_last=$%06X:$%04X:bank%u "
+            "palette_peak=%u/$%08X palette_bank=%u vram_nonzero=%u "
+            "vram_sum=$%08X pixels_nonzero=%u pixels_nonblack=%u "
+            "pixels_hash=$%016llX\n",
+            ng_neogeo_work_ram_nonzero_bytes(),
+            ng_neogeo_work_ram_checksum(),
+            ng_neogeo_palette_ram_nonzero_bytes(),
+            ng_neogeo_palette_ram_checksum(),
+            ng_neogeo_palette_write_count(),
+            ng_neogeo_palette_nonzero_write_count(),
+            ng_neogeo_palette_last_addr() & 0x00FFFFFFu,
+            ng_neogeo_palette_last_value(),
+            ng_neogeo_palette_last_bank(),
+            ng_neogeo_palette_peak_nonzero_bytes(),
+            ng_neogeo_palette_peak_checksum(),
+            current_live_palette_bank(),
+            ng_neogeo_vram_nonzero_words(),
+            ng_neogeo_vram_checksum(),
+            pixel_stats.nonzero,
+            pixel_stats.nonblack,
+            (unsigned long long)pixel_stats.hash);
+    fprintf(stderr,
+            "live mslug diag: sync=$%014llX counters=$%012llX "
+            "vblank_selector=$%04X bios_flags=$%04X\n",
+            (unsigned long long)live_mslug_sync_flags(),
+            (unsigned long long)live_mslug_sync_counters(),
+            live_mslug_vblank_selector(),
+            live_mslug_bios_flags());
+    fprintf(stderr,
+            "live regs d: d0=$%08X d1=$%08X d2=$%08X d3=$%08X "
+            "d4=$%08X d5=$%08X d6=$%08X d7=$%08X\n",
+            g_ng_m68k.d[0], g_ng_m68k.d[1], g_ng_m68k.d[2], g_ng_m68k.d[3],
+            g_ng_m68k.d[4], g_ng_m68k.d[5], g_ng_m68k.d[6], g_ng_m68k.d[7]);
+    fprintf(stderr,
+            "live regs a: a0=$%08X a1=$%08X a2=$%08X a3=$%08X "
+            "a4=$%08X a5=$%08X a6=$%08X a7=$%08X usp=$%08X ssp=$%08X\n",
+            g_ng_m68k.a[0], g_ng_m68k.a[1], g_ng_m68k.a[2], g_ng_m68k.a[3],
+            g_ng_m68k.a[4], g_ng_m68k.a[5], g_ng_m68k.a[6], g_ng_m68k.a[7],
+            g_ng_m68k.usp, g_ng_m68k.ssp);
+    print_recent_dispatches(32u);
+    print_nonzero_watch_counts("live dispatch watch", 0);
+    print_nonzero_watch_counts("live instruction watch", 1);
+}
+
 static int parse_u64(const char *text, uint64_t *out) {
     char *end = NULL;
     unsigned long long value = strtoull(text, &end, 0);
@@ -365,6 +606,7 @@ static void usage(const char *argv0) {
             "  --scanline-poll-interval <n>   runtime scanline poll interval (default: 64)\n"
             "  --max-refreshes <n>            exit after n presented frames\n"
             "  --status-interval <n>          log status every n presented frames\n"
+            "  --diagnostics-interval <n>     log detailed diagnostics every n frames\n"
             "  --stall-refreshes <n>          log if scanline/frame stalls for n refreshes (default: 180, 0 disables)\n"
             "  --no-throttle                  do not sleep to ~60Hz after each refresh\n"
             "  --scale <n>                    integer window scale (default: %u)\n",
@@ -378,6 +620,7 @@ int main(int argc, char **argv) {
     uint64_t dispatches_per_refresh = NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH;
     uint64_t max_refreshes = 0;
     uint64_t status_interval = 0;
+    uint64_t diagnostics_interval = 0;
     uint64_t stall_refreshes = 180u;
     uint64_t no_throttle = 0;
     uint64_t scanline_poll_interval = 64u;
@@ -397,6 +640,8 @@ int main(int argc, char **argv) {
             target = &max_refreshes;
         } else if (strcmp(option, "--status-interval") == 0) {
             target = &status_interval;
+        } else if (strcmp(option, "--diagnostics-interval") == 0) {
+            target = &diagnostics_interval;
         } else if (strcmp(option, "--stall-refreshes") == 0) {
             target = &stall_refreshes;
         } else if (strcmp(option, "--scale") == 0) {
@@ -595,6 +840,15 @@ int main(int argc, char **argv) {
             (refreshes % status_interval) == 0u) {
             print_live_status("live status", refreshes, dispatches_per_refresh);
         }
+        if (diagnostics_interval != 0u && refreshes != 0u &&
+            (refreshes % diagnostics_interval) == 0u) {
+            print_live_diagnostics("live diagnostics",
+                                   refreshes,
+                                   dispatches_per_refresh,
+                                   pixels,
+                                   width,
+                                   height);
+        }
 
         uint32_t current_frame = ng_neogeo_frame_count();
         uint16_t current_scanline = ng_neogeo_current_scanline();
@@ -607,9 +861,12 @@ int main(int argc, char **argv) {
         } else if (!paused && stall_refreshes != 0u) {
             ++stagnant_refreshes;
             if (!stall_reported && stagnant_refreshes >= stall_refreshes) {
-                print_live_status("live scanline stall",
-                                  refreshes,
-                                  dispatches_per_refresh);
+                print_live_diagnostics("live scanline stall",
+                                       refreshes,
+                                       dispatches_per_refresh,
+                                       pixels,
+                                       width,
+                                       height);
                 stall_reported = 1;
             }
         }

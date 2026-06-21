@@ -420,6 +420,19 @@ BIOS/VBlank-heavy loop after a mode transition. This is still using the
 approximate headless device model, but it is no longer a saved snapshot reload
 loop.
 
+For live transition diagnostics, `./run.sh --diag N` (or
+`NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) prints a detailed status block every `N`
+refreshes. The block includes split cart/BIOS dispatch counts, recent dispatch
+ring entries, watched frontier hit counts, runtime latch state, last watchdog /
+system-latch / BIOS-vector / LSPC / IRQ-ack writes, memory/video checksums,
+Metal Slug RAM sentinels, and D/A registers. A dummy no-throttle run with
+`NG_MSLUG_SDL_MAX_REFRESHES=3100` now classifies the later white-screen path as
+an intentional cart soft-reset request rather than a missing CPU callback:
+`$001838` sets the soft-reset mode, then the run enters
+`$00085E -> $000862 -> $C00444 -> $C112D2 -> $C11300`; `$C11300` writes
+`SWPBIOS`, work RAM drops to a near-reset checksum, and the BIOS/VBlank path
+continues with `bios_vectors=1`.
+
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
 
@@ -1675,15 +1688,14 @@ Use this loop:
 
 Immediate next slice:
 
-- Investigate the current live Metal Slug post-frontier behavior while keeping
-  the runtime/hardware surface minimal. The latest dummy no-throttle run no
-  longer reports the old `$FFFFFF` read miss or known callback dispatch stalls;
-  it advances into BIOS/VBlank-heavy PCs around `$C126B4`/`$C184F4`/`$C1866C`
-  with scanline near 0/1 after the mode transition.
-- Keep the next work isolated: decide whether that later white-screen path is a
-  runtime/video/interrupt scheduling problem, a missing input/BIOS device
-  semantic, or another small callback/data classification issue before adding a
-  broader hardware stack.
+- Investigate the BIOS soft-reset return path while keeping the runtime/hardware
+  surface minimal. The latest dummy no-throttle run no longer reports the old
+  `$FFFFFF` read miss or known callback dispatch stalls; it reaches a cart
+  request at `$001838`, enters `$00085E -> $000862 -> $C00444 -> $C112D2`, and
+  writes `SWPBIOS` at `$C11300`.
+- Keep the next work isolated: determine whether the post-reset white-screen
+  state is caused by BIOS-vector mapping, BIOS/device/input semantics, or
+  VBlank/IRQ scheduling before adding a broader hardware stack.
 
 Near follow-ups:
 
