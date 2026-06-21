@@ -278,7 +278,8 @@ own video routine. The live renderer now defaults to the runtime PALBANK latch; 
 banks while debugging flicker. For noninteractive transition debugging, pass
 `./run.sh --diag N` (or set `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) to
 print the detailed live runtime, write-latch, memory/video, sprite saturation,
-register, recent-dispatch, and watch-counter state every `N` refreshes. The
+register, recent-dispatch, and watch-counter state every `N` refreshes. The SDL
+window title includes live present FPS plus emulated-frame FPS while running. The
 underlying script recompiles Metal Slug, builds the user-provided BIOS slice,
 links a temporary `build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
 yet; it reuses the headless runtime model and current renderer, but it is a

@@ -1279,6 +1279,11 @@ int main(int argc, char **argv) {
     uint64_t perf_frequency = SDL_GetPerformanceFrequency();
     uint64_t neo_frame_ticks = live_neo_frame_perf_ticks(perf_frequency);
     uint64_t next_present_tick = SDL_GetPerformanceCounter() + neo_frame_ticks;
+    uint64_t fps_last_tick = SDL_GetPerformanceCounter();
+    uint64_t fps_last_refreshes = 0;
+    uint32_t fps_last_frame = ng_neogeo_frame_count();
+    double present_fps = 0.0;
+    double emulated_fps = 0.0;
     uint32_t last_progress_frame = ng_neogeo_frame_count();
     uint16_t last_progress_scanline = ng_neogeo_current_scanline();
     uint64_t refreshes = 0;
@@ -1339,6 +1344,28 @@ int main(int argc, char **argv) {
         SDL_RenderCopy(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);
 
+        uint64_t presented_refreshes = refreshes + 1u;
+        uint64_t fps_now = SDL_GetPerformanceCounter();
+        int title_due = refreshes == 0u || (refreshes % 30u) == 0u;
+        if (perf_frequency != 0u &&
+            fps_now >= fps_last_tick &&
+            fps_now - fps_last_tick >= perf_frequency / 2u) {
+            double elapsed =
+                (double)(fps_now - fps_last_tick) / (double)perf_frequency;
+            uint32_t frame_now = ng_neogeo_frame_count();
+            if (elapsed > 0.0) {
+                present_fps =
+                    (double)(presented_refreshes - fps_last_refreshes) /
+                    elapsed;
+                emulated_fps =
+                    (double)(frame_now - fps_last_frame) / elapsed;
+            }
+            fps_last_tick = fps_now;
+            fps_last_refreshes = presented_refreshes;
+            fps_last_frame = frame_now;
+            title_due = 1;
+        }
+
         if (status_interval != 0u && refreshes != 0u &&
             (refreshes % status_interval) == 0u) {
             print_live_status("live status", refreshes, dispatches_per_refresh);
@@ -1376,11 +1403,13 @@ int main(int argc, char **argv) {
             }
         }
 
-        if ((refreshes % 30u) == 0u) {
+        if (title_due) {
             char title[256];
             snprintf(title,
                      sizeof(title),
-                     "neo-recomp live - dispatches=%llu frame=%u scanline=%u cap=%llu hold=%llu %s%s",
+                     "neo-recomp live - %.1f fps / %.1f emu - dispatches=%llu frame=%u scanline=%u cap=%llu hold=%llu %s%s",
+                     present_fps,
+                     emulated_fps,
                      (unsigned long long)ng_generated_smoke_dispatch_count(),
                      ng_neogeo_frame_count(),
                      ng_neogeo_current_scanline(),
