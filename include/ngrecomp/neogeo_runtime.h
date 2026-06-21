@@ -92,6 +92,7 @@ uint32_t ng_neogeo_last_sound_addr(void);
 uint8_t ng_neogeo_sound_reply(void);
 uint8_t ng_neogeo_shadow_enabled(void);
 uint8_t ng_neogeo_bios_vectors_enabled(void);
+uint8_t ng_neogeo_palette_bank(void);
 uint32_t ng_neogeo_system_latch_writes(void);
 uint32_t ng_neogeo_last_system_latch_pc(void);
 uint32_t ng_neogeo_last_system_latch_addr(void);

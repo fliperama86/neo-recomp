@@ -12,7 +12,7 @@ export NG_MSLUG_SDL_FAST_FORWARD
 
 usage() {
   cat >&2 <<USAGE
-usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|slice|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
+usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|slice|--palette-bank active|auto|0|1|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
 
 Default paths:
   ~/Documents/Games/Mister/NEOGEO/mslug.neo
@@ -43,6 +43,7 @@ launch_cached_host() {
   local fast_forward="${NG_MSLUG_SDL_FAST_FORWARD:-0}"
   local dpf="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-5000}"
   local present_mode="${NG_MSLUG_SDL_PRESENT_MODE:-frame}"
+  local palette_bank="${NG_MSLUG_SDL_PALETTE_BANK:-active}"
   local scanline_poll="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
   local watchdog_timeout="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
   local start_mode="${NG_MSLUG_START_MODE:-cart}"
@@ -71,6 +72,7 @@ launch_cached_host() {
     --fast-forward "$fast_forward"
     --dispatches-per-refresh "$dpf"
     --present-mode "$present_mode"
+    --palette-bank "$palette_bank"
     --scanline-poll-interval "$scanline_poll"
     --watchdog-timeout-polls "$watchdog_timeout"
     --scale "$scale"
@@ -102,6 +104,7 @@ launch_cached_host() {
   printf '    fast-forward: %s dispatches\n' "$fast_forward" >&2
   printf '    dispatches/refresh: %s\n' "$dpf" >&2
   printf '    present mode: %s\n' "$present_mode" >&2
+  printf '    palette bank: %s\n' "$palette_bank" >&2
   exec "$HOST_BIN" "${host_args[@]}"
 }
 
@@ -165,6 +168,15 @@ while (($#)); do
       ;;
     --present-slice|--slice)
       export NG_MSLUG_SDL_PRESENT_MODE=slice
+      ;;
+    --palette-bank)
+      shift
+      if (($# == 0)); then
+        echo "--palette-bank needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_PALETTE_BANK="$1"
       ;;
     --diag|--diagnostics-interval)
       shift

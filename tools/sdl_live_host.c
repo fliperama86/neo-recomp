@@ -12,6 +12,7 @@
 
 #define NG_LIVE_PALETTE_WORDS (NG_NEO_PALETTE_RAM_BYTES / 2u)
 #define NG_LIVE_PALETTE_BANK_AUTO UINT32_MAX
+#define NG_LIVE_PALETTE_BANK_ACTIVE (UINT32_MAX - 1u)
 #define NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH 5000u
 #define NG_LIVE_DEFAULT_FAST_FORWARD 0u
 #define NG_LIVE_DEFAULT_SCALE 3u
@@ -212,6 +213,27 @@ static uint32_t choose_palette_bank(const uint16_t *palette_words) {
     return best_bank;
 }
 
+static uint32_t resolve_palette_bank(const uint16_t *palette_words,
+                                     uint32_t palette_bank_mode) {
+    if (palette_bank_mode == NG_LIVE_PALETTE_BANK_AUTO) {
+        return choose_palette_bank(palette_words);
+    }
+    if (palette_bank_mode == NG_LIVE_PALETTE_BANK_ACTIVE) {
+        return ng_neogeo_palette_bank() & 1u;
+    }
+    return palette_bank_mode & 1u;
+}
+
+static const char *palette_bank_mode_name(uint32_t palette_bank_mode) {
+    if (palette_bank_mode == NG_LIVE_PALETTE_BANK_AUTO) {
+        return "auto";
+    }
+    if (palette_bank_mode == NG_LIVE_PALETTE_BANK_ACTIVE) {
+        return "active";
+    }
+    return palette_bank_mode == 0u ? "0" : "1";
+}
+
 static uint8_t snapshot_auto_animation_counter(uint32_t frame_count, uint16_t lspc) {
     uint32_t speed = (uint32_t)(lspc >> 8);
     return (uint8_t)((frame_count + speed) / (speed + 1u));
@@ -322,6 +344,7 @@ static int run_fast_forward(uint64_t target_dispatches, uint32_t entry_addr) {
 static int render_live_frame(const NgNeoRomImage *image,
                              const uint8_t *zoom_rom,
                              uint32_t zoom_rom_size,
+                             uint32_t palette_bank_mode,
                              uint32_t *pixels,
                              uint32_t width,
                              uint32_t height) {
@@ -337,7 +360,7 @@ static int render_live_frame(const NgNeoRomImage *image,
         palette_words[i] = read_be_word(palette_ram, i);
     }
 
-    uint32_t palette_bank = choose_palette_bank(palette_words);
+    uint32_t palette_bank = resolve_palette_bank(palette_words, palette_bank_mode);
     NgNeoVideoRenderOptions options;
     memset(&options, 0, sizeof(options));
     options.zoom_rom = zoom_rom;
@@ -369,6 +392,12 @@ typedef struct NgLivePixelStats {
     uint32_t nonzero;
     uint32_t nonblack;
 } NgLivePixelStats;
+
+typedef struct NgLiveSpriteStats {
+    uint32_t max_active_per_line;
+    uint32_t saturated_lines;
+    uint32_t total_active_samples;
+} NgLiveSpriteStats;
 
 typedef enum NgLivePresentMode {
     NG_LIVE_PRESENT_FRAME,
@@ -410,7 +439,61 @@ static NgLivePixelStats analyze_live_pixels(const uint32_t *pixels,
     return stats;
 }
 
-static uint32_t current_live_palette_bank(void) {
+static uint16_t live_sprite_y(uint16_t scb3_word) {
+    return (uint16_t)((496u - ((scb3_word >> 7) & 0x01FFu)) & 0x01FFu);
+}
+
+static int live_sprite_on_scanline(uint32_t scanline,
+                                   uint16_t y,
+                                   uint8_t rows) {
+    return rows >= 0x20u ||
+           (((scanline - (uint32_t)y) & 0x01FFu) <
+            (uint32_t)rows * NG_NEO_SPRITE_TILE_PIXELS);
+}
+
+static NgLiveSpriteStats analyze_live_sprites(void) {
+    NgLiveSpriteStats stats;
+    uint16_t vram_words[NG_NEO_VRAM_WORDS];
+    memset(&stats, 0, sizeof(stats));
+    if (!ng_neogeo_copy_vram(vram_words, NG_NEO_VRAM_WORDS)) {
+        return stats;
+    }
+
+    for (uint32_t scanline = 0;
+         scanline < NG_NEO_SPRITE_FRAME_HEIGHT;
+         ++scanline) {
+        uint16_t y = 0;
+        uint8_t rows = 0;
+        uint32_t active_count = 0;
+        for (uint16_t sprite = 0;
+             sprite < NG_NEO_SPRITE_DISPLAY_LIMIT;
+             ++sprite) {
+            uint16_t scb3 = vram_words[0x8200u + sprite];
+            if (((scb3 >> 6) & 1u) == 0u) {
+                y = live_sprite_y(scb3);
+                rows = (uint8_t)(scb3 & 0x3Fu);
+            }
+
+            if (rows == 0u ||
+                !live_sprite_on_scanline(scanline, y, rows)) {
+                continue;
+            }
+
+            ++active_count;
+            if (active_count == NG_NEO_SPRITES_PER_SCANLINE) {
+                ++stats.saturated_lines;
+                break;
+            }
+        }
+        if (active_count > stats.max_active_per_line) {
+            stats.max_active_per_line = active_count;
+        }
+        stats.total_active_samples += active_count;
+    }
+    return stats;
+}
+
+static uint32_t current_live_auto_palette_bank(void) {
     uint8_t palette_ram[NG_NEO_PALETTE_RAM_BYTES];
     uint16_t palette_words[NG_LIVE_PALETTE_WORDS];
     if (!ng_neogeo_copy_palette_ram(palette_ram, sizeof(palette_ram))) {
@@ -420,6 +503,16 @@ static uint32_t current_live_palette_bank(void) {
         palette_words[i] = read_be_word(palette_ram, i);
     }
     return choose_palette_bank(palette_words);
+}
+
+static uint32_t current_live_selected_palette_bank(uint32_t palette_bank_mode) {
+    if (palette_bank_mode == NG_LIVE_PALETTE_BANK_AUTO) {
+        return current_live_auto_palette_bank();
+    }
+    if (palette_bank_mode == NG_LIVE_PALETTE_BANK_ACTIVE) {
+        return ng_neogeo_palette_bank() & 1u;
+    }
+    return palette_bank_mode & 1u;
 }
 
 static uint64_t live_mslug_sync_flags(void) {
@@ -536,11 +629,16 @@ static void print_recent_dispatches(uint32_t count) {
 static void print_live_diagnostics(const char *label,
                                    uint64_t refreshes,
                                    uint64_t dispatches_per_refresh,
+                                   uint32_t palette_bank_mode,
                                    const uint32_t *pixels,
                                    uint32_t width,
                                    uint32_t height) {
     NgLivePixelStats pixel_stats = analyze_live_pixels(pixels, width, height);
+    NgLiveSpriteStats sprite_stats = analyze_live_sprites();
     NgLiveBackupTableStats backup_table = live_backup_table_stats();
+    uint32_t selected_palette_bank =
+        current_live_selected_palette_bank(palette_bank_mode);
+    uint32_t auto_palette_bank = current_live_auto_palette_bank();
     print_live_status(label, refreshes, dispatches_per_refresh);
     fprintf(stderr,
             "live dispatch diag: cart=%llu bios=%llu unique=%u hot_overflow=%u "
@@ -615,8 +713,10 @@ static void print_live_diagnostics(const char *label,
             "live memory/video diag: wram_nonzero=%u wram_sum=$%08X "
             "palette_nonzero=%u palette_sum=$%08X palette_writes=%u "
             "palette_nonzero_writes=%u palette_last=$%06X:$%04X:bank%u "
-            "palette_peak=%u/$%08X palette_bank=%u vram_nonzero=%u "
-            "vram_sum=$%08X pixels_nonzero=%u pixels_nonblack=%u "
+            "palette_peak=%u/$%08X palette_selected=%u palette_active=%u "
+            "palette_auto=%u palette_mode=%s vram_nonzero=%u "
+            "vram_sum=$%08X sprite_max_line=%u sprite_sat_lines=%u "
+            "sprite_samples=%u pixels_nonzero=%u pixels_nonblack=%u "
             "pixels_hash=$%016llX\n",
             ng_neogeo_work_ram_nonzero_bytes(),
             ng_neogeo_work_ram_checksum(),
@@ -629,9 +729,15 @@ static void print_live_diagnostics(const char *label,
             ng_neogeo_palette_last_bank(),
             ng_neogeo_palette_peak_nonzero_bytes(),
             ng_neogeo_palette_peak_checksum(),
-            current_live_palette_bank(),
+            selected_palette_bank,
+            ng_neogeo_palette_bank() & 1u,
+            auto_palette_bank,
+            palette_bank_mode_name(palette_bank_mode),
             ng_neogeo_vram_nonzero_words(),
             ng_neogeo_vram_checksum(),
+            sprite_stats.max_active_per_line,
+            sprite_stats.saturated_lines,
+            sprite_stats.total_active_samples,
             pixel_stats.nonzero,
             pixel_stats.nonblack,
             (unsigned long long)pixel_stats.hash);
@@ -702,6 +808,26 @@ static int parse_present_mode(const char *text, NgLivePresentMode *out) {
     return 0;
 }
 
+static int parse_palette_bank_mode(const char *text, uint32_t *out) {
+    if (strcmp(text, "active") == 0 || strcmp(text, "latch") == 0) {
+        *out = NG_LIVE_PALETTE_BANK_ACTIVE;
+        return 1;
+    }
+    if (strcmp(text, "auto") == 0) {
+        *out = NG_LIVE_PALETTE_BANK_AUTO;
+        return 1;
+    }
+    if (strcmp(text, "0") == 0) {
+        *out = 0u;
+        return 1;
+    }
+    if (strcmp(text, "1") == 0) {
+        *out = 1u;
+        return 1;
+    }
+    return 0;
+}
+
 static void usage(const char *argv0) {
     fprintf(stderr,
             "usage: %s [options] <game.neo> <bios.rom> [lo-rom]\n"
@@ -710,6 +836,8 @@ static void usage(const char *argv0) {
             "  --fast-forward <n>             dispatches before opening the loop (default: 0)\n"
             "  --dispatches-per-refresh <n>   dispatch cap per rendered refresh (default: %u)\n"
             "  --present-mode <frame|slice>   frame-boundary or fixed-slice presentation (default: frame)\n"
+            "  --palette-bank <active|auto|0|1>\n"
+            "                                  displayed palette bank (default: active latch)\n"
             "  --scanline-poll-interval <n>   runtime scanline poll interval (default: 64)\n"
             "  --watchdog-timeout-polls <n>   reset after n interrupt polls without watchdog kick (default: %u, 0 disables)\n"
             "  --start-bios                   enter through the BIOS reset vector instead of cart header\n"
@@ -738,6 +866,7 @@ int main(int argc, char **argv) {
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
     int start_bios = 0;
     NgLivePresentMode present_mode = NG_LIVE_PRESENT_FRAME;
+    uint32_t palette_bank_mode = NG_LIVE_PALETTE_BANK_ACTIVE;
 
     int argi = 1;
     while (argi < argc && strncmp(argv[argi], "--", 2) == 0) {
@@ -762,6 +891,16 @@ int main(int argc, char **argv) {
             continue;
         } else if (strcmp(option, "--present-slice") == 0) {
             present_mode = NG_LIVE_PRESENT_SLICE;
+            continue;
+        } else if (strcmp(option, "--palette-bank") == 0) {
+            if (argi >= argc ||
+                !parse_palette_bank_mode(argv[argi++], &palette_bank_mode)) {
+                fprintf(stderr,
+                        "%s requires one of: active, auto, 0, 1\n",
+                        option);
+                usage(argv[0]);
+                return 2;
+            }
             continue;
         } else if (strcmp(option, "--scanline-poll-interval") == 0) {
             target = &scanline_poll_interval;
@@ -928,13 +1067,14 @@ int main(int argc, char **argv) {
 
     fprintf(stderr,
             "live host started: entry=$%06X cart_entry=$%06X dispatches=%llu "
-            "frame=%u scanline=%u present=%s watchdog_timeout=%llu\n",
+            "frame=%u scanline=%u present=%s palette=%s watchdog_timeout=%llu\n",
             initial_entry & 0x00FFFFFFu,
             cart_entry & 0x00FFFFFFu,
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             ng_neogeo_frame_count(),
             ng_neogeo_current_scanline(),
             present_mode_name(present_mode),
+            palette_bank_mode_name(palette_bank_mode),
             (unsigned long long)watchdog_timeout_polls);
     fprintf(stderr,
             "keys: q/Escape quit, Space pause/resume, +/- adjust dispatch cap per refresh\n");
@@ -977,7 +1117,13 @@ int main(int argc, char **argv) {
                 quit = 1;
             }
         }
-        if (!render_live_frame(&image, zoom_rom, zoom_rom_size, pixels, width, height)) {
+        if (!render_live_frame(&image,
+                               zoom_rom,
+                               zoom_rom_size,
+                               palette_bank_mode,
+                               pixels,
+                               width,
+                               height)) {
             quit = 1;
         }
 
@@ -995,6 +1141,7 @@ int main(int argc, char **argv) {
             print_live_diagnostics("live diagnostics",
                                    refreshes,
                                    dispatches_per_refresh,
+                                   palette_bank_mode,
                                    pixels,
                                    width,
                                    height);
@@ -1014,6 +1161,7 @@ int main(int argc, char **argv) {
                 print_live_diagnostics("live scanline stall",
                                        refreshes,
                                        dispatches_per_refresh,
+                                       palette_bank_mode,
                                        pixels,
                                        width,
                                        height);

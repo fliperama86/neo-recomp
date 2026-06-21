@@ -875,6 +875,10 @@ uint8_t ng_neogeo_bios_vectors_enabled(void) {
     return g_ng_neogeo_bios_vectors_enabled;
 }
 
+uint8_t ng_neogeo_palette_bank(void) {
+    return g_ng_neogeo_palette_bank;
+}
+
 uint32_t ng_neogeo_system_latch_writes(void) {
     return g_ng_neogeo_system_latch_writes;
 }

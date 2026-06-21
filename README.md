@@ -262,12 +262,14 @@ defaults to frame-boundary presentation with a 5000-dispatch cap per presented
 refresh. In this mode `--dpf N` / the `+`/`-` keys adjust the per-frame cap
 instead of intentionally skipping emulated frames; use `./run.sh
 --present-slice` to return to the older fixed-dispatch presentation mode for
-comparison. For noninteractive transition debugging, pass `./run.sh --diag N`
-(or set `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) to print the detailed live runtime,
-write-latch, memory/video, register, recent-dispatch, and watch-counter state
-every `N` refreshes. The underlying script
-recompiles Metal Slug, builds the user-provided BIOS slice, links a temporary
-`build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
+comparison. The live renderer now defaults to the runtime PALBANK latch; use
+`./run.sh --palette-bank auto|0|1` to compare against the old heuristic or fixed
+banks while debugging flicker. For noninteractive transition debugging, pass
+`./run.sh --diag N` (or set `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) to
+print the detailed live runtime, write-latch, memory/video, sprite saturation,
+register, recent-dispatch, and watch-counter state every `N` refreshes. The
+underlying script recompiles Metal Slug, builds the user-provided BIOS slice,
+links a temporary `build/mslug_sdl_host`, then runs an SDL window. This is not a full emulator
 yet; it reuses the headless runtime model and current renderer, but it is a
 real live host loop rather than a saved-snapshot reload.
 

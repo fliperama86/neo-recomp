@@ -103,9 +103,16 @@ is gone, and the `$80000A`/`$A0000A` memory-card probes are now modeled as
 absent-card reads instead of unmapped-bus spam. The live host now presents on
 emulated frame boundaries by default: with a 5000-dispatch cap, a dummy
 no-throttle smoke reached `refresh=1200 frame=1200 scanline=0` instead of
-skipping BIOS/logo animation states via fixed dispatch slices. This is still not
-a playable boot oracle, but the immediate blocker is no longer a strict
-generated-CPU dispatch gap or the former BIOS reset loop.
+skipping BIOS/logo animation states via fixed dispatch slices. The renderer also
+now uses the active PALBANK latch by default and logs selected/active/auto banks
+in diagnostics, so palette-bank flicker can be tested directly; diagnostics also
+report sprite scanline saturation to distinguish renderer bugs from the 96-sprite
+line limit. A sampled 1200-refresh diagnostic showed the active and auto palette
+banks matching (`palette_selected=palette_active=palette_auto`) and no sprite
+line saturation (`sprite_sat_lines=0`, `sprite_max_line=63`) at the richer
+attract frame, so those two hypotheses are not supported in that window. This is
+still not a playable boot oracle, but the immediate blocker is no longer a
+strict generated-CPU dispatch gap or the former BIOS reset loop.
 
 An earlier no-BIOS executable checkpoint remains useful as a boundary proof:
 generated cart code reaches cartridge execution and then stops at the expected
@@ -419,8 +426,10 @@ MiSTer-style Metal Slug and BIOS paths. The live host currently defaults to
 frame-boundary presentation with a 5000-dispatch cap per presented refresh. In
 this mode `./run.sh --dpf N` or the `+`/`-` keys tune the per-frame cap instead
 of deliberately skipping emulated frames; `./run.sh --present-slice` returns to
-the older fixed-dispatch presentation mode for comparison. The script uses the
-same Metal Slug recompilation and user-provided BIOS slice as the headless smoke,
+the older fixed-dispatch presentation mode for comparison. The renderer defaults
+to the runtime PALBANK latch rather than the old richest-bank heuristic, with
+`./run.sh --palette-bank auto|0|1` kept for A/B tests. The script uses the same
+Metal Slug recompilation and user-provided BIOS slice as the headless smoke,
 then links
 `tools/sdl_live_host.c` with the generated cart/BIOS objects, runtime, video
 renderer, and shared dispatch trampoline. The host initializes the runtime,
@@ -439,11 +448,11 @@ For live transition diagnostics, `./run.sh --diag N` (or
 refreshes. The block includes split cart/BIOS dispatch counts, recent dispatch
 ring entries, watched frontier hit counts, runtime latch state, watchdog timeout
 state, system-latch / BIOS-vector / LSPC / IRQ-ack writes, memory/video
-checksums, backup-RAM counters/table probes, Metal Slug RAM sentinels, and D/A
-registers. These diagnostics first classified the white-screen path as an
-intentional cart soft-reset request (`$001838 -> $00085E -> $000862 ->
-$C00444 -> $C112D2 -> $C11300`) and then showed the backup-RAM high-water
-problem described above.
+checksums, sprite saturation, backup-RAM counters/table probes, Metal Slug RAM
+sentinels, and D/A registers. These diagnostics first classified the
+white-screen path as an intentional cart soft-reset request (`$001838 ->
+$00085E -> $000862 -> $C00444 -> $C112D2 -> $C11300`) and then showed the
+backup-RAM high-water problem described above.
 
 The runtime now honors `SWPBIOS`/`SWPROM` for the banked 68000 vector window:
 when BIOS vectors are selected, `$000000-$00007F` reads come from the system ROM
