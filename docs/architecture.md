@@ -38,4 +38,10 @@ decoders, and snapshot-to-pixel helpers. Live SDL/native hosts should compose
 the generated CPU module, the runtime bus state, and these video helpers rather
 than baking rendering knowledge into emitted 68000 C.
 
+Audio follows the same boundary. `neo_audio` owns the Z80/M1-side sound bus,
+command/reply latches, M-ROM banking, and eventually YM2610 synthesis. The
+68000 runtime should only expose CPU-visible sound latch behavior and forward
+commands/replies across a narrow host/runtime boundary; generated 68000 code
+should not know about Z80 or YM2610 internals.
+
 The first useful milestone is function-level parity against an interpreter for selected 68000 routines, not full game boot.

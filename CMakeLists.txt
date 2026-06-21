@@ -14,6 +14,23 @@ target_include_directories(neo_runtime PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+add_library(superzazu_z80
+    third_party/superzazu/z80.c
+)
+target_include_directories(superzazu_z80 PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/superzazu"
+)
+
+add_library(neo_audio
+    runtime/src/neogeo_audio.c
+)
+target_include_directories(neo_audio PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+target_link_libraries(neo_audio PUBLIC
+    superzazu_z80
+)
+
 add_library(neo_video
     runtime/src/neogeo_video.c
 )
@@ -69,6 +86,18 @@ target_link_libraries(neo-render-snapshot PRIVATE
     neo_recompiler_core
 )
 
+add_executable(neo-audio-probe
+    tools/audio_probe.c
+)
+target_include_directories(neo-audio-probe PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/recompiler/src"
+)
+target_link_libraries(neo-audio-probe PRIVATE
+    neo_audio
+    neo_recompiler_core
+)
+
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
     pkg_check_modules(SDL2 QUIET IMPORTED_TARGET sdl2)
@@ -91,21 +120,27 @@ endif()
 
 if(MSVC)
     target_compile_options(neo_runtime PRIVATE /W4)
+    target_compile_options(superzazu_z80 PRIVATE /W4)
+    target_compile_options(neo_audio PRIVATE /W4)
     target_compile_options(neo_video PRIVATE /W4)
     target_compile_options(neo_recompiler_core PRIVATE /W4)
     target_compile_options(neo-recomp PRIVATE /W4)
     target_compile_options(generate-bios-recomp PRIVATE /W4)
     target_compile_options(neo-render-snapshot PRIVATE /W4)
+    target_compile_options(neo-audio-probe PRIVATE /W4)
     if(TARGET neo-snapshot-viewer)
         target_compile_options(neo-snapshot-viewer PRIVATE /W4)
     endif()
 else()
     target_compile_options(neo_runtime PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(superzazu_z80 PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(neo_audio PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(neo_video PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(neo_recompiler_core PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(neo-recomp PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(generate-bios-recomp PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(neo-render-snapshot PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(neo-audio-probe PRIVATE -Wall -Wextra -Wpedantic)
     if(TARGET neo-snapshot-viewer)
         target_compile_options(neo-snapshot-viewer PRIVATE -Wall -Wextra -Wpedantic)
     endif()

@@ -298,13 +298,30 @@ real live host loop rather than a saved-snapshot reload.
 Current local status: the generated Metal Slug cart build is dispatch-audit
 clean with `function candidates: 46396` and
 `sites=7485 missing_direct=0 computed=0 runtime_computed=59`. The full test
-suite is `15/15` passing. The live host now uses cycle-derived frame timing and
+suite is `16/16` passing. The live host now uses cycle-derived frame timing and
 runs beyond the earlier `$C18662`/`$09B90A` dispatch frontiers, the former
 cart-requested soft-reset/BIOS-reset white-screen loop, and the observed
 `$092252` dynamic script dispatch miss. The current useful path is still
 cart-header entry plus a user-provided BIOS slice; next work is validating fresh
-live frames and isolating remaining renderer/runtime state, not adding a broad
-audio/input stack yet.
+live frames and isolating remaining renderer/runtime state, not complete yet. The audio path has started with a tested Z80/M1 bus
+scaffold and YM2610 register-write probe, but it does not synthesize or play
+sound yet.
+
+
+### Audio probe
+
+The first audio slice is a deterministic Z80-side Neo Geo sound-bus scaffold.
+It runs the cartridge M1 program with MAME/ares-grounded M-ROM banking,
+68000->Z80 command/NMI latches, Z80->68000 reply latch, and a YM2610
+register-write stub. It is useful for proving that sound commands reach the
+M1 driver before real YM2610 synthesis and SDL output are added:
+
+```sh
+build/neo-audio-probe ~/Documents/Games/Mister/NEOGEO/mslug.neo 0x03
+```
+
+This is not audible yet; it reports Z80 PC/cycles, NMI state, reply-latch
+state, and YM2610 register-write deltas.
 
 ## Decoder Slice
 

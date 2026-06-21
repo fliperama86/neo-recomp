@@ -1769,6 +1769,16 @@ and `V` are only trusted where generated-exec tests cover them.
   matches a fresh MAME/MVS directory while leaving the game high-score block for
   cartridge code to initialize.
 
+- local: Started the audio path with a separate `neo_audio` module and
+  permissively vendored `superzazu/z80` core. The new module models the Neo Geo
+  Z80-side M1 bus with MAME/ares-grounded initial banking, 2 KiB work RAM,
+  68000->Z80 command/NMI latch, Z80->68000 reply latch, and a YM2610
+  register-write/read stub. `tests/test_neogeo_audio.c` covers banking, RAM,
+  polled commands, and NMI command service; `tools/audio_probe.c` can run a
+  cartridge M1 ROM and report YM register-write deltas. This is not audible
+  yet; next audio work is replacing the stub with YM2610 synthesis and wiring
+  SDL output into the live host.
+
 ## Next Steps
 
 Use this loop:
@@ -1790,8 +1800,10 @@ Immediate next slice:
   them with the known-good offline/snapshot/MAME frames, and use the smallest
   possible runtime probes to isolate missing/misaligned sprite or fix-layer
   state before adding broader hardware.
-- Keep audio, full input, and full-BIOS boot as follow-ups unless a rendering
-  or liveness check proves they are directly blocking real frames. If the live
+- Continue audio in small slices now that rendering is good enough for live
+  inspection: wire a real YM2610 core behind the current Z80/M1 bus scaffold,
+  then add SDL output. Keep full input and full-BIOS boot as follow-ups unless
+  they directly block audio/video liveness. If the live
   path stalls again, use the new watchdog/backup/memcard/status diagnostics to
   classify the next blocker before broadening the stack.
 
