@@ -7,11 +7,11 @@ NEO_PATH="${1:-$HOME/Documents/Games/Mister/NEOGEO/mslug.neo}"
 BIOS_PATH="${2:-$HOME/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1}"
 LO_ROM_PATH="${3:-}"
 FAST_FORWARD="${NG_MSLUG_SDL_FAST_FORWARD:-500000}"
-DISPATCHES_PER_REFRESH="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-5000}"
+DISPATCHES_PER_REFRESH="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-50000}"
 PRESENT_MODE="${NG_MSLUG_SDL_PRESENT_MODE:-frame}"
 PALETTE_BANK="${NG_MSLUG_SDL_PALETTE_BANK:-active}"
-SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
-WATCHDOG_TIMEOUT_POLLS="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
+SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-0}"
+WATCHDOG_TIMEOUT_CYCLES="${NG_MSLUG_WATCHDOG_TIMEOUT_CYCLES:-1622015}"
 VIDEO_SETTLE_DISPATCHES="${NG_MSLUG_SDL_VIDEO_SETTLE_DISPATCHES:-16}"
 FRAME_HOLD="${NG_MSLUG_SDL_FRAME_HOLD:-1}"
 START_MODE="${NG_MSLUG_START_MODE:-cart}"
@@ -23,7 +23,7 @@ STALL_REFRESHES="${NG_MSLUG_SDL_STALL_REFRESHES:-}"
 NO_THROTTLE="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
 BUILD_ONLY="${NG_MSLUG_SDL_BUILD_ONLY:-0}"
 
-CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
+CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_CYCLE_HOOK=ng_generated_cycle_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
 log_step() {
   printf '\n==> %s\n' "$*" >&2
@@ -73,10 +73,10 @@ else
   log_note "lo/zoom ROM: auto-detect near game path if present"
 fi
 log_note "fast-forward: $FAST_FORWARD dispatches (set NG_MSLUG_SDL_FAST_FORWARD=10000 for faster startup)"
-log_note "dispatch cap/refresh: $DISPATCHES_PER_REFRESH"
+log_note "safety dispatch cap/refresh: $DISPATCHES_PER_REFRESH"
 log_note "present mode: $PRESENT_MODE"
 log_note "palette bank: $PALETTE_BANK"
-log_note "watchdog timeout polls: $WATCHDOG_TIMEOUT_POLLS"
+log_note "watchdog timeout cycles: $WATCHDOG_TIMEOUT_CYCLES"
 log_note "video settle dispatches: $VIDEO_SETTLE_DISPATCHES"
 log_note "frame hold: $FRAME_HOLD"
 log_note "start mode: $START_MODE"
@@ -192,7 +192,7 @@ HOST_ARGS=(
   --present-mode "$PRESENT_MODE"
   --palette-bank "$PALETTE_BANK"
   --scanline-poll-interval "$SCANLINE_POLL_INTERVAL"
-  --watchdog-timeout-polls "$WATCHDOG_TIMEOUT_POLLS"
+  --watchdog-timeout-cycles "$WATCHDOG_TIMEOUT_CYCLES"
   --video-settle-dispatches "$VIDEO_SETTLE_DISPATCHES"
   --frame-hold "$FRAME_HOLD"
   --scale "$SCALE"

@@ -27,6 +27,7 @@ add_library(neo_recompiler_core
     recompiler/src/function_discovery.c
     recompiler/src/game_config.c
     recompiler/src/m68k_analyze.c
+    recompiler/src/m68k_cycles.c
     recompiler/src/m68k_decode.c
     recompiler/src/m68k_validate.c
     recompiler/src/m68k_stub.c

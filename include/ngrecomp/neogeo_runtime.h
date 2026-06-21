@@ -48,8 +48,18 @@ typedef int (*NgExternalDispatchHandler)(uint32_t addr);
 #define NG_NEO_LSPCMODE_TIMER_RELOAD_ON_FRAME 0x0040u
 #define NG_NEO_LSPCMODE_TIMER_RELOAD_ON_ZERO  0x0080u
 
+#define NG_NEO_MASTER_CLOCK_HZ 24000000u
+#define NG_NEO_MAIN_CPU_CLOCK_HZ (NG_NEO_MASTER_CLOCK_HZ / 2u)
+#define NG_NEO_PIXEL_CLOCK_HZ (NG_NEO_MASTER_CLOCK_HZ / 4u)
 #define NG_NEO_NTSC_PIXELS_PER_SCANLINE 384u
 #define NG_NEO_NTSC_SCANLINES_PER_FRAME 264u
+#define NG_NEO_NTSC_VBLANK_START_SCANLINE 0x0F0u
+#define NG_NEO_CPU_CYCLES_PER_SCANLINE 768u
+#define NG_NEO_CPU_CYCLES_PER_FRAME \
+    (NG_NEO_CPU_CYCLES_PER_SCANLINE * NG_NEO_NTSC_SCANLINES_PER_FRAME)
+#define NG_NEO_WATCHDOG_TIMEOUT_MASTER_TICKS 3244030u
+#define NG_NEO_WATCHDOG_TIMEOUT_CPU_CYCLES \
+    (NG_NEO_WATCHDOG_TIMEOUT_MASTER_TICKS / 2u)
 
 void ng_neogeo_set_external_dispatch(NgExternalDispatchHandler handler);
 void ng_m68k_set_interrupt_level(uint8_t level, uint8_t vector);
@@ -66,19 +76,28 @@ void ng_neogeo_reset_runtime(void);
 void ng_neogeo_set_auto_vblank_interval(uint32_t interrupt_polls);
 void ng_neogeo_set_auto_scanline_interval(uint32_t interrupt_polls);
 void ng_neogeo_set_watchdog_timeout_polls(uint32_t interrupt_polls);
+void ng_neogeo_set_watchdog_timeout_cycles(uint32_t cpu_cycles);
 void ng_neogeo_set_watchdog_reset_vector(uint32_t pc, uint32_t ssp);
 void ng_neogeo_begin_vblank(void);
 void ng_neogeo_advance_timer(uint32_t pixel_ticks);
 void ng_neogeo_advance_scanline(void);
 void ng_neogeo_advance_frame(void);
+void ng_neogeo_advance_cpu_cycles(uint32_t cpu_cycles);
+uint64_t ng_neogeo_cpu_cycles(void);
+uint32_t ng_neogeo_scanline_cycle(void);
+uint8_t ng_neogeo_cycle_timing_active(void);
 uint32_t ng_neogeo_watchdog_kicks(void);
 uint32_t ng_neogeo_watchdog_timeout_polls(void);
+uint32_t ng_neogeo_watchdog_timeout_cycles(void);
 uint32_t ng_neogeo_watchdog_last_kick_poll(void);
 uint32_t ng_neogeo_watchdog_max_gap_polls(void);
+uint64_t ng_neogeo_watchdog_last_kick_cycle(void);
+uint64_t ng_neogeo_watchdog_max_gap_cycles(void);
 uint32_t ng_neogeo_watchdog_resets(void);
 uint8_t ng_neogeo_watchdog_reset_pending(void);
 uint32_t ng_neogeo_watchdog_last_reset_pc(void);
 uint32_t ng_neogeo_watchdog_last_reset_poll(void);
+uint64_t ng_neogeo_watchdog_last_reset_cycle(void);
 uint32_t ng_neogeo_last_watchdog_pc(void);
 uint32_t ng_neogeo_last_watchdog_addr(void);
 uint8_t ng_neogeo_last_watchdog_value(void);

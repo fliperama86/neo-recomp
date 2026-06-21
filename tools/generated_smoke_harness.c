@@ -111,6 +111,11 @@ void ng_generated_instruction_hook(uint32_t addr) {
     ng_generated_smoke_note_instruction_watch(addr);
 }
 
+void ng_generated_cycle_hook(uint32_t addr, uint32_t cycles) {
+    (void)addr;
+    ng_neogeo_advance_cpu_cycles(cycles);
+}
+
 void ng_generated_smoke_clear_instruction_yield(void) {
     g_ng_generated_smoke_yield_addr = NG_GENERATED_SMOKE_YIELD_ADDR_NONE;
     g_ng_generated_smoke_yield_frame_must_differ =
@@ -584,12 +589,20 @@ static void ng_generated_smoke_hot_rank(uint32_t rank,
 
 #ifdef NG_GENERATED_SMOKE_HAS_BIOS
 static int ng_generated_smoke_bios_dispatch(uint32_t addr) {
+    static int dispatch_depth;
+    static uint32_t active_addr;
     addr &= 0x00FFFFFFu;
     if (addr >= 0x00C00000u && addr <= 0x00CFFFFFu) {
         if (g_ng_generated_smoke_bios_dispatch_depth) {
             return 0;
         }
+        if (dispatch_depth != 0 && active_addr == addr) {
+            return 0;
+        }
+        active_addr = addr;
+        ++dispatch_depth;
         ng_generated_smoke_call_bios(addr);
+        --dispatch_depth;
         return 1;
     }
     return 0;
@@ -741,6 +754,8 @@ static int ng_generated_smoke_write_snapshot_summary(const char *dir) {
     fprintf(f, "sr=$%04X\n", g_ng_m68k.sr);
     fprintf(f, "sp=$%08X\n", g_ng_m68k.a[7]);
     fprintf(f, "polls=%u\n", ng_neogeo_interrupt_polls());
+    fprintf(f, "cycles=%llu\n", (unsigned long long)ng_neogeo_cpu_cycles());
+    fprintf(f, "scanline_cycle=%u\n", ng_neogeo_scanline_cycle());
     fprintf(f, "watchdog=%u\n", ng_neogeo_watchdog_kicks());
     fprintf(f, "vblank=%u\n", ng_neogeo_vblank_interrupts());
     fprintf(f, "frame=%u\n", ng_neogeo_frame_count());
@@ -995,7 +1010,8 @@ static void ng_generated_smoke_print_summary(void) {
             "smoke summary: dispatches=%llu cart=%llu bios=%llu "
             "unique=%u hot_overflow=%u last=$%06X last_cart=$%06X "
             "last_bios=$%06X pc=$%06X sr=$%04X "
-            "sp=$%08X polls=%u watchdog=%u vblank=%u frame=%u timer_irq=%u "
+            "sp=$%08X polls=%u cycles=%llu scanline_cycle=%u "
+            "watchdog=%u vblank=%u frame=%u timer_irq=%u "
             "irqack=%u irq_pending=$%04X last_irq_pc=$%06X "
             "last_irq_level=%u last_irq_vector=%u "
             "scanline=%u lspc=$%04X vram_addr=$%04X vram_mod=$%04X "
@@ -1020,6 +1036,8 @@ static void ng_generated_smoke_print_summary(void) {
             g_ng_m68k.sr,
             g_ng_m68k.a[7],
             ng_neogeo_interrupt_polls(),
+            (unsigned long long)ng_neogeo_cpu_cycles(),
+            ng_neogeo_scanline_cycle(),
             ng_neogeo_watchdog_kicks(),
             ng_neogeo_vblank_interrupts(),
             ng_neogeo_frame_count(),

@@ -7,11 +7,11 @@ NEO_PATH="${1:-$HOME/Documents/Games/Mister/NEOGEO/mslug.neo}"
 BIOS_PATH="${2:-$HOME/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1}"
 DISPATCH_BUDGETS="${NG_MSLUG_PROGRESS_BUDGETS:-${NG_MSLUG_DISPATCH_BUDGET:-10000 50000 100000 500000}}"
 SNAPSHOT_DIR="${NG_MSLUG_SNAPSHOT_DIR:-}"
-SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
+SCANLINE_POLL_INTERVAL="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-0}"
 SNAPSHOT_SCANLINE="${NG_MSLUG_SNAPSHOT_SCANLINE:-}"
 SNAPSHOT_EXTRA_DISPATCHES="${NG_MSLUG_SNAPSHOT_EXTRA_DISPATCHES:-250000}"
 
-CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
+CFLAGS=(-std=c99 -Wall -Wextra -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_CYCLE_HOOK=ng_generated_cycle_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
 
 if [[ ! -f "$NEO_PATH" ]]; then
   echo "mslug .neo not found: $NEO_PATH" >&2

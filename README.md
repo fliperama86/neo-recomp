@@ -257,15 +257,18 @@ use `./run.sh quick` for the 10k-dispatch pre-window fast-forward, `./run.sh
 attract` for the deeper 500k-dispatch pre-window fast-forward, or
 `scripts/mslug rebuild` to force a build and then launch. The wrapper defaults
 to `~/Documents/Games/Mister/NEOGEO/mslug.neo` and
-`~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. The live host currently
-defaults to instruction-yielded frame-boundary presentation with a
-5000-dispatch cap per presented refresh. In this mode `--dpf N` / the `+`/`-`
-keys adjust the per-frame cap instead of intentionally skipping emulated
-frames; use `./run.sh --present-slice` to return to the older fixed-dispatch
-presentation mode for comparison. The host throttles from MAME's Neo Geo
-raw-screen timing (`24 MHz / 4` pixel clock, `HTOTAL=0x180`, `VTOTAL=0x108`,
-~59.19 Hz). Small host overruns catch up by skipping sleep, not by dropping
-emulated frames; only large backlogs reset the throttle phase. Use
+`~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1`. The live host now advances
+scanlines/frames from generated 68000 cycle hooks: emitted instructions carry a
+MAME/Musashi 68000 base-cycle count, and the runtime uses Neo Geo timing
+constants (`24 MHz` master, `12 MHz` 68k, `6 MHz` pixel clock, `HTOTAL=0x180`,
+`VTOTAL=0x108`, 768 68k cycles/scanline, 202752 cycles/frame). MiSTer's Neo Geo
+core is used as a second reference for the same 24M/12M/6M video pipeline and
+pixel/raster counters. `--dpf N` / the `+`/`-` keys now adjust only a safety
+dispatch cap per presented refresh (default 50000); it is not the timing source.
+Use `./run.sh --present-slice` only to return to the older fixed-dispatch
+presentation mode for comparison. The host throttles presentation to MAME's raw
+screen rate (~59.19 Hz). Small host overruns catch up by skipping sleep, not by
+dropping emulated frames; only large backlogs reset the throttle phase. Use
 `./run.sh --frame-hold N` (or `--slowmo N`) only when you intentionally want
 slow inspection, and Space + `n`/`.` for frame-by-frame inspection. `./run.sh --present-video` enables a bounded
 post-vblank Metal Slug video-update settle path (default 16 extra dispatches,
@@ -282,11 +285,12 @@ yet; it reuses the headless runtime model and current renderer, but it is a
 real live host loop rather than a saved-snapshot reload.
 
 Current local status: the generated Metal Slug cart build is dispatch-audit
-clean with `function candidates: 46392` and
+clean with `function candidates: 46396` and
 `sites=7485 missing_direct=0 computed=0 runtime_computed=59`. The full test
-suite is `15/15` passing. The live host now runs beyond the earlier
-`$C18662`/`$09B90A` dispatch frontiers and the former cart-requested
-soft-reset/BIOS-reset white-screen loop. The current useful path is still
+suite is `15/15` passing. The live host now uses cycle-derived frame timing and
+runs beyond the earlier `$C18662`/`$09B90A` dispatch frontiers, the former
+cart-requested soft-reset/BIOS-reset white-screen loop, and the observed
+`$092252` dynamic script dispatch miss. The current useful path is still
 cart-header entry plus a user-provided BIOS slice; next work is validating fresh
 live frames and isolating remaining renderer/runtime state, not adding a broad
 audio/input stack yet.

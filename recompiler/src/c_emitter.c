@@ -1,5 +1,6 @@
 #include "c_emitter.h"
 
+#include "m68k_cycles.h"
 #include "m68k_decode.h"
 #include "m68k_validate.h"
 
@@ -73,6 +74,9 @@ static void emit_header(FILE *out) {
     fprintf(out, "#endif\n\n");
     fprintf(out, "#ifndef NG_GENERATED_INSTRUCTION_HOOK\n");
     fprintf(out, "#define NG_GENERATED_INSTRUCTION_HOOK(addr) ((void)(addr))\n");
+    fprintf(out, "#endif\n\n");
+    fprintf(out, "#ifndef NG_GENERATED_CYCLE_HOOK\n");
+    fprintf(out, "#define NG_GENERATED_CYCLE_HOOK(addr, cycles) ((void)(addr), (void)(cycles))\n");
     fprintf(out, "#endif\n\n");
     fprintf(out, "#ifndef NG_GENERATED_SHOULD_YIELD\n");
     fprintf(out, "#define NG_GENERATED_SHOULD_YIELD(addr) (0)\n");
@@ -2738,6 +2742,9 @@ static void emit_function_body(FILE *out,
                 instrs[i].addr & 0x00FFFFFFu);
         fprintf(out, "    if (ng_service_interrupt(0x%08Xu)) return;\n",
                 instrs[i].addr & 0x00FFFFFFu);
+        fprintf(out, "    NG_GENERATED_CYCLE_HOOK(0x%08Xu, %uu);\n",
+                instrs[i].addr & 0x00FFFFFFu,
+                (unsigned)ng_m68k_base_cycles_for_instr(&instrs[i]));
         fprintf(out, "    ng_trace_sr = g_ng_m68k.sr;\n");
         if (!ng_m68k_validate(&instrs[i])) {
             emit_record_unsupported(diagnostics, instrs[i].addr);

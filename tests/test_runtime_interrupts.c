@@ -225,6 +225,63 @@ int main(void) {
     ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_VBLANK);
     ng_neogeo_reset_runtime();
 
+    CHECK(NG_NEO_MASTER_CLOCK_HZ == 24000000u);
+    CHECK(NG_NEO_MAIN_CPU_CLOCK_HZ == 12000000u);
+    CHECK(NG_NEO_PIXEL_CLOCK_HZ == 6000000u);
+    CHECK(NG_NEO_CPU_CYCLES_PER_SCANLINE == 768u);
+    CHECK(NG_NEO_CPU_CYCLES_PER_FRAME == 202752u);
+    CHECK(NG_NEO_WATCHDOG_TIMEOUT_CPU_CYCLES == 1622015u);
+
+    CHECK(!ng_neogeo_cycle_timing_active());
+    CHECK(ng_neogeo_cpu_cycles() == 0u);
+    CHECK(ng_neogeo_scanline_cycle() == 0u);
+    ng_neogeo_advance_cpu_cycles(NG_NEO_CPU_CYCLES_PER_SCANLINE - 1u);
+    CHECK(ng_neogeo_cycle_timing_active());
+    CHECK(ng_neogeo_cpu_cycles() == NG_NEO_CPU_CYCLES_PER_SCANLINE - 1u);
+    CHECK(ng_neogeo_scanline_cycle() == NG_NEO_CPU_CYCLES_PER_SCANLINE - 1u);
+    CHECK(ng_neogeo_current_scanline() == 0u);
+    ng_neogeo_advance_cpu_cycles(1u);
+    CHECK(ng_neogeo_cpu_cycles() == NG_NEO_CPU_CYCLES_PER_SCANLINE);
+    CHECK(ng_neogeo_scanline_cycle() == 0u);
+    CHECK(ng_neogeo_current_scanline() == 1u);
+    CHECK(ng_neogeo_frame_count() == 0u);
+    ng_neogeo_advance_cpu_cycles(
+        NG_NEO_CPU_CYCLES_PER_SCANLINE *
+        (NG_NEO_NTSC_SCANLINES_PER_FRAME - 1u));
+    CHECK(ng_neogeo_current_scanline() == 0u);
+    CHECK(ng_neogeo_frame_count() == 1u);
+    CHECK(ng_neogeo_vblank_interrupts() == 1u);
+    ng68k_write16(NG_NEO_REG_IRQACK, NG_NEO_IRQACK_VBLANK);
+
+    ng_neogeo_reset_runtime();
+    ng_neogeo_set_auto_scanline_interval(1u);
+    ng_neogeo_advance_cpu_cycles(1u);
+    CHECK(!ng_m68k_take_interrupt(7, &level, &vector));
+    CHECK(ng_neogeo_current_scanline() == 0u);
+    CHECK(ng_neogeo_scanline_cycle() == 1u);
+    ng_neogeo_set_auto_scanline_interval(0);
+    ng_neogeo_reset_runtime();
+
+    {
+        uint32_t reset_pc = 0;
+        uint32_t reset_ssp = 0;
+        ng_neogeo_set_watchdog_reset_vector(0x000055AAu, 0x0010F300u);
+        ng_neogeo_set_watchdog_timeout_cycles(10u);
+        CHECK(ng_neogeo_watchdog_timeout_cycles() == 10u);
+        ng_neogeo_advance_cpu_cycles(9u);
+        CHECK(!ng_neogeo_watchdog_reset_pending());
+        g_ng_m68k.pc = 0x00001234u;
+        ng_neogeo_advance_cpu_cycles(1u);
+        CHECK(ng_neogeo_watchdog_reset_pending());
+        CHECK(ng_neogeo_watchdog_last_reset_pc() == 0x00001234u);
+        CHECK(ng_neogeo_watchdog_last_reset_cycle() == 10u);
+        CHECK(ng_m68k_take_reset(&reset_pc, &reset_ssp));
+        CHECK(reset_pc == 0x000055AAu);
+        CHECK(reset_ssp == 0x0010F300u);
+        CHECK(ng_neogeo_watchdog_last_kick_cycle() == ng_neogeo_cpu_cycles());
+    }
+    ng_neogeo_reset_runtime();
+
     ng_neogeo_set_program_rom(program_rom, (uint32_t)sizeof(program_rom));
     CHECK(ng68k_read8(0x000000u) == 0x12u);
     CHECK(ng68k_read16(0x000000u) == 0x1234u);

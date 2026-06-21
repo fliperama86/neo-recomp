@@ -1,6 +1,6 @@
 # Progress Tracker
 
-Last updated: 2026-06-20
+Last updated: 2026-06-21
 
 This is the live working document for `neo-recomp`. Keep the README focused on
 project orientation; update this file after each meaningful green slice.
@@ -10,7 +10,11 @@ project orientation; update this file after each meaningful green slice.
 - Repository: `https://github.com/fliperama86/neo-recomp.git`
 - Branch: `main`
 - Latest pushed commit: `d6b38dd Update Metal Slug progress docs`
-- Local validation: `ctest --test-dir build --output-on-failure`
+- Local validation: `cmake --build build -j4`;
+  `ctest --test-dir build --output-on-failure`;
+  `scripts/mslug build`;
+  `SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_MAX_REFRESHES=120 scripts/mslug`;
+  `SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 NG_MSLUG_SDL_MAX_REFRESHES=1200 scripts/mslug`
 - Current test status: 15/15 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
@@ -58,9 +62,9 @@ Latest local Metal Slug build/live-smoke sequence used:
 ```sh
 scripts/mslug build
 SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 \
-  NG_MSLUG_SDL_STATUS_INTERVAL=300 \
+  NG_MSLUG_SDL_STATUS_INTERVAL=400 \
   NG_MSLUG_SDL_MAX_REFRESHES=1200 scripts/mslug \
-  > /tmp/mslug_frame_present_1200_dpf5000.log 2>&1
+  > /tmp/mslug_cycle_timed_1200.log 2>&1
 ```
 
 `scripts/mslug` / `./run.sh` launches the cached live SDL host;
@@ -69,7 +73,7 @@ cart C still compiles, and the static dispatch audit is clean:
 
 ```text
 game config functions: entry=0 extra=482 discovery_files=0 jump_tables=72 runtime_dispatch=59
-function candidates: 46392
+function candidates: 46396
 dispatch audit: sites=7485 missing_direct=0 external_direct=20 computed=0 runtime_computed=59 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
@@ -100,10 +104,31 @@ are created. A dummy no-throttle run then reached `refresh=4500` and stopped
 cleanly at `dispatches=9000000 frame=6754 scanline=215 budget_stop=$00065C`; a
 longer spot-check reached `refresh=6000` / `frame=8865`. The old `$FFFFFF` miss
 is gone, and the `$80000A`/`$A0000A` memory-card probes are now modeled as
-absent-card reads instead of unmapped-bus spam. The live host now presents on
-emulated frame boundaries by default: with a 5000-dispatch cap, a dummy
-no-throttle smoke reached `refresh=1200 frame=1200 scanline=0` instead of
-skipping BIOS/logo animation states via fixed dispatch slices. The renderer also
+absent-card reads instead of unmapped-bus spam. A later operator log showed an
+eventual live stall with `recent_loop=1` and every recent dispatch at `$092252`;
+that was not a hardware-timing stall but a missing dynamic script target from
+the `$043906`/`$043AA4` `JSR ($2,A1)` path when `A1=$092250`. The TOML now seeds
+`$092252`, generated C includes `ng_func_092252`, and the SDL external-dispatch
+fallback no longer recursively re-enters unknown cart addresses; the next
+unseeded dynamic cart target should fail loudly as a dispatch miss instead of
+silently burning the dispatch cap.
+
+The live host now presents on emulated frame boundaries by default, and those
+boundaries come from generated 68k cycle hooks rather than an arbitrary
+scanline-poll interval. Emitted instructions call `NG_GENERATED_CYCLE_HOOK`
+with a reduced MAME/Musashi 68000 base-cycle table (BSD-3-Clause attribution in
+`recompiler/src/m68k_cycles.c`). Runtime timing uses the Neo Geo constants from
+MAME (`NEOGEO_MASTER_CLOCK=24 MHz`, main 68k `=12 MHz`, pixel clock `=6 MHz`,
+`HTOTAL=0x180`, `VTOTAL=0x108`) and is cross-checked against MiSTer's Neo Geo
+core (`neogeo.sv` 24M/12M/6M enables, `rtl/video/videosync.v` pixel/raster
+counters, and `rtl/video/lspc2_a2.v` pixel-264 line-buffer timing). That gives
+768 68k cycles/scanline and 202752 cycles/frame. `--dpf`/`+`/`-` is now only a
+safety dispatch cap (default 50000) and `NG_MSLUG_SCANLINE_POLL_INTERVAL`
+defaults to `0` as a legacy fallback for builds without cycle hooks. A paced
+dummy 120-refresh run stopped at `frame=120` in ~2.06s, matching the MAME raw
+rate (~59.19 Hz), and a no-throttle 1200-refresh dummy run stopped cleanly at
+`frame=1200 scanline=0` with cycle counts tracking 202752 cycles/frame. The
+renderer also
 now uses the active PALBANK latch by default and logs selected/active/auto banks
 in diagnostics, so palette-bank flicker can be tested directly; diagnostics also
 report sprite scanline saturation to distinguish renderer bugs from the 96-sprite
@@ -422,10 +447,11 @@ expensive generated-code/relink work, while `./run.sh` only launches the cached
 `./run.sh quick` uses a 10k-dispatch pre-window fast-forward, `./run.sh attract`
 uses the deeper 500k-dispatch pre-window fast-forward, and `scripts/mslug
 rebuild` forces a build and then launches. The wrapper defaults to the local
-MiSTer-style Metal Slug and BIOS paths. The live host currently defaults to
-instruction-yielded frame-boundary presentation with a 5000-dispatch cap per
-presented refresh. In this mode `./run.sh --dpf N` or the `+`/`-` keys tune the
-per-frame cap instead of deliberately skipping emulated frames; `./run.sh
+MiSTer-style Metal Slug and BIOS paths. The live host now defaults to
+instruction-yielded frame-boundary presentation with scanline/frame advancement
+driven by emitted 68000 cycle hooks. In this mode `./run.sh --dpf N` or the
+`+`/`-` keys tune only the safety dispatch cap (default 50000) instead of
+defining timing or deliberately skipping emulated frames; `./run.sh
 --present-slice` returns to the older fixed-dispatch presentation mode for
 comparison. `./run.sh --present-video` enables a bounded post-vblank
 Metal Slug video-update settle path (default `--video-settle 16`) for A/B
@@ -439,13 +465,14 @@ then links
 renderer, and shared dispatch trampoline. The host initializes the runtime,
 optionally fast-forwards to the current useful frontier
 (`NG_MSLUG_SDL_FAST_FORWARD`, default 500000 dispatches), then advances
-generated CPU dispatches until the next emulated frame boundary, or until the
-per-refresh dispatch cap is reached, and renders directly from live runtime
+generated CPU dispatches until the next cycle-derived emulated frame boundary,
+or until the safety cap is reached, and renders directly from live runtime
 VRAM/palette state. `NG_MSLUG_SDL_MAX_REFRESHES` plus
 `SDL_VIDEODRIVER=dummy` gives a noninteractive smoke path; locally this now
-runs past the previously observed dispatch/frontier stalls and the former
-soft-reset white-screen loop. This is still using the approximate headless
-device model, but it is no longer a saved snapshot reload loop.
+runs past the previously observed dispatch/frontier stalls, the former
+soft-reset white-screen loop, and the `$092252` dynamic script miss. This is
+still using the approximate headless device model, but it is no longer a saved
+snapshot reload loop.
 
 For live transition diagnostics, `./run.sh --diag N` (or
 `NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL=N`) prints a detailed status block every `N`

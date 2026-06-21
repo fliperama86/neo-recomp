@@ -505,6 +505,9 @@ extra = [
   0x09C39A,
   0x09C3D0,
   0x09C3F0,
+  # Script command body reached by the $043906/$043AA4 JSR ($2,A1)
+  # interpreter path when A1 points at the $092250 command record.
+  0x092252,
   0x0934E2,
   0x0934F4,
   0x093512,

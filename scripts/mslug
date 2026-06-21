@@ -12,7 +12,7 @@ export NG_MSLUG_SDL_FAST_FORWARD
 
 usage() {
   cat >&2 <<USAGE
-usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|video|slice|--video-settle N|--frame-hold N|--palette-bank active|auto|0|1|--watchdog N|--start-bios] [game.neo bios.rom [lo-rom]]
+usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--present-mode frame|video|slice|--video-settle N|--frame-hold N|--palette-bank active|auto|0|1|--watchdog-cycles N|--start-bios] [game.neo bios.rom [lo-rom]]
 
 Default paths:
   ~/Documents/Games/Mister/NEOGEO/mslug.neo
@@ -41,11 +41,12 @@ launch_cached_host() {
   local bios="${2:-$DEFAULT_BIOS}"
   local lo_rom="${3:-}"
   local fast_forward="${NG_MSLUG_SDL_FAST_FORWARD:-0}"
-  local dpf="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-5000}"
+  local dpf="${NG_MSLUG_SDL_DISPATCHES_PER_REFRESH:-50000}"
   local present_mode="${NG_MSLUG_SDL_PRESENT_MODE:-frame}"
   local palette_bank="${NG_MSLUG_SDL_PALETTE_BANK:-active}"
-  local scanline_poll="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-64}"
-  local watchdog_timeout="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-250000}"
+  local scanline_poll="${NG_MSLUG_SCANLINE_POLL_INTERVAL:-0}"
+  local watchdog_timeout_cycles="${NG_MSLUG_WATCHDOG_TIMEOUT_CYCLES:-}"
+  local watchdog_timeout_polls="${NG_MSLUG_WATCHDOG_TIMEOUT_POLLS:-}"
   local video_settle="${NG_MSLUG_SDL_VIDEO_SETTLE_DISPATCHES:-16}"
   local frame_hold="${NG_MSLUG_SDL_FRAME_HOLD:-1}"
   local start_mode="${NG_MSLUG_START_MODE:-cart}"
@@ -76,7 +77,6 @@ launch_cached_host() {
     --present-mode "$present_mode"
     --palette-bank "$palette_bank"
     --scanline-poll-interval "$scanline_poll"
-    --watchdog-timeout-polls "$watchdog_timeout"
     --video-settle-dispatches "$video_settle"
     --frame-hold "$frame_hold"
     --scale "$scale"
@@ -96,6 +96,12 @@ launch_cached_host() {
   if [[ "$no_throttle" != "0" ]]; then
     host_args+=(--no-throttle)
   fi
+  if [[ -n "$watchdog_timeout_cycles" ]]; then
+    host_args+=(--watchdog-timeout-cycles "$watchdog_timeout_cycles")
+  fi
+  if [[ -n "$watchdog_timeout_polls" ]]; then
+    host_args+=(--watchdog-timeout-polls "$watchdog_timeout_polls")
+  fi
   if [[ "$start_mode" == "bios" ]]; then
     host_args+=(--start-bios)
   fi
@@ -106,7 +112,7 @@ launch_cached_host() {
 
   printf '==> Launching cached Metal Slug host\n' >&2
   printf '    fast-forward: %s dispatches\n' "$fast_forward" >&2
-  printf '    dispatches/refresh: %s\n' "$dpf" >&2
+  printf '    safety dispatch cap/refresh: %s\n' "$dpf" >&2
   printf '    present mode: %s\n' "$present_mode" >&2
   printf '    frame hold: %s\n' "$frame_hold" >&2
   printf '    palette bank: %s\n' "$palette_bank" >&2
@@ -195,6 +201,15 @@ while (($#)); do
       fi
       export NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL="$1"
       ;;
+    --watchdog-cycles|--watchdog-timeout-cycles)
+      shift
+      if (($# == 0)); then
+        echo "--watchdog-cycles needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_WATCHDOG_TIMEOUT_CYCLES="$1"
+      ;;
     --watchdog|--watchdog-timeout-polls)
       shift
       if (($# == 0)); then
@@ -202,6 +217,8 @@ while (($#)); do
         usage
         exit 2
       fi
+      echo "warning: --watchdog is legacy poll-based; use --watchdog-cycles for cycle timing" >&2
+      export NG_MSLUG_WATCHDOG_TIMEOUT_CYCLES=0
       export NG_MSLUG_WATCHDOG_TIMEOUT_POLLS="$1"
       ;;
     --video-settle|--video-settle-dispatches)

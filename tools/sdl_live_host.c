@@ -13,10 +13,10 @@
 #define NG_LIVE_PALETTE_WORDS (NG_NEO_PALETTE_RAM_BYTES / 2u)
 #define NG_LIVE_PALETTE_BANK_AUTO UINT32_MAX
 #define NG_LIVE_PALETTE_BANK_ACTIVE (UINT32_MAX - 1u)
-#define NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH 5000u
+#define NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH 50000u
 #define NG_LIVE_DEFAULT_FAST_FORWARD 0u
 #define NG_LIVE_DEFAULT_SCALE 3u
-#define NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS 250000u
+#define NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_CYCLES NG_NEO_WATCHDOG_TIMEOUT_CPU_CYCLES
 #define NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES 16u
 #define NG_LIVE_DEFAULT_FRAME_HOLD 1u
 #define NG_LIVE_MAME_MASTER_CLOCK_HZ 24000000ull
@@ -305,11 +305,17 @@ static uint8_t snapshot_auto_animation_counter(uint32_t frame_count, uint16_t ls
 }
 
 static int live_external_dispatch(uint32_t addr) {
+    static int dispatch_depth;
+    static uint32_t active_addr;
     addr &= 0x00FFFFFFu;
-    if (addr < 0x00100000u ||
-        (addr >= 0x00200000u && addr < 0x00300000u) ||
-        (addr >= 0x00C00000u && addr <= 0x00CFFFFFu)) {
+    if (addr >= 0x00C00000u && addr <= 0x00CFFFFFu) {
+        if (dispatch_depth != 0 && active_addr == addr) {
+            return 0;
+        }
+        active_addr = addr;
+        ++dispatch_depth;
         ng_generated_call(addr);
+        --dispatch_depth;
         return 1;
     }
     return 0;
@@ -717,7 +723,7 @@ static void print_live_status(const char *label,
                               uint64_t dispatches_per_refresh) {
     fprintf(stderr,
             "%s refresh=%llu dispatches=%llu frame=%u scanline=%u "
-            "pc=$%06X sr=$%04X dpf=%llu irq_pending=$%04X polls=%u "
+            "cycle=%llu pc=$%06X sr=$%04X cap=%llu irq_pending=$%04X polls=%u "
             "last_irq_pc=$%06X last_irq_level=%u last_irq_vector=%u "
             "budget_stop=$%06X\n",
             label,
@@ -725,6 +731,7 @@ static void print_live_status(const char *label,
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             ng_neogeo_frame_count(),
             ng_neogeo_current_scanline(),
+            (unsigned long long)ng_neogeo_cpu_cycles(),
             g_ng_m68k.pc & 0x00FFFFFFu,
             g_ng_m68k.sr & 0xFFFFu,
             (unsigned long long)dispatches_per_refresh,
@@ -802,7 +809,8 @@ static void print_live_diagnostics(const char *label,
             ng_generated_smoke_recent_loop_period());
     fprintf(stderr,
             "live runtime diag: watchdog=%u vblank=%u timer_irq=%u irqack=%u "
-            "wd_timeout=%u wd_gap=%u wd_max_gap=%u wd_resets=%u "
+            "wd_timeout_cycles=%u wd_gap_cycles=%llu wd_max_gap_cycles=%llu "
+            "wd_timeout_polls=%u wd_gap=%u wd_max_gap=%u wd_resets=%u "
             "wd_pending=%u wd_reset=$%06X@%u "
             "lspc=$%04X timer_reload=$%08X timer_counter=$%08X timer_stop=$%04X "
             "vram_addr=$%04X vram_mod=$%04X shadow=%u bios_vectors=%u fix=%u "
@@ -811,6 +819,10 @@ static void print_live_diagnostics(const char *label,
             ng_neogeo_vblank_interrupts(),
             ng_neogeo_timer_interrupts(),
             ng_neogeo_irq_ack_writes(),
+            ng_neogeo_watchdog_timeout_cycles(),
+            (unsigned long long)(ng_neogeo_cpu_cycles() -
+                                 ng_neogeo_watchdog_last_kick_cycle()),
+            (unsigned long long)ng_neogeo_watchdog_max_gap_cycles(),
             ng_neogeo_watchdog_timeout_polls(),
             ng_neogeo_interrupt_polls() - ng_neogeo_watchdog_last_kick_poll(),
             ng_neogeo_watchdog_max_gap_polls(),
@@ -987,15 +999,16 @@ static void usage(const char *argv0) {
             "\n"
             "Options:\n"
             "  --fast-forward <n>             dispatches before opening the loop (default: 0)\n"
-            "  --dispatches-per-refresh <n>   dispatch cap per rendered refresh (default: %u)\n"
+            "  --dispatches-per-refresh <n>   safety dispatch cap per rendered refresh (default: %u)\n"
             "  --present-mode <frame|video|slice>\n"
             "                                  frame-boundary, video-update-settled, or fixed-slice presentation (default: frame)\n"
             "  --video-settle-dispatches <n>  extra cap for video-update settle mode (default: %u)\n"
             "  --frame-hold <n>               present each emulated frame n times for slow inspection (default: %u)\n"
             "  --palette-bank <active|auto|0|1>\n"
             "                                  displayed palette bank (default: active latch)\n"
-            "  --scanline-poll-interval <n>   runtime scanline poll interval (default: 64)\n"
-            "  --watchdog-timeout-polls <n>   reset after n interrupt polls without watchdog kick (default: %u, 0 disables)\n"
+            "  --scanline-poll-interval <n>   legacy scanline poll interval when cycle hooks are disabled (default: 0)\n"
+            "  --watchdog-timeout-cycles <n>  reset after n 68k cycles without watchdog kick (default: %u, 0 disables)\n"
+            "  --watchdog-timeout-polls <n>   legacy reset after n interrupt polls without watchdog kick (default: 0)\n"
             "  --start-bios                   enter through the BIOS reset vector instead of cart header\n"
             "  --max-refreshes <n>            exit after n presented frames\n"
             "  --status-interval <n>          log status every n presented frames\n"
@@ -1007,7 +1020,7 @@ static void usage(const char *argv0) {
             NG_LIVE_DEFAULT_DISPATCHES_PER_REFRESH,
             NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES,
             NG_LIVE_DEFAULT_FRAME_HOLD,
-            NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS,
+            NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_CYCLES,
             NG_LIVE_DEFAULT_SCALE);
 }
 
@@ -1019,8 +1032,9 @@ int main(int argc, char **argv) {
     uint64_t diagnostics_interval = 0;
     uint64_t stall_refreshes = 180u;
     uint64_t no_throttle = 0;
-    uint64_t scanline_poll_interval = 64u;
-    uint64_t watchdog_timeout_polls = NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_POLLS;
+    uint64_t scanline_poll_interval = 0u;
+    uint64_t watchdog_timeout_cycles = NG_LIVE_DEFAULT_WATCHDOG_TIMEOUT_CYCLES;
+    uint64_t watchdog_timeout_polls = 0u;
     uint64_t video_settle_dispatches = NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES;
     uint64_t frame_hold = NG_LIVE_DEFAULT_FRAME_HOLD;
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
@@ -1069,6 +1083,8 @@ int main(int argc, char **argv) {
             target = &scanline_poll_interval;
         } else if (strcmp(option, "--watchdog-timeout-polls") == 0) {
             target = &watchdog_timeout_polls;
+        } else if (strcmp(option, "--watchdog-timeout-cycles") == 0) {
+            target = &watchdog_timeout_cycles;
         } else if (strcmp(option, "--video-settle-dispatches") == 0) {
             target = &video_settle_dispatches;
         } else if (strcmp(option, "--frame-hold") == 0 ||
@@ -1112,6 +1128,7 @@ int main(int argc, char **argv) {
     }
     if (dispatches_per_refresh == 0u || frame_hold == 0u ||
         scanline_poll_interval > UINT32_MAX ||
+        watchdog_timeout_cycles > UINT32_MAX ||
         watchdog_timeout_polls > UINT32_MAX ||
         scale == 0u || scale > 16u) {
         usage(argv[0]);
@@ -1172,6 +1189,7 @@ int main(int argc, char **argv) {
     ng_neogeo_set_external_dispatch(live_external_dispatch);
     ng_neogeo_set_auto_scanline_interval((uint32_t)scanline_poll_interval);
     ng_neogeo_set_watchdog_reset_vector(initial_entry, ng_program_rom_initial_ssp(&rom));
+    ng_neogeo_set_watchdog_timeout_cycles((uint32_t)watchdog_timeout_cycles);
     ng_neogeo_set_watchdog_timeout_polls((uint32_t)watchdog_timeout_polls);
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
     g_ng_m68k.ssp = ng_program_rom_initial_ssp(&rom);
@@ -1237,7 +1255,7 @@ int main(int argc, char **argv) {
 
     fprintf(stderr,
             "live host started: entry=$%06X cart_entry=$%06X dispatches=%llu "
-            "frame=%u scanline=%u present=%s palette=%s watchdog_timeout=%llu "
+            "frame=%u scanline=%u present=%s palette=%s watchdog_cycles=%llu "
             "video_settle=%llu frame_hold=%llu\n",
             initial_entry & 0x00FFFFFFu,
             cart_entry & 0x00FFFFFFu,
@@ -1246,11 +1264,11 @@ int main(int argc, char **argv) {
             ng_neogeo_current_scanline(),
             present_mode_name(present_mode),
             palette_bank_mode_name(palette_bank_mode),
-            (unsigned long long)watchdog_timeout_polls,
+            (unsigned long long)watchdog_timeout_cycles,
             (unsigned long long)video_settle_dispatches,
             (unsigned long long)frame_hold);
     fprintf(stderr,
-            "keys: q/Escape quit, Space pause/resume, n/. step one frame, +/- adjust dispatch cap per refresh\n");
+            "keys: q/Escape quit, Space pause/resume, n/. step one frame, +/- adjust safety dispatch cap\n");
 
     int quit = 0;
     int paused = 0;
@@ -1362,7 +1380,7 @@ int main(int argc, char **argv) {
             char title[256];
             snprintf(title,
                      sizeof(title),
-                     "neo-recomp live - dispatches=%llu frame=%u scanline=%u dpf=%llu hold=%llu %s%s",
+                     "neo-recomp live - dispatches=%llu frame=%u scanline=%u cap=%llu hold=%llu %s%s",
                      (unsigned long long)ng_generated_smoke_dispatch_count(),
                      ng_neogeo_frame_count(),
                      ng_neogeo_current_scanline(),
