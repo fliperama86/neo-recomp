@@ -1,6 +1,7 @@
 #include "ngrecomp/neogeo_audio.h"
 
 #include "z80.h"
+#include "neogeo_ym2610.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +33,7 @@ struct NgNeoAudio {
     uint32_t ym_read_count;
     NgNeoAudioYmWrite ym_write_log[NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY];
     uint32_t ym_write_log_head;
+    NgNeoYm2610 *ym;
 };
 
 static uint8_t ng_audio_read_m(const NgNeoAudio *audio, uint32_t addr) {
@@ -127,12 +129,11 @@ static void ng_audio_record_ym_write(NgNeoAudio *audio,
 }
 
 static uint8_t ng_audio_ym_read(NgNeoAudio *audio, uint8_t port) {
-    (void)port;
     if (!audio) {
         return 0xFFu;
     }
     ++audio->ym_read_count;
-    return 0x00u;
+    return audio->ym ? ng_neogeo_ym2610_read(audio->ym, port) : 0x00u;
 }
 
 static void ng_audio_ym_write(NgNeoAudio *audio, uint8_t port, uint8_t data) {
@@ -142,11 +143,17 @@ static void ng_audio_ym_write(NgNeoAudio *audio, uint8_t port, uint8_t data) {
 
     if ((port & 1u) == 0u) {
         audio->ym_address[(port >> 1u) & 1u] = data;
+        if (audio->ym) {
+            ng_neogeo_ym2610_write(audio->ym, port, data);
+        }
         return;
     }
 
     uint8_t address = audio->ym_address[(port >> 1u) & 1u];
     ng_audio_record_ym_write(audio, port, address, data);
+    if (audio->ym) {
+        ng_neogeo_ym2610_write(audio->ym, port, data);
+    }
 }
 
 static uint8_t ng_audio_port_read_impl(NgNeoAudio *audio, uint16_t port_addr) {
@@ -266,11 +273,16 @@ NgNeoAudio *ng_neogeo_audio_create(void) {
     if (!audio) {
         return NULL;
     }
+    audio->ym = ng_neogeo_ym2610_create();
     ng_neogeo_audio_reset(audio);
     return audio;
 }
 
 void ng_neogeo_audio_destroy(NgNeoAudio *audio) {
+    if (!audio) {
+        return;
+    }
+    ng_neogeo_ym2610_destroy(audio->ym);
     free(audio);
 }
 
@@ -290,6 +302,9 @@ void ng_neogeo_audio_set_roms(NgNeoAudio *audio,
     audio->v1_rom_size = v1_rom_size;
     audio->v2_rom = v2_rom;
     audio->v2_rom_size = v2_rom_size;
+    if (audio->ym) {
+        ng_neogeo_ym2610_set_roms(audio->ym, v1_rom, v1_rom_size, v2_rom, v2_rom_size);
+    }
 }
 
 void ng_neogeo_audio_reset(NgNeoAudio *audio) {
@@ -303,6 +318,7 @@ void ng_neogeo_audio_reset(NgNeoAudio *audio) {
     uint32_t v1_rom_size = audio->v1_rom_size;
     const uint8_t *v2_rom = audio->v2_rom;
     uint32_t v2_rom_size = audio->v2_rom_size;
+    NgNeoYm2610 *ym = audio->ym;
 
     memset(audio, 0, sizeof(*audio));
     audio->m_rom = m_rom;
@@ -311,6 +327,7 @@ void ng_neogeo_audio_reset(NgNeoAudio *audio) {
     audio->v1_rom_size = v1_rom_size;
     audio->v2_rom = v2_rom;
     audio->v2_rom_size = v2_rom_size;
+    audio->ym = ym;
 
     z80_init(&audio->cpu);
     ng_audio_attach_cpu_callbacks(audio);
@@ -320,6 +337,10 @@ void ng_neogeo_audio_reset(NgNeoAudio *audio) {
     audio->bank_c = 0x0Eu;
     audio->bank_d = 0x1Eu;
     audio->reply_latch = 0xFFu;
+    if (audio->ym) {
+        ng_neogeo_ym2610_set_roms(audio->ym, v1_rom, v1_rom_size, v2_rom, v2_rom_size);
+        ng_neogeo_ym2610_reset(audio->ym);
+    }
 }
 
 void ng_neogeo_audio_write_command(NgNeoAudio *audio, uint8_t command) {
@@ -345,9 +366,42 @@ void ng_neogeo_audio_advance_z80_cycles(NgNeoAudio *audio, uint32_t cycles) {
             audio->nmi_pending = 0u;
             ++audio->nmi_service_count;
         }
+        if (audio->ym && ng_neogeo_ym2610_irq_pending(audio->ym) &&
+            !audio->cpu.int_pending) {
+            z80_gen_int(&audio->cpu, 0xFFu);
+        }
+        unsigned long before = audio->cpu.cyc;
         z80_step(&audio->cpu);
+        unsigned long after = audio->cpu.cyc;
+        if (after > before && audio->ym) {
+            uint32_t z80_step_cycles = (uint32_t)(after - before);
+            ng_neogeo_ym2610_advance_clocks(audio->ym, z80_step_cycles * 2u);
+        }
         ++instructions;
     }
+}
+
+
+void ng_neogeo_audio_generate(NgNeoAudio *audio,
+                              int16_t *stereo_out,
+                              uint32_t frames,
+                              uint32_t sample_rate) {
+    if (!stereo_out || frames == 0u) {
+        return;
+    }
+    if (!audio || !audio->ym) {
+        memset(stereo_out, 0, sizeof(int16_t) * (size_t)frames * 2u);
+        return;
+    }
+    ng_neogeo_ym2610_generate(audio->ym, stereo_out, frames, sample_rate);
+}
+
+uint32_t ng_neogeo_audio_ym2610_native_sample_rate(const NgNeoAudio *audio) {
+    return audio && audio->ym ? ng_neogeo_ym2610_native_sample_rate(audio->ym) : 0u;
+}
+
+uint8_t ng_neogeo_audio_ym2610_irq_pending(const NgNeoAudio *audio) {
+    return audio && audio->ym ? ng_neogeo_ym2610_irq_pending(audio->ym) : 0u;
 }
 
 uint8_t ng_neogeo_audio_command_latch(const NgNeoAudio *audio) {
@@ -395,6 +449,28 @@ NgNeoAudioYmWrite ng_neogeo_audio_last_ym_write(const NgNeoAudio *audio) {
     uint32_t last = audio->ym_write_log_head == 0u ?
         NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY - 1u : audio->ym_write_log_head - 1u;
     return audio->ym_write_log[last];
+}
+
+uint32_t ng_neogeo_audio_copy_recent_ym_writes(const NgNeoAudio *audio,
+                                               NgNeoAudioYmWrite *out,
+                                               uint32_t out_capacity) {
+    if (!audio || !out || out_capacity == 0u || audio->ym_write_count == 0u) {
+        return 0u;
+    }
+
+    uint32_t available = audio->ym_write_count;
+    if (available > NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY) {
+        available = NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY;
+    }
+    uint32_t count = available < out_capacity ? available : out_capacity;
+    uint32_t start = (audio->ym_write_log_head +
+                      NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY - count) %
+                     NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY;
+    for (uint32_t i = 0; i < count; ++i) {
+        out[i] = audio->ym_write_log[(start + i) %
+                                     NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY];
+    }
+    return count;
 }
 
 int ng_neogeo_audio_copy_work_ram(const NgNeoAudio *audio,

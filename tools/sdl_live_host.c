@@ -1,5 +1,6 @@
 #include <SDL.h>
 
+#include "ngrecomp/neogeo_audio.h"
 #include "ngrecomp/neogeo_runtime.h"
 #include "ngrecomp/neogeo_video.h"
 #include "p_rom.h"
@@ -25,6 +26,11 @@
 #define NG_LIVE_MAME_VTOTAL 0x108u
 #define NG_LIVE_MAX_CATCHUP_FRAMES 5u
 #define NG_LIVE_MSLUG_VIDEO_PRESENT_ADDR 0x0005CA28u
+#define NG_LIVE_AUDIO_SAMPLE_RATE 48000u
+#define NG_LIVE_AUDIO_CHUNK_FRAMES 1024u
+#define NG_LIVE_AUDIO_MAX_QUEUE_MS 250u
+#define NG_LIVE_AUDIO_SYNC_CYCLES (NG_NEO_CPU_CYCLES_PER_SCANLINE / 8u)
+#define NG_LIVE_AUDIO_NO_TEST_COMMAND UINT64_MAX
 
 typedef struct NgLivePerfWindow {
     uint64_t cpu_ticks;
@@ -34,10 +40,32 @@ typedef struct NgLivePerfWindow {
     uint64_t refreshes;
 } NgLivePerfWindow;
 
+typedef struct NgLiveAudio {
+    NgNeoAudio *audio;
+    SDL_AudioDeviceID device;
+    SDL_AudioSpec spec;
+    uint64_t last_cpu_cycles;
+    uint64_t z80_cycle_remainder;
+    uint64_t sample_remainder;
+    uint64_t generated_audio_frames;
+    uint64_t nonzero_audio_samples;
+    uint64_t sound_commands;
+    int32_t peak_audio_sample;
+    uint8_t last_sound_command;
+    uint8_t recent_sound_commands[16];
+    uint32_t recent_sound_command_head;
+    int16_t output_buffer[NG_LIVE_AUDIO_CHUNK_FRAMES * 2u];
+    uint32_t output_buffer_frames;
+    int output_enabled;
+    int device_open;
+} NgLiveAudio;
+
 void ng_generated_call(uint32_t addr);
 void ng_generated_smoke_reset_dispatch_stats(void);
 void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches);
 void ng_generated_smoke_set_scanline_poll_interval(uint32_t interval);
+void ng_generated_smoke_set_cycle_observer(void (*observer)(uint32_t addr,
+                                                            uint32_t cycles));
 void ng_generated_smoke_clear_instruction_yield(void);
 void ng_generated_smoke_set_instruction_yield(uint32_t addr,
                                               uint32_t frame_must_differ);
@@ -387,6 +415,257 @@ static int try_load_default_zoom_rom(const char *neo_path,
     return 0;
 }
 
+static void live_audio_flush_output(NgLiveAudio *ctx);
+static NgLiveAudio *g_live_audio_cycle_context;
+
+static void live_audio_close(NgLiveAudio *ctx) {
+    if (!ctx) {
+        return;
+    }
+    if (g_live_audio_cycle_context == ctx) {
+        ng_generated_smoke_set_cycle_observer(NULL);
+        g_live_audio_cycle_context = NULL;
+    }
+    live_audio_flush_output(ctx);
+    if (ctx->device_open) {
+        SDL_CloseAudioDevice(ctx->device);
+        ctx->device_open = 0;
+        ctx->device = 0;
+    }
+    ng_neogeo_audio_destroy(ctx->audio);
+    ctx->audio = NULL;
+}
+
+static int live_audio_create(NgLiveAudio *ctx,
+                             const NgNeoRomImage *image,
+                             int output_enabled) {
+    if (!ctx) {
+        return 0;
+    }
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->output_enabled = output_enabled;
+    ctx->last_cpu_cycles = ng_neogeo_cpu_cycles();
+    ctx->audio = ng_neogeo_audio_create();
+    if (!ctx->audio) {
+        fprintf(stderr, "warning: failed to create Neo Geo audio core; continuing silent\n");
+        return 0;
+    }
+    ng_neogeo_audio_set_roms(ctx->audio,
+                             image ? image->m.data : NULL,
+                             image ? image->m.size : 0u,
+                             image ? image->v1.data : NULL,
+                             image ? image->v1.size : 0u,
+                             image ? image->v2.data : NULL,
+                             image ? image->v2.size : 0u);
+    ng_neogeo_audio_reset(ctx->audio);
+    ng_neogeo_set_sound_reply(ng_neogeo_audio_reply_latch(ctx->audio));
+    return 1;
+}
+
+static void live_audio_open_device(NgLiveAudio *ctx) {
+    if (!ctx || !ctx->audio || !ctx->output_enabled) {
+        return;
+    }
+
+    SDL_AudioSpec want;
+    memset(&want, 0, sizeof(want));
+    want.freq = (int)NG_LIVE_AUDIO_SAMPLE_RATE;
+    want.format = AUDIO_S16SYS;
+    want.channels = 2;
+    want.samples = NG_LIVE_AUDIO_CHUNK_FRAMES;
+    want.callback = NULL;
+
+    ctx->device = SDL_OpenAudioDevice(NULL,
+                                      0,
+                                      &want,
+                                      &ctx->spec,
+                                      SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+    if (ctx->device == 0) {
+        fprintf(stderr,
+                "warning: SDL audio device open failed: %s; continuing silent\n",
+                SDL_GetError());
+        memset(&ctx->spec, 0, sizeof(ctx->spec));
+        return;
+    }
+    if (ctx->spec.format != AUDIO_S16SYS || ctx->spec.channels != 2) {
+        fprintf(stderr,
+                "warning: SDL audio returned unsupported format/channels; continuing silent\n");
+        SDL_CloseAudioDevice(ctx->device);
+        ctx->device = 0;
+        memset(&ctx->spec, 0, sizeof(ctx->spec));
+        return;
+    }
+    ctx->device_open = 1;
+    SDL_PauseAudioDevice(ctx->device, 0);
+}
+
+static void live_audio_advance_z80(NgLiveAudio *ctx, uint64_t m68k_cycles) {
+    if (!ctx || !ctx->audio || m68k_cycles == 0u) {
+        return;
+    }
+
+    uint64_t total = ctx->z80_cycle_remainder + m68k_cycles;
+    uint64_t z80_cycles = total / 3u;
+    ctx->z80_cycle_remainder = total % 3u;
+    while (z80_cycles != 0u) {
+        uint32_t step = z80_cycles > UINT32_MAX ? UINT32_MAX : (uint32_t)z80_cycles;
+        ng_neogeo_audio_advance_z80_cycles(ctx->audio, step);
+        z80_cycles -= step;
+    }
+    ng_neogeo_set_sound_reply(ng_neogeo_audio_reply_latch(ctx->audio));
+}
+
+static void live_audio_flush_output(NgLiveAudio *ctx) {
+    if (!ctx || !ctx->device_open || ctx->output_buffer_frames == 0u) {
+        return;
+    }
+
+    uint32_t sample_rate = ctx->spec.freq > 0 ?
+        (uint32_t)ctx->spec.freq : NG_LIVE_AUDIO_SAMPLE_RATE;
+    uint32_t queued = SDL_GetQueuedAudioSize(ctx->device);
+    uint32_t max_queue =
+        (sample_rate * 2u * (uint32_t)sizeof(int16_t) *
+         NG_LIVE_AUDIO_MAX_QUEUE_MS) / 1000u;
+    if (queued > max_queue) {
+        SDL_ClearQueuedAudio(ctx->device);
+    }
+    (void)SDL_QueueAudio(ctx->device,
+                         ctx->output_buffer,
+                         ctx->output_buffer_frames * 2u *
+                             (uint32_t)sizeof(int16_t));
+    ctx->output_buffer_frames = 0u;
+}
+
+static void live_audio_record_and_buffer_samples(NgLiveAudio *ctx,
+                                                 const int16_t *samples,
+                                                 uint32_t frames) {
+    if (!ctx || !samples || frames == 0u) {
+        return;
+    }
+
+    ctx->generated_audio_frames += frames;
+    for (uint32_t i = 0; i < frames * 2u; ++i) {
+        int32_t sample = samples[i];
+        int32_t abs_sample = sample < 0 ? -sample : sample;
+        if (sample != 0) {
+            ++ctx->nonzero_audio_samples;
+        }
+        if (abs_sample > ctx->peak_audio_sample) {
+            ctx->peak_audio_sample = abs_sample;
+        }
+    }
+
+    if (!ctx->device_open) {
+        return;
+    }
+
+    uint32_t consumed = 0u;
+    while (consumed < frames) {
+        uint32_t room = NG_LIVE_AUDIO_CHUNK_FRAMES - ctx->output_buffer_frames;
+        if (room == 0u) {
+            live_audio_flush_output(ctx);
+            room = NG_LIVE_AUDIO_CHUNK_FRAMES;
+        }
+        uint32_t copy_frames = frames - consumed;
+        if (copy_frames > room) {
+            copy_frames = room;
+        }
+        memcpy(&ctx->output_buffer[ctx->output_buffer_frames * 2u],
+               &samples[consumed * 2u],
+               (size_t)copy_frames * 2u * sizeof(int16_t));
+        ctx->output_buffer_frames += copy_frames;
+        consumed += copy_frames;
+        if (ctx->output_buffer_frames == NG_LIVE_AUDIO_CHUNK_FRAMES) {
+            live_audio_flush_output(ctx);
+        }
+    }
+}
+
+static void live_audio_generate_and_queue(NgLiveAudio *ctx, uint64_t m68k_cycles) {
+    if (!ctx || !ctx->audio || m68k_cycles == 0u) {
+        return;
+    }
+
+    uint32_t sample_rate = ctx->device_open && ctx->spec.freq > 0 ?
+        (uint32_t)ctx->spec.freq : NG_LIVE_AUDIO_SAMPLE_RATE;
+    uint64_t numerator =
+        ctx->sample_remainder + m68k_cycles * (uint64_t)sample_rate;
+    uint64_t frames = numerator / NG_NEO_MAIN_CPU_CLOCK_HZ;
+    ctx->sample_remainder = numerator % NG_NEO_MAIN_CPU_CLOCK_HZ;
+
+    int16_t samples[NG_LIVE_AUDIO_CHUNK_FRAMES * 2u];
+    while (frames != 0u) {
+        uint32_t chunk = frames > NG_LIVE_AUDIO_CHUNK_FRAMES ?
+            NG_LIVE_AUDIO_CHUNK_FRAMES : (uint32_t)frames;
+        ng_neogeo_audio_generate(ctx->audio, samples, chunk, sample_rate);
+        live_audio_record_and_buffer_samples(ctx, samples, chunk);
+        frames -= chunk;
+    }
+}
+
+static void live_audio_advance_to_cpu_cycle(NgLiveAudio *ctx,
+                                            uint64_t target_cpu_cycles) {
+    if (!ctx || !ctx->audio) {
+        return;
+    }
+    if (target_cpu_cycles <= ctx->last_cpu_cycles) {
+        return;
+    }
+    while (ctx->last_cpu_cycles < target_cpu_cycles) {
+        uint64_t delta = target_cpu_cycles - ctx->last_cpu_cycles;
+        uint64_t step = delta > NG_NEO_CPU_CYCLES_PER_SCANLINE ?
+            NG_NEO_CPU_CYCLES_PER_SCANLINE : delta;
+        live_audio_advance_z80(ctx, step);
+        live_audio_generate_and_queue(ctx, step);
+        ctx->last_cpu_cycles += step;
+    }
+}
+
+static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
+    if (!ctx || !ctx->audio) {
+        return;
+    }
+    ng_neogeo_audio_write_command(ctx->audio, command);
+    ++ctx->sound_commands;
+    ctx->last_sound_command = command;
+    ctx->recent_sound_commands[ctx->recent_sound_command_head++ & 15u] =
+        command;
+}
+
+static void live_audio_sync_to_runtime(NgLiveAudio *ctx) {
+    if (!ctx || !ctx->audio) {
+        return;
+    }
+
+    uint64_t current_cycles = ng_neogeo_cpu_cycles();
+    NgNeoSoundCommandEvent event;
+    while (ng_neogeo_pop_sound_command_event(&event)) {
+        uint64_t event_cycles = event.cpu_cycles;
+        if (event_cycles > current_cycles) {
+            event_cycles = current_cycles;
+        }
+        live_audio_advance_to_cpu_cycle(ctx, event_cycles);
+        live_audio_send_command(ctx, event.command);
+    }
+    live_audio_advance_to_cpu_cycle(ctx, current_cycles);
+    ng_neogeo_set_sound_reply(ng_neogeo_audio_reply_latch(ctx->audio));
+}
+
+static void live_audio_cycle_observer(uint32_t addr, uint32_t cycles) {
+    (void)addr;
+    (void)cycles;
+    NgLiveAudio *ctx = g_live_audio_cycle_context;
+    if (!ctx || !ctx->audio) {
+        return;
+    }
+
+    uint64_t current_cycles = ng_neogeo_cpu_cycles();
+    if (ng_neogeo_sound_command_events_available() != 0u ||
+        current_cycles - ctx->last_cpu_cycles >= NG_LIVE_AUDIO_SYNC_CYCLES) {
+        live_audio_sync_to_runtime(ctx);
+    }
+}
+
 static uint16_t read_be_word(const uint8_t *data, uint32_t word_index) {
     uint32_t off = word_index * 2u;
     return (uint16_t)(((uint16_t)data[off] << 8) | (uint16_t)data[off + 1u]);
@@ -580,7 +859,9 @@ static int run_video_synced_slice(uint64_t max_dispatches,
         NULL);
 }
 
-static int run_fast_forward(uint64_t target_dispatches, uint32_t entry_addr) {
+static int run_fast_forward(uint64_t target_dispatches,
+                            uint32_t entry_addr,
+                            NgLiveAudio *audio) {
     if (target_dispatches == 0u) {
         return 1;
     }
@@ -608,6 +889,7 @@ static int run_fast_forward(uint64_t target_dispatches, uint32_t entry_addr) {
         if (!run_until_dispatch_count(next, addr)) {
             return 0;
         }
+        live_audio_sync_to_runtime(audio);
         current = ng_generated_smoke_dispatch_count();
         fprintf(stderr,
                 "  fast-forward %llu/%llu dispatches (frame=%u scanline=%u)\n",
@@ -1151,6 +1433,8 @@ static void usage(const char *argv0) {
             "  --perf-log                     log rolling CPU/render/SDL frame costs\n"
             "  --dump-state-dir <dir>         write work/backup/palette/VRAM dumps on exit\n"
             "  --stall-refreshes <n>          log if scanline/frame stalls for n refreshes (default: 180, 0 disables)\n"
+            "  --no-audio                     run the Z80/YM2610 core but do not open SDL audio output\n"
+            "  --audio-test-command <n>       inject one M1 command at launch for audio diagnostics (for mslug, 0xF8 is audible)\n"
             "  --no-throttle                  do not sleep to ~60Hz after each refresh\n"
             "  --scale <n>                    integer window scale (default: %u)\n",
             argv0,
@@ -1175,8 +1459,10 @@ int main(int argc, char **argv) {
     uint64_t video_settle_dispatches = NG_LIVE_DEFAULT_VIDEO_SETTLE_DISPATCHES;
     uint64_t frame_hold = NG_LIVE_DEFAULT_FRAME_HOLD;
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
+    uint64_t audio_test_command = NG_LIVE_AUDIO_NO_TEST_COMMAND;
     int start_bios = 0;
     int perf_log = 0;
+    int audio_output_enabled = 1;
     const char *dump_state_dir = NULL;
     NgLivePresentMode present_mode = NG_LIVE_PRESENT_FRAME;
     uint32_t palette_bank_mode = NG_LIVE_PALETTE_BANK_ACTIVE;
@@ -1254,8 +1540,13 @@ int main(int argc, char **argv) {
             target = &stall_refreshes;
         } else if (strcmp(option, "--scale") == 0) {
             target = &scale;
+        } else if (strcmp(option, "--audio-test-command") == 0) {
+            target = &audio_test_command;
         } else if (strcmp(option, "--no-throttle") == 0) {
             no_throttle = 1u;
+            continue;
+        } else if (strcmp(option, "--no-audio") == 0) {
+            audio_output_enabled = 0;
             continue;
         } else if (strcmp(option, "--help") == 0 || strcmp(option, "-h") == 0) {
             usage(argv[0]);
@@ -1280,6 +1571,8 @@ int main(int argc, char **argv) {
         scanline_poll_interval > UINT32_MAX ||
         watchdog_timeout_cycles > UINT32_MAX ||
         watchdog_timeout_polls > UINT32_MAX ||
+        (audio_test_command != NG_LIVE_AUDIO_NO_TEST_COMMAND &&
+         audio_test_command > 0xFFu) ||
         scale == 0u || scale > 16u) {
         usage(argv[0]);
         return 2;
@@ -1299,6 +1592,8 @@ int main(int argc, char **argv) {
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
     SDL_Texture *texture = NULL;
+    NgLiveAudio live_audio;
+    memset(&live_audio, 0, sizeof(live_audio));
 
     if (!ng_neo_rom_image_load(&image, neo_path) ||
         !read_file(bios_path, &bios_data, &bios_size)) {
@@ -1355,12 +1650,21 @@ int main(int argc, char **argv) {
     g_ng_m68k.sr = 0x2700u;
     ng_generated_smoke_reset_dispatch_stats();
     ng_generated_smoke_set_scanline_poll_interval((uint32_t)scanline_poll_interval);
+    (void)live_audio_create(&live_audio, &image, audio_output_enabled);
+    if (live_audio.audio) {
+        g_live_audio_cycle_context = &live_audio;
+        ng_generated_smoke_set_cycle_observer(live_audio_cycle_observer);
+    }
 
-    if (!run_fast_forward(fast_forward, initial_entry)) {
+    if (!run_fast_forward(fast_forward, initial_entry, &live_audio)) {
+        live_audio_close(&live_audio);
         ng_neo_rom_image_free(&image);
         free(bios_data);
         free(zoom_rom);
         return 1;
+    }
+    if (audio_test_command != NG_LIVE_AUDIO_NO_TEST_COMMAND) {
+        live_audio_send_command(&live_audio, (uint8_t)audio_test_command);
     }
 
     const uint32_t width = NG_NEO_SPRITE_FRAME_WIDTH;
@@ -1368,20 +1672,23 @@ int main(int argc, char **argv) {
     pixels = (uint32_t *)calloc((size_t)width * (size_t)height, sizeof(uint32_t));
     if (!pixels) {
         fprintf(stderr, "failed to allocate framebuffer\n");
+        live_audio_close(&live_audio);
         ng_neo_rom_image_free(&image);
         free(bios_data);
         free(zoom_rom);
         return 1;
     }
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_AUDIO) != 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        live_audio_close(&live_audio);
         free(pixels);
         ng_neo_rom_image_free(&image);
         free(bios_data);
         free(zoom_rom);
         return 1;
     }
+    live_audio_open_device(&live_audio);
     window = SDL_CreateWindow("neo-recomp live host",
                               SDL_WINDOWPOS_CENTERED,
                               SDL_WINDOWPOS_CENTERED,
@@ -1402,6 +1709,7 @@ int main(int argc, char **argv) {
         SDL_DestroyTexture(texture);
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
+        live_audio_close(&live_audio);
         SDL_Quit();
         free(pixels);
         ng_neo_rom_image_free(&image);
@@ -1414,7 +1722,7 @@ int main(int argc, char **argv) {
     fprintf(stderr,
             "live host started: entry=$%06X cart_entry=$%06X dispatches=%llu "
             "frame=%u scanline=%u present=%s palette=%s watchdog_cycles=%llu "
-            "video_settle=%llu frame_hold=%llu\n",
+            "video_settle=%llu frame_hold=%llu audio=%s/%uHz ym=%uHz\n",
             initial_entry & 0x00FFFFFFu,
             cart_entry & 0x00FFFFFFu,
             (unsigned long long)ng_generated_smoke_dispatch_count(),
@@ -1424,9 +1732,14 @@ int main(int argc, char **argv) {
             palette_bank_mode_name(palette_bank_mode),
             (unsigned long long)watchdog_timeout_cycles,
             (unsigned long long)video_settle_dispatches,
-            (unsigned long long)frame_hold);
+            (unsigned long long)frame_hold,
+            live_audio.device_open ? "on" :
+                (live_audio.output_enabled ? "silent" : "off"),
+            live_audio.device_open && live_audio.spec.freq > 0 ?
+                (uint32_t)live_audio.spec.freq : NG_LIVE_AUDIO_SAMPLE_RATE,
+            ng_neogeo_audio_ym2610_native_sample_rate(live_audio.audio));
     fprintf(stderr,
-            "keys: q/Escape quit, Space pause/resume, n/. step one frame, +/- adjust safety dispatch cap\n");
+            "keys: q/Escape quit, Space pause/resume, n/. step one frame, m audio test, +/- adjust safety dispatch cap\n");
 
     int quit = 0;
     int paused = 0;
@@ -1465,6 +1778,8 @@ int main(int argc, char **argv) {
                 } else if (key == SDLK_n || key == SDLK_PERIOD) {
                     step_requested = 1;
                     hold_phase = 0;
+                } else if (key == SDLK_m) {
+                    live_audio_send_command(&live_audio, 0xF8u);
                 } else if (key == SDLK_EQUALS || key == SDLK_PLUS) {
                     dispatches_per_refresh += dispatches_per_refresh / 4u + 1u;
                 } else if (key == SDLK_MINUS && dispatches_per_refresh > 1u) {
@@ -1492,6 +1807,7 @@ int main(int argc, char **argv) {
             if (!ok) {
                 quit = 1;
             }
+            live_audio_sync_to_runtime(&live_audio);
             step_requested = 0;
         }
         uint64_t perf_after_cpu = SDL_GetPerformanceCounter();
@@ -1629,6 +1945,7 @@ int main(int argc, char **argv) {
         if (max_refreshes != 0u && refreshes >= max_refreshes) {
             quit = 1;
         }
+        live_audio_flush_output(&live_audio);
         uint64_t perf_before_throttle = SDL_GetPerformanceCounter();
         throttle_to_next_neo_frame(&next_present_tick,
                                    perf_frequency,
@@ -1640,17 +1957,57 @@ int main(int argc, char **argv) {
     }
 
     fprintf(stderr,
-            "live host stopped: dispatches=%llu frame=%u scanline=%u budget_stop=$%06X\n",
+            "live host stopped: dispatches=%llu frame=%u scanline=%u budget_stop=$%06X "
+            "audio_frames=%llu audio_nonzero=%llu audio_peak=%d "
+            "sound_cmds=%llu last_sound=$%02X ym_writes=%u ym_reads=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             ng_neogeo_frame_count(),
             ng_neogeo_current_scanline(),
-            ng_generated_smoke_dispatch_budget_stop_addr() & 0x00FFFFFFu);
+            ng_generated_smoke_dispatch_budget_stop_addr() & 0x00FFFFFFu,
+            (unsigned long long)live_audio.generated_audio_frames,
+            (unsigned long long)live_audio.nonzero_audio_samples,
+            (int)live_audio.peak_audio_sample,
+            (unsigned long long)live_audio.sound_commands,
+            live_audio.last_sound_command,
+            ng_neogeo_audio_ym_write_count(live_audio.audio),
+            ng_neogeo_audio_ym_read_count(live_audio.audio));
+    if (live_audio.sound_commands != 0u) {
+        fprintf(stderr, "live audio recent commands:");
+        uint32_t count = live_audio.sound_commands < 16u ?
+            (uint32_t)live_audio.sound_commands : 16u;
+        uint32_t start = live_audio.recent_sound_command_head - count;
+        for (uint32_t i = 0; i < count; ++i) {
+            fprintf(stderr,
+                    " $%02X",
+                    live_audio.recent_sound_commands[(start + i) & 15u]);
+        }
+        fprintf(stderr, "\n");
+    }
+    if (live_audio.audio) {
+        NgNeoAudioYmWrite recent_writes[16];
+        uint32_t write_count =
+            ng_neogeo_audio_copy_recent_ym_writes(live_audio.audio,
+                                                  recent_writes,
+                                                  16u);
+        if (write_count != 0u) {
+            fprintf(stderr, "live audio recent YM writes:");
+            for (uint32_t i = 0; i < write_count; ++i) {
+                fprintf(stderr,
+                        " p%u[$%02X]=$%02X",
+                        recent_writes[i].port,
+                        recent_writes[i].address,
+                        recent_writes[i].data);
+            }
+            fprintf(stderr, "\n");
+        }
+    }
 
     int dump_ok = dump_live_state(dump_state_dir);
 
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    live_audio_close(&live_audio);
     SDL_Quit();
     free(pixels);
     free(zoom_rom);

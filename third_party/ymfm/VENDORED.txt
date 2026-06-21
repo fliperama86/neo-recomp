@@ -1,0 +1,3 @@
+ymfm vendored from ares thirdparty/ymfm source tree as of local ares reference checkout.
+Upstream project: https://github.com/aaronsgiles/ymfm
+License: BSD-3-Clause (see LICENSE).

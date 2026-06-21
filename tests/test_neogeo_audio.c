@@ -137,10 +137,43 @@ static int test_audio_nmi_command_path(void) {
     return 0;
 }
 
+static int test_audio_ym2610_generates_samples(void) {
+    NgNeoAudio *audio = ng_neogeo_audio_create();
+    CHECK(audio != NULL);
+    ng_neogeo_audio_reset(audio);
+
+    /* Program a simple SSG tone through the YM2610 A-port. */
+    ng_neogeo_audio_debug_port_write(audio, 0x0004u, 0x00u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0005u, 0x10u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0004u, 0x01u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0005u, 0x00u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0004u, 0x07u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0005u, 0x3Eu);
+    ng_neogeo_audio_debug_port_write(audio, 0x0004u, 0x08u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0005u, 0x0Fu);
+
+    int16_t samples[1024 * 2];
+    memset(samples, 0, sizeof(samples));
+    ng_neogeo_audio_generate(audio, samples, 1024u, 48000u);
+
+    uint32_t nonzero = 0;
+    for (uint32_t i = 0; i < 1024u * 2u; ++i) {
+        if (samples[i] != 0) {
+            ++nonzero;
+        }
+    }
+    CHECK(nonzero != 0u);
+    CHECK(ng_neogeo_audio_ym2610_native_sample_rate(audio) != 0u);
+
+    ng_neogeo_audio_destroy(audio);
+    return 0;
+}
+
 int main(void) {
     if (test_audio_initial_banks() != 0) return 1;
     if (test_audio_ram_window() != 0) return 1;
     if (test_audio_z80_polls_command_and_writes_ym() != 0) return 1;
     if (test_audio_nmi_command_path() != 0) return 1;
+    if (test_audio_ym2610_generates_samples() != 0) return 1;
     return 0;
 }

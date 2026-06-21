@@ -286,7 +286,14 @@ CPU/render/SDL costs while running; add `./run.sh --perf-log` (or
 `NG_MSLUG_SDL_PERF_LOG=1`) to print those timing buckets to stderr. Set
 `NG_MSLUG_SDL_DUMP_STATE_DIR=build/live_dump` to dump
 `work_ram.bin`, `backup_ram.bin`, `palette_ram.bin`, `vram_be.bin`, and a
-`summary.txt` when the live host exits. The cart-entry live path seeds the
+`summary.txt` when the live host exits. The live host also opens SDL audio and
+feeds the cartridge M1 Z80 through a YM2610 backend; press `m` to inject an
+audible Metal Slug M1 diagnostic command (`0xF8`), or set
+`NG_MSLUG_SDL_AUDIO_TEST_COMMAND=0xF8` / run
+`./run.sh --audio-test-command 0xF8` for a noninteractive smoke. Attract-mode
+game commands can still be silent with the current cart-entry/default-soft-DIP
+path, so controls/soft-DIP handling remain follow-ups for game-driven music.
+The cart-entry live path seeds the
 minimal Metal Slug MVS backup-RAM directory seen in a fresh MAME boot so the
 BIOS save/load services address the correct game block without a full cold BIOS
 initialization pass. The
@@ -303,25 +310,25 @@ runs beyond the earlier `$C18662`/`$09B90A` dispatch frontiers, the former
 cart-requested soft-reset/BIOS-reset white-screen loop, and the observed
 `$092252` dynamic script dispatch miss. The current useful path is still
 cart-header entry plus a user-provided BIOS slice; next work is validating fresh
-live frames and isolating remaining renderer/runtime state, not complete yet. The audio path has started with a tested Z80/M1 bus
-scaffold and YM2610 register-write probe, but it does not synthesize or play
-sound yet.
+live frames and isolating remaining renderer/runtime state, not complete yet.
+The audio path now has a tested Z80/M1 bus, YM2610 FM/SSG/ADPCM backend, SDL
+queue output, and an audible diagnostic command path; game-driven attract audio
+still needs input/soft-DIP validation.
 
 
 ### Audio probe
 
-The first audio slice is a deterministic Z80-side Neo Geo sound-bus scaffold.
-It runs the cartridge M1 program with MAME/ares-grounded M-ROM banking,
-68000->Z80 command/NMI latches, Z80->68000 reply latch, and a YM2610
-register-write stub. It is useful for proving that sound commands reach the
-M1 driver before real YM2610 synthesis and SDL output are added:
+The audio probe runs the cartridge M1 program with MAME/ares-grounded M-ROM
+banking, 68000->Z80 command/NMI latches, Z80->68000 reply latch, and the same
+YM2610 backend used by the live host:
 
 ```sh
 build/neo-audio-probe ~/Documents/Games/Mister/NEOGEO/mslug.neo 0x03
 ```
 
-This is not audible yet; it reports Z80 PC/cycles, NMI state, reply-latch
-state, and YM2610 register-write deltas.
+It reports Z80 PC/cycles, NMI state, reply-latch state, YM2610 register-write
+deltas, and a short rendered sample block (`nonzero`/`peak`) for quick backend
+sanity checks.
 
 ## Decoder Slice
 

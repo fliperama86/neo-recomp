@@ -21,8 +21,7 @@ static void usage(const char *argv0) {
             "usage: %s <game.neo> [command] [boot-cycles] [post-command-cycles]\n"
             "\n"
             "Runs the cartridge M1 Z80 program against the Neo Geo audio bus\n"
-            "with a YM2610 register-write stub. This is a diagnostic bridge\n"
-            "before real YM2610 synthesis/SDL output is wired.\n"
+            "and YM2610 backend, then renders a short diagnostic sample block.\n"
             "\n"
             "Defaults: command=0x04 boot-cycles=200000 post-command-cycles=200000\n",
             argv0);
@@ -103,6 +102,31 @@ int main(int argc, char **argv) {
            last.address,
            last.data,
            (unsigned long long)last.z80_cycles);
+    enum { probe_frames = 4096 };
+    int16_t *samples =
+        (int16_t *)calloc((size_t)probe_frames * 2u, sizeof(int16_t));
+    if (samples) {
+        ng_neogeo_audio_generate(audio, samples, probe_frames, 48000u);
+        uint32_t nonzero = 0;
+        int32_t peak = 0;
+        for (uint32_t i = 0; i < (uint32_t)probe_frames * 2u; ++i) {
+            int32_t sample = samples[i];
+            int32_t abs_sample = sample < 0 ? -sample : sample;
+            if (sample != 0) {
+                ++nonzero;
+            }
+            if (abs_sample > peak) {
+                peak = abs_sample;
+            }
+        }
+        printf("rendered audio: frames=%u rate=48000 nonzero=%u peak=%d ym_native=%u irq=%u\n",
+               (uint32_t)probe_frames,
+               nonzero,
+               peak,
+               ng_neogeo_audio_ym2610_native_sample_rate(audio),
+               ng_neogeo_audio_ym2610_irq_pending(audio));
+        free(samples);
+    }
 
     ng_neogeo_audio_destroy(audio);
     ng_neo_rom_image_free(&image);

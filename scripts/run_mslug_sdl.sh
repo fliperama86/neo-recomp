@@ -23,12 +23,15 @@ PERF_LOG="${NG_MSLUG_SDL_PERF_LOG:-0}"
 DUMP_STATE_DIR="${NG_MSLUG_SDL_DUMP_STATE_DIR:-}"
 STALL_REFRESHES="${NG_MSLUG_SDL_STALL_REFRESHES:-}"
 NO_THROTTLE="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
+AUDIO_OUTPUT="${NG_MSLUG_SDL_AUDIO:-1}"
+AUDIO_TEST_COMMAND="${NG_MSLUG_SDL_AUDIO_TEST_COMMAND:-}"
 BUILD_ONLY="${NG_MSLUG_SDL_BUILD_ONLY:-0}"
 
 OPTFLAGS_VALUE="${NG_MSLUG_SDL_OPTFLAGS:--O1 -DNDEBUG}"
 # shellcheck disable=SC2206
 OPTFLAGS=($OPTFLAGS_VALUE)
 CFLAGS=(-std=c99 -Wall -Wextra "${OPTFLAGS[@]}" -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_CYCLE_HOOK=ng_generated_cycle_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
+CXXFLAGS=(-std=c++17 -Wall -Wextra "${OPTFLAGS[@]}" -I"$ROOT/include" -I"$ROOT/runtime/src" -isystem "$ROOT/third_party/ymfm")
 
 log_step() {
   printf '\n==> %s\n' "$*" >&2
@@ -85,6 +88,10 @@ log_note "watchdog timeout cycles: $WATCHDOG_TIMEOUT_CYCLES"
 log_note "video settle dispatches: $VIDEO_SETTLE_DISPATCHES"
 log_note "frame hold: $FRAME_HOLD"
 log_note "start mode: $START_MODE"
+log_note "audio output: $AUDIO_OUTPUT"
+if [[ -n "$AUDIO_TEST_COMMAND" ]]; then
+  log_note "audio test command: $AUDIO_TEST_COMMAND"
+fi
 log_note "native C optimization flags: ${OPTFLAGS[*]:-(none)}"
 
 log_step "Configuring/building recompiler tools"
@@ -99,6 +106,12 @@ BIOS_OBJ="$BUILD_DIR/bios_recomp_mslug_headless.o"
 HARNESS_OBJ="$BUILD_DIR/generated_smoke_harness_live.o"
 RUNTIME_OBJ="$BUILD_DIR/neogeo_runtime_live.o"
 VIDEO_OBJ="$BUILD_DIR/neogeo_video_live.o"
+AUDIO_OBJ="$BUILD_DIR/neogeo_audio_live.o"
+YM2610_OBJ="$BUILD_DIR/neogeo_ym2610_live.o"
+Z80_OBJ="$BUILD_DIR/superzazu_z80_live.o"
+YMFM_ADPCM_OBJ="$BUILD_DIR/ymfm_adpcm_live.o"
+YMFM_OPN_OBJ="$BUILD_DIR/ymfm_opn_live.o"
+YMFM_SSG_OBJ="$BUILD_DIR/ymfm_ssg_live.o"
 P_ROM_OBJ="$BUILD_DIR/p_rom_live.o"
 SDL_HOST_OBJ="$BUILD_DIR/sdl_live_host.o"
 HOST_BIN="$BUILD_DIR/mslug_sdl_host"
@@ -171,6 +184,24 @@ cc "${CFLAGS[@]}" \
   -o "$HARNESS_OBJ"
 cc "${CFLAGS[@]}" -c "$ROOT/runtime/src/neogeo_runtime.c" -o "$RUNTIME_OBJ"
 cc "${CFLAGS[@]}" -c "$ROOT/runtime/src/neogeo_video.c" -o "$VIDEO_OBJ"
+cc "${CFLAGS[@]}" -I"$ROOT/runtime/src" -I"$ROOT/third_party/superzazu" \
+  -c "$ROOT/runtime/src/neogeo_audio.c" \
+  -o "$AUDIO_OBJ"
+cc "${CFLAGS[@]}" -I"$ROOT/third_party/superzazu" \
+  -c "$ROOT/third_party/superzazu/z80.c" \
+  -o "$Z80_OBJ"
+c++ "${CXXFLAGS[@]}" \
+  -c "$ROOT/runtime/src/neogeo_ym2610.cpp" \
+  -o "$YM2610_OBJ"
+c++ -std=c++17 "${OPTFLAGS[@]}" -I"$ROOT/third_party/ymfm" \
+  -c "$ROOT/third_party/ymfm/ymfm_adpcm.cpp" \
+  -o "$YMFM_ADPCM_OBJ"
+c++ -std=c++17 "${OPTFLAGS[@]}" -I"$ROOT/third_party/ymfm" \
+  -c "$ROOT/third_party/ymfm/ymfm_opn.cpp" \
+  -o "$YMFM_OPN_OBJ"
+c++ -std=c++17 "${OPTFLAGS[@]}" -I"$ROOT/third_party/ymfm" \
+  -c "$ROOT/third_party/ymfm/ymfm_ssg.cpp" \
+  -o "$YMFM_SSG_OBJ"
 cc "${CFLAGS[@]}" -c "$ROOT/recompiler/src/p_rom.c" -o "$P_ROM_OBJ"
 # shellcheck disable=SC2207
 SDL_CFLAGS=($(pkg-config --cflags sdl2))
@@ -181,13 +212,19 @@ cc "${CFLAGS[@]}" "${SDL_CFLAGS[@]}" \
   -o "$SDL_HOST_OBJ"
 
 log_step "Linking SDL host"
-cc \
+c++ \
   "$SDL_HOST_OBJ" \
   "$HARNESS_OBJ" \
   "$CART_OBJ" \
   "$BIOS_OBJ" \
   "$RUNTIME_OBJ" \
   "$VIDEO_OBJ" \
+  "$AUDIO_OBJ" \
+  "$YM2610_OBJ" \
+  "$Z80_OBJ" \
+  "$YMFM_ADPCM_OBJ" \
+  "$YMFM_OPN_OBJ" \
+  "$YMFM_SSG_OBJ" \
   "$P_ROM_OBJ" \
   "${SDL_LIBS[@]}" \
   -o "$HOST_BIN"
@@ -230,6 +267,12 @@ if [[ -n "$STALL_REFRESHES" ]]; then
 fi
 if [[ "$NO_THROTTLE" != "0" ]]; then
   HOST_ARGS+=(--no-throttle)
+fi
+if [[ "$AUDIO_OUTPUT" == "0" ]]; then
+  HOST_ARGS+=(--no-audio)
+fi
+if [[ -n "$AUDIO_TEST_COMMAND" ]]; then
+  HOST_ARGS+=(--audio-test-command "$AUDIO_TEST_COMMAND")
 fi
 if [[ "$START_MODE" == "bios" ]]; then
   HOST_ARGS+=(--start-bios)

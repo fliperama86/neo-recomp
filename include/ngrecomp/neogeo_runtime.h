@@ -5,6 +5,14 @@
 
 typedef int (*NgExternalDispatchHandler)(uint32_t addr);
 
+#define NG_NEO_SOUND_COMMAND_QUEUE_CAPACITY 512u
+
+typedef struct NgNeoSoundCommandEvent {
+    uint64_t cpu_cycles;
+    uint32_t pc;
+    uint8_t command;
+} NgNeoSoundCommandEvent;
+
 #define NG_NEO_IRQACK_RESET  0x0001u
 #define NG_NEO_IRQACK_TIMER  0x0002u
 #define NG_NEO_IRQACK_VBLANK 0x0004u
@@ -109,6 +117,10 @@ uint8_t ng_neogeo_sound_command(void);
 uint32_t ng_neogeo_last_sound_pc(void);
 uint32_t ng_neogeo_last_sound_addr(void);
 uint8_t ng_neogeo_sound_reply(void);
+void ng_neogeo_set_sound_reply(uint8_t reply);
+uint32_t ng_neogeo_sound_command_events_available(void);
+uint32_t ng_neogeo_sound_command_event_overflows(void);
+int ng_neogeo_pop_sound_command_event(NgNeoSoundCommandEvent *out);
 uint8_t ng_neogeo_shadow_enabled(void);
 uint8_t ng_neogeo_bios_vectors_enabled(void);
 uint8_t ng_neogeo_palette_bank(void);

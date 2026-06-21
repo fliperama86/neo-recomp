@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(neo_recomp C)
+project(neo_recomp C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 enable_testing()
 
@@ -21,14 +23,27 @@ target_include_directories(superzazu_z80 PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/superzazu"
 )
 
+add_library(ymfm_opn
+    third_party/ymfm/ymfm_adpcm.cpp
+    third_party/ymfm/ymfm_opn.cpp
+    third_party/ymfm/ymfm_ssg.cpp
+)
+target_include_directories(ymfm_opn SYSTEM PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ymfm"
+)
+
 add_library(neo_audio
     runtime/src/neogeo_audio.c
+    runtime/src/neogeo_ym2610.cpp
 )
 target_include_directories(neo_audio PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
+PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src"
 )
 target_link_libraries(neo_audio PUBLIC
     superzazu_z80
+    ymfm_opn
 )
 
 add_library(neo_video
@@ -97,6 +112,7 @@ target_link_libraries(neo-audio-probe PRIVATE
     neo_audio
     neo_recompiler_core
 )
+set_target_properties(neo-audio-probe PROPERTIES LINKER_LANGUAGE CXX)
 
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)

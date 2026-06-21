@@ -42,6 +42,7 @@ add_executable(test_neogeo_audio
     test_neogeo_audio.c
 )
 target_link_libraries(test_neogeo_audio PRIVATE neo_audio)
+set_target_properties(test_neogeo_audio PROPERTIES LINKER_LANGUAGE CXX)
 
 add_executable(test_neogeo_video
     test_neogeo_video.c

@@ -156,6 +156,7 @@ int main(void) {
 
     CHECK(ng_neogeo_sound_command() == 0x00u);
     CHECK(ng_neogeo_sound_reply() == 0xFFu);
+    CHECK(ng_neogeo_sound_command_events_available() == 0u);
     CHECK(ng68k_read8(NG_NEO_REG_SOUND) == 0xFFu);
     CHECK(ng68k_read8(0x00320001u) == 0xFFu);
     CHECK(ng68k_read8(0x00320001u) == 0xBFu);
@@ -164,10 +165,20 @@ int main(void) {
     CHECK(ng_neogeo_sound_command() == 0x34u);
     ng68k_write8(0x00330000u, 0x56u);
     CHECK(ng_neogeo_sound_command() == 0x56u);
-    CHECK(ng_neogeo_sound_reply() == 0xFFu);
+    CHECK(ng_neogeo_sound_command_events_available() == 2u);
+    NgNeoSoundCommandEvent sound_event;
+    CHECK(ng_neogeo_pop_sound_command_event(&sound_event));
+    CHECK(sound_event.command == 0x34u);
+    CHECK(ng_neogeo_pop_sound_command_event(&sound_event));
+    CHECK(sound_event.command == 0x56u);
+    CHECK(!ng_neogeo_pop_sound_command_event(&sound_event));
+    ng_neogeo_set_sound_reply(0x9Au);
+    CHECK(ng_neogeo_sound_reply() == 0x9Au);
+    CHECK(ng68k_read8(NG_NEO_REG_SOUND) == 0x9Au);
     ng_neogeo_reset_runtime();
     CHECK(ng_neogeo_sound_command() == 0x00u);
     CHECK(ng_neogeo_sound_reply() == 0xFFu);
+    CHECK(ng_neogeo_sound_command_events_available() == 0u);
 
     CHECK(ng_neogeo_shadow_enabled() == 0u);
     CHECK(ng_neogeo_bios_vectors_enabled() == 0u);

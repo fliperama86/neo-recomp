@@ -4,6 +4,10 @@
 
 #include "ngrecomp/neogeo_runtime.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define NG_NEO_AUDIO_CPU_CLOCK_HZ (NG_NEO_MASTER_CLOCK_HZ / 6u)
 #define NG_NEO_YM2610_CLOCK_HZ (NG_NEO_MASTER_CLOCK_HZ / 3u)
 #define NG_NEO_AUDIO_WORK_RAM_BYTES 0x0800u
@@ -31,6 +35,12 @@ void ng_neogeo_audio_set_roms(NgNeoAudio *audio,
 void ng_neogeo_audio_reset(NgNeoAudio *audio);
 void ng_neogeo_audio_write_command(NgNeoAudio *audio, uint8_t command);
 void ng_neogeo_audio_advance_z80_cycles(NgNeoAudio *audio, uint32_t cycles);
+void ng_neogeo_audio_generate(NgNeoAudio *audio,
+                              int16_t *stereo_out,
+                              uint32_t frames,
+                              uint32_t sample_rate);
+uint32_t ng_neogeo_audio_ym2610_native_sample_rate(const NgNeoAudio *audio);
+uint8_t ng_neogeo_audio_ym2610_irq_pending(const NgNeoAudio *audio);
 
 uint8_t ng_neogeo_audio_command_latch(const NgNeoAudio *audio);
 uint8_t ng_neogeo_audio_reply_latch(const NgNeoAudio *audio);
@@ -42,6 +52,9 @@ uint32_t ng_neogeo_audio_nmi_service_count(const NgNeoAudio *audio);
 uint32_t ng_neogeo_audio_ym_write_count(const NgNeoAudio *audio);
 uint32_t ng_neogeo_audio_ym_read_count(const NgNeoAudio *audio);
 NgNeoAudioYmWrite ng_neogeo_audio_last_ym_write(const NgNeoAudio *audio);
+uint32_t ng_neogeo_audio_copy_recent_ym_writes(const NgNeoAudio *audio,
+                                               NgNeoAudioYmWrite *out,
+                                               uint32_t out_capacity);
 
 int ng_neogeo_audio_copy_work_ram(const NgNeoAudio *audio,
                                   uint8_t *out,
@@ -56,3 +69,7 @@ uint8_t ng_neogeo_audio_debug_port_read(NgNeoAudio *audio, uint16_t port_addr);
 void ng_neogeo_audio_debug_port_write(NgNeoAudio *audio,
                                       uint16_t port_addr,
                                       uint8_t value);
+
+#ifdef __cplusplus
+}
+#endif

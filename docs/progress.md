@@ -1779,6 +1779,18 @@ and `V` are only trusted where generated-exec tests cover them.
   yet; next audio work is replacing the stub with YM2610 synthesis and wiring
   SDL output into the live host.
 
+- local: Replaced the YM2610 register stub with a vendored BSD-licensed ymfm
+  YM2610 backend from the ares reference tree, including V1/V2 ADPCM ROM reads,
+  YM timer/IRQ plumbing into the M1 Z80, sample rendering, and SDL queued-audio
+  output in the live host. The generated-cycle hook now lets the host advance
+  audio alongside 68000 execution so sound replies are visible during a CPU
+  slice. `tests/test_neogeo_audio.c` now proves synthesized samples with a
+  programmed SSG tone, and a dummy SDL smoke with
+  `NG_MSLUG_SDL_AUDIO_TEST_COMMAND=0xF8` produces nonzero samples. Current
+  caveat: the cart-entry/default-soft-DIP attract path still sends mostly
+  silent game commands, so controls/soft-DIP validation are needed before
+  claiming game-driven music in the attract loop.
+
 ## Next Steps
 
 Use this loop:

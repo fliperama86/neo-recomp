@@ -92,6 +92,13 @@ static uint32_t g_ng_generated_smoke_yield_stop_on_frame_change =
 static int g_ng_generated_smoke_yield_hit;
 static uint32_t g_ng_generated_smoke_yield_hit_addr;
 static uint32_t g_ng_generated_smoke_yield_hit_frame;
+static void (*g_ng_generated_smoke_cycle_observer)(uint32_t addr,
+                                                   uint32_t cycles);
+
+void ng_generated_smoke_set_cycle_observer(void (*observer)(uint32_t addr,
+                                                            uint32_t cycles)) {
+    g_ng_generated_smoke_cycle_observer = observer;
+}
 
 static void ng_generated_smoke_note_instruction_watch(uint32_t addr) {
     switch (addr & 0x00FFFFFFu) {
@@ -112,8 +119,10 @@ void ng_generated_instruction_hook(uint32_t addr) {
 }
 
 void ng_generated_cycle_hook(uint32_t addr, uint32_t cycles) {
-    (void)addr;
     ng_neogeo_advance_cpu_cycles(cycles);
+    if (g_ng_generated_smoke_cycle_observer) {
+        g_ng_generated_smoke_cycle_observer(addr, cycles);
+    }
 }
 
 void ng_generated_smoke_clear_instruction_yield(void) {

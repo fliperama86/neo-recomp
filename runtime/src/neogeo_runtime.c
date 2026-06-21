@@ -40,6 +40,12 @@ static uint32_t g_ng_neogeo_status_a_reads;
 static uint8_t g_ng_neogeo_port_output;
 static uint8_t g_ng_neogeo_sound_command;
 static uint8_t g_ng_neogeo_sound_reply = 0xFFu;
+static NgNeoSoundCommandEvent
+    g_ng_neogeo_sound_command_queue[NG_NEO_SOUND_COMMAND_QUEUE_CAPACITY];
+static uint32_t g_ng_neogeo_sound_command_queue_head;
+static uint32_t g_ng_neogeo_sound_command_queue_tail;
+static uint32_t g_ng_neogeo_sound_command_queue_count;
+static uint32_t g_ng_neogeo_sound_command_queue_overflows;
 static uint8_t g_ng_neogeo_dipswitch = 0xFFu;
 static uint32_t g_ng_neogeo_watchdog_kicks;
 static uint32_t g_ng_neogeo_last_watchdog_pc;
@@ -157,6 +163,27 @@ static int ng_neogeo_is_p2cnt_addr(uint32_t addr) {
 
 static int ng_neogeo_is_sound_addr(uint32_t addr) {
     return (addr & 0x00FE0001u) == NG_NEO_REG_SOUND;
+}
+
+static void ng_neogeo_queue_sound_command(uint8_t command) {
+    if (g_ng_neogeo_sound_command_queue_count >=
+        NG_NEO_SOUND_COMMAND_QUEUE_CAPACITY) {
+        g_ng_neogeo_sound_command_queue_tail =
+            (g_ng_neogeo_sound_command_queue_tail + 1u) %
+            NG_NEO_SOUND_COMMAND_QUEUE_CAPACITY;
+        --g_ng_neogeo_sound_command_queue_count;
+        ++g_ng_neogeo_sound_command_queue_overflows;
+    }
+
+    NgNeoSoundCommandEvent *event =
+        &g_ng_neogeo_sound_command_queue[g_ng_neogeo_sound_command_queue_head];
+    event->cpu_cycles = g_ng_neogeo_cpu_cycles;
+    event->pc = g_ng_m68k.pc & 0x00FFFFFFu;
+    event->command = command;
+    g_ng_neogeo_sound_command_queue_head =
+        (g_ng_neogeo_sound_command_queue_head + 1u) %
+        NG_NEO_SOUND_COMMAND_QUEUE_CAPACITY;
+    ++g_ng_neogeo_sound_command_queue_count;
 }
 
 static int ng_neogeo_is_status_a_addr(uint32_t addr) {
@@ -545,6 +572,7 @@ void ng68k_write8(uint32_t addr, uint8_t value) {
         g_ng_neogeo_sound_command = value;
         g_ng_neogeo_last_sound_pc = g_ng_m68k.pc & 0x00FFFFFFu;
         g_ng_neogeo_last_sound_addr = addr & 0x00FFFFFFu;
+        ng_neogeo_queue_sound_command(value);
         return;
     }
     if (ng_neogeo_is_system_latch_addr(addr)) {
@@ -788,6 +816,10 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_last_sound_pc = 0;
     g_ng_neogeo_last_sound_addr = 0;
     g_ng_neogeo_sound_reply = 0xFFu;
+    g_ng_neogeo_sound_command_queue_head = 0;
+    g_ng_neogeo_sound_command_queue_tail = 0;
+    g_ng_neogeo_sound_command_queue_count = 0;
+    g_ng_neogeo_sound_command_queue_overflows = 0;
     g_ng_neogeo_vram_addr = 0;
     g_ng_neogeo_vram_mod = 0;
     g_ng_neogeo_shadow_enabled = 0;
@@ -1051,6 +1083,32 @@ uint32_t ng_neogeo_last_sound_addr(void) {
 
 uint8_t ng_neogeo_sound_reply(void) {
     return g_ng_neogeo_sound_reply;
+}
+
+void ng_neogeo_set_sound_reply(uint8_t reply) {
+    g_ng_neogeo_sound_reply = reply;
+}
+
+uint32_t ng_neogeo_sound_command_events_available(void) {
+    return g_ng_neogeo_sound_command_queue_count;
+}
+
+uint32_t ng_neogeo_sound_command_event_overflows(void) {
+    return g_ng_neogeo_sound_command_queue_overflows;
+}
+
+int ng_neogeo_pop_sound_command_event(NgNeoSoundCommandEvent *out) {
+    if (g_ng_neogeo_sound_command_queue_count == 0u) {
+        return 0;
+    }
+    if (out) {
+        *out = g_ng_neogeo_sound_command_queue[g_ng_neogeo_sound_command_queue_tail];
+    }
+    g_ng_neogeo_sound_command_queue_tail =
+        (g_ng_neogeo_sound_command_queue_tail + 1u) %
+        NG_NEO_SOUND_COMMAND_QUEUE_CAPACITY;
+    --g_ng_neogeo_sound_command_queue_count;
+    return 1;
 }
 
 uint8_t ng_neogeo_shadow_enabled(void) {
