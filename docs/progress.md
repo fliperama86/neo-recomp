@@ -433,6 +433,14 @@ an intentional cart soft-reset request rather than a missing CPU callback:
 `SWPBIOS`, work RAM drops to a near-reset checksum, and the BIOS/VBlank path
 continues with `bios_vectors=1`.
 
+The runtime now honors `SWPBIOS`/`SWPROM` for the banked 68000 vector window:
+when BIOS vectors are selected, `$000000-$00007F` reads come from the system
+ROM instead of the cartridge P-ROM. This matches MAME's Neo Geo vector-bank
+model and is covered by `tests/test_runtime_interrupts.c`. With this fixed, the
+post-reset dummy run takes BIOS vector fetches from the BIOS, but still remains
+in the BIOS reset/VBlank path; the next suspect is now backup-SRAM / BIOS device
+state rather than vector-bank fetches themselves.
+
 The previous `$00067E: DC.W $D101` frontier has since been confirmed as
 `ADDX.B D1,D0` and is decoded/emitted locally with generated-exec coverage.
 
@@ -1692,10 +1700,11 @@ Immediate next slice:
   surface minimal. The latest dummy no-throttle run no longer reports the old
   `$FFFFFF` read miss or known callback dispatch stalls; it reaches a cart
   request at `$001838`, enters `$00085E -> $000862 -> $C00444 -> $C112D2`, and
-  writes `SWPBIOS` at `$C11300`.
+  writes `SWPBIOS` at `$C11300`. The vector window is now banked correctly, so
+  continue from the BIOS reset/VBlank path around `$C123DE`/`$C00438`.
 - Keep the next work isolated: determine whether the post-reset white-screen
-  state is caused by BIOS-vector mapping, BIOS/device/input semantics, or
-  VBlank/IRQ scheduling before adding a broader hardware stack.
+  state is caused by backup-SRAM contents/locking, BIOS device/input semantics,
+  or VBlank/IRQ scheduling before adding a broader hardware stack.
 
 Near follow-ups:
 

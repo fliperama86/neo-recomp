@@ -205,8 +205,17 @@ static int ng_neogeo_is_system_rom_addr(uint32_t addr) {
     return addr >= 0x00C00000u && addr <= 0x00CFFFFFu;
 }
 
+static uint8_t ng_neogeo_read_system_rom(uint32_t offset) {
+    offset %= NG_NEO_SYSTEM_ROM_BYTES;
+    return offset < g_ng_neogeo_system_rom_size && g_ng_neogeo_system_rom ?
+        g_ng_neogeo_system_rom[offset] : 0xFFu;
+}
+
 uint8_t ng68k_read8(uint32_t addr) {
     addr &= 0x00FFFFFFu;
+    if (g_ng_neogeo_bios_vectors_enabled && addr <= 0x0000007Fu) {
+        return ng_neogeo_read_system_rom(addr);
+    }
     if (addr <= 0x000FFFFFu) {
         return addr < g_ng_neogeo_program_rom_size && g_ng_neogeo_program_rom ?
             g_ng_neogeo_program_rom[addr] : 0xFFu;
@@ -263,9 +272,7 @@ uint8_t ng68k_read8(uint32_t addr) {
         }
     }
     if (ng_neogeo_is_system_rom_addr(addr)) {
-        uint32_t rom_offset = (addr - 0x00C00000u) % NG_NEO_SYSTEM_ROM_BYTES;
-        return rom_offset < g_ng_neogeo_system_rom_size && g_ng_neogeo_system_rom ?
-            g_ng_neogeo_system_rom[rom_offset] : 0xFFu;
+        return ng_neogeo_read_system_rom(addr - 0x00C00000u);
     }
     ng_neogeo_log_read_miss(addr);
     return 0xFF;

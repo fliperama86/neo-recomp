@@ -31,6 +31,16 @@ int main(void) {
         0xA1u, 0xB2u, 0xC3u, 0xD4u,
         0xE5u, 0xF6u, 0x07u, 0x18u,
     };
+    const uint8_t vector_program_rom[0x84] = {
+        [0x00] = 0x11u, [0x01] = 0x22u,
+        [0x02] = 0x33u, [0x03] = 0x44u,
+        [0x7F] = 0x7Fu, [0x80] = 0x80u,
+    };
+    const uint8_t vector_system_rom[0x84] = {
+        [0x00] = 0xAAu, [0x01] = 0xBBu,
+        [0x02] = 0xCCu, [0x03] = 0xDDu,
+        [0x7F] = 0xF7u, [0x80] = 0x55u,
+    };
 
     memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
     ng_neogeo_reset_runtime();
@@ -185,6 +195,23 @@ int main(void) {
     CHECK(ng68k_read8(0x00C00008u) == 0xFFu);
     ng68k_write8(0x00C00000u, 0x55u);
     CHECK(ng68k_read8(0x00C00000u) == 0xA1u);
+
+    ng_neogeo_set_program_rom(vector_program_rom,
+                              (uint32_t)sizeof(vector_program_rom));
+    ng_neogeo_set_system_rom(vector_system_rom,
+                             (uint32_t)sizeof(vector_system_rom));
+    CHECK(ng68k_read32(0x000000u) == 0x11223344u);
+    CHECK(ng68k_read8(0x00007Fu) == 0x7Fu);
+    CHECK(ng68k_read8(0x000080u) == 0x80u);
+    ng68k_write8(NG_NEO_REG_SWPBIOS, 0xFFu);
+    CHECK(ng_neogeo_bios_vectors_enabled() == 1u);
+    CHECK(ng68k_read32(0x000000u) == 0xAABBCCDDu);
+    CHECK(ng68k_read8(0x00007Fu) == 0xF7u);
+    CHECK(ng68k_read8(0x000080u) == 0x80u);
+    ng68k_write8(NG_NEO_REG_SWPROM, 0xFFu);
+    CHECK(ng_neogeo_bios_vectors_enabled() == 0u);
+    CHECK(ng68k_read32(0x000000u) == 0x11223344u);
+    ng_neogeo_reset_runtime();
 
     ng68k_write8(0x00100000u, 0xA5u);
     CHECK(ng68k_read8(0x00100000u) == 0xA5u);
