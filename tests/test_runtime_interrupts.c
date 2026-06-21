@@ -150,6 +150,9 @@ int main(void) {
     CHECK(ng68k_read16(0x0080000Au) == 0xFFFFu);
     ng68k_write16(0x00A0000Au, 0x1234u);
     CHECK(ng68k_read16(0x00A0000Au) == 0xFFFFu);
+    CHECK(ng68k_read8(0x00E0000Bu) == 0xFFu);
+    CHECK(ng68k_read16(0x00E0000Au) == 0xFFFFu);
+    CHECK(ng68k_read16(0x00FFFFFEu) == 0xFFFFu);
 
     CHECK(ng_neogeo_sound_command() == 0x00u);
     CHECK(ng_neogeo_sound_reply() == 0xFFu);

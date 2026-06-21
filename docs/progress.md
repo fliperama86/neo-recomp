@@ -103,8 +103,10 @@ runtime now maintains that small BIOS save-RAM high-water byte as table entries
 are created. A dummy no-throttle run then reached `refresh=4500` and stopped
 cleanly at `dispatches=9000000 frame=6754 scanline=215 budget_stop=$00065C`; a
 longer spot-check reached `refresh=6000` / `frame=8865`. The old `$FFFFFF` miss
-is gone, and the `$80000A`/`$A0000A` memory-card probes are now modeled as
-absent-card reads instead of unmapped-bus spam. A later operator log showed an
+is gone, the `$80000A`/`$A0000A` memory-card probes are now modeled as
+absent-card reads instead of unmapped-bus spam, and the MVS `$E00000-$FFFFFF`
+high-unmapped read range is handled as quiet idle reads for late attract-mode
+probes such as Metal Slug's `$E0000B` table entry. A later operator log showed an
 eventual live stall with `recent_loop=1` and every recent dispatch at `$092252`;
 that was not a hardware-timing stall but a missing dynamic script target from
 the `$043906`/`$043AA4` `JSR ($2,A1)` path when `A1=$092250`. The TOML now seeds

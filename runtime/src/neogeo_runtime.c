@@ -183,6 +183,10 @@ static int ng_neogeo_is_memcard_addr(uint32_t addr) {
     return addr >= 0x00800000u && addr <= 0x00BFFFFFu;
 }
 
+static int ng_neogeo_is_high_unmapped_addr(uint32_t addr) {
+    return addr >= 0x00E00000u;
+}
+
 static void ng_neogeo_note_watchdog_kick(void) {
     uint32_t gap =
         g_ng_neogeo_interrupt_polls - g_ng_neogeo_watchdog_last_kick_poll;
@@ -391,6 +395,13 @@ uint8_t ng68k_read8(uint32_t addr) {
     }
     if (ng_neogeo_is_system_rom_addr(addr)) {
         return ng_neogeo_read_system_rom(addr - 0x00C00000u);
+    }
+    if (ng_neogeo_is_high_unmapped_addr(addr)) {
+        /* MAME's MVS map treats $E00000-$FFFFFF as unmapped/open-bus reads.
+           Until we model 68000 prefetch/open-bus values precisely, keep the
+           existing idle value but do not spam diagnostics for expected probes
+           like Metal Slug's $E0000B attract/demo table entry. */
+        return 0xFFu;
     }
     ng_neogeo_log_read_miss(addr);
     return 0xFF;
