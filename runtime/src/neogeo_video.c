@@ -493,9 +493,17 @@ int ng_neogeo_video_render_sprite_frame_argb_with_options(
         return 0;
     }
 
+    /* Neo Geo video does not clear to RGB black before sprite rendering.
+       MAME's screen_update() fills the bitmap with the active palette bank's
+       background pen (palette index 0x0fff), then draws sprites and fix text
+       over it. */
+    uint32_t background = ng_neogeo_video_palette_argb(
+        palette_words,
+        palette_word_count,
+        0x0FFFu);
     for (uint32_t y = 0; y < out_height; ++y) {
         for (uint32_t x = 0; x < out_width; ++x) {
-            out_argb[y * out_stride_pixels + x] = 0xFF000000u;
+            out_argb[y * out_stride_pixels + x] = background;
         }
     }
 

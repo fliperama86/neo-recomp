@@ -252,6 +252,50 @@ static int test_sprite_frame_render(void) {
     return 0;
 }
 
+static int test_sprite_frame_uses_background_pen(void) {
+    uint8_t c_rom[NG_NEO_SPRITE_TILE_BYTES];
+    uint16_t *vram = (uint16_t *)calloc(0x10000u, sizeof(uint16_t));
+    uint16_t palette[NG_NEO_PALETTE_COLORS_PER_BANK];
+    uint32_t *frame = (uint32_t *)calloc(NG_NEO_SPRITE_FRAME_WIDTH *
+                                         NG_NEO_SPRITE_FRAME_HEIGHT,
+                                         sizeof(uint32_t));
+    CHECK(vram != NULL && frame != NULL);
+    memset(c_rom, 0, sizeof(c_rom));
+    memset(palette, 0, sizeof(palette));
+
+    uint8_t source[NG_NEO_SPRITE_TILE_PIXELS];
+    memset(source, 0, sizeof(source));
+    source[0] = 1u;
+    encode_sprite_line(c_rom, 0u, source);
+
+    vram[0x8001u] = 0x0FFFu;
+    vram[0x8201u] = (uint16_t)((496u << 7) | 1u);
+    vram[0x8401u] = 0x0000u;
+    vram[64u] = 0x0000u;
+    vram[65u] = 0x0100u;
+    palette[0x11u] = 0x4F00u;
+    palette[0x0FFFu] = 0x100Fu;
+
+    CHECK(ng_neogeo_video_render_sprite_frame_argb(
+        c_rom,
+        sizeof(c_rom),
+        vram,
+        0x10000u,
+        palette,
+        NG_NEO_PALETTE_COLORS_PER_BANK,
+        frame,
+        NG_NEO_SPRITE_FRAME_WIDTH,
+        NG_NEO_SPRITE_FRAME_HEIGHT,
+        NG_NEO_SPRITE_FRAME_WIDTH));
+    CHECK(frame[0] == 0xFFFF0000u);
+    CHECK(frame[1] == 0xFF0000FFu);
+    CHECK(frame[NG_NEO_SPRITE_FRAME_WIDTH + 1u] == 0xFF0000FFu);
+
+    free(vram);
+    free(frame);
+    return 0;
+}
+
 static int test_sprite_frame_hshrink_and_sticky_chain(void) {
     uint8_t c_rom[NG_NEO_SPRITE_TILE_BYTES * 2u];
     uint16_t *vram = (uint16_t *)calloc(0x10000u, sizeof(uint16_t));
@@ -516,6 +560,7 @@ int main(void) {
     if (test_fix_layer_render() != 0) return 1;
     if (test_sprite_map_atlas_render() != 0) return 1;
     if (test_sprite_frame_render() != 0) return 1;
+    if (test_sprite_frame_uses_background_pen() != 0) return 1;
     if (test_sprite_frame_hshrink_and_sticky_chain() != 0) return 1;
     if (test_sprite_frame_wraparound_x_alignment() != 0) return 1;
     if (test_sprite_frame_uses_zoom_rom_table() != 0) return 1;
