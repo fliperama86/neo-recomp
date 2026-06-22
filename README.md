@@ -319,8 +319,8 @@ The audio path now has a tested Z80/M1 bus, YM2610 FM/SSG/ADPCM backend, SDL
 queue output, MAME-style 128 KiB M1 `ROM_RELOAD` banking, an audible diagnostic
 command path, MAME-style contiguous `201-v1/201-v2` sample-region reads for
 Metal Slug, ADPCM-A key-on diagnostics in live logs, native-sample averaging
-when resampling YM output to the host rate, and a gameplay smoke with nonzero
-game-driven audio.
+when resampling YM output to the host rate, MAME-style YM2610 stream
+fidelity/routes, and a gameplay smoke with nonzero game-driven audio.
 
 
 ### Audio probe

@@ -45,8 +45,9 @@ layout, including the 128 KiB M1 `ROM_RELOAD` effective region used by Metal
 Slug. YM2610 V-ROM reads likewise treat the `.neo` `v1`/`v2` chunks as one
 contiguous sample address space for Metal Slug's MAME `ymsnd:adpcma` map, with
 ADPCM-B falling back to that same region when no explicit B region exists. The
-YM wrapper averages native chip samples when resampling to the host output rate
-rather than letting the live host sample a single native tick. The 68000 runtime
+YM wrapper uses MAME's YM2610 stream fidelity/routes and averages native chip
+samples when resampling to the host output rate rather than letting the live
+host sample a single native tick. The 68000 runtime
 exposes only CPU-visible sound latch behavior plus a narrow command/reply event
 boundary for hosts; generated 68000 code should not know about Z80 or YM2610
 internals.

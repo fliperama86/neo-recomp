@@ -20,6 +20,10 @@ static int16_t clamp_i16(int32_t value) {
     return static_cast<int16_t>(value);
 }
 
+static constexpr int kMameSsgRouteGain = 84;
+static constexpr int kMameFmAdpcmRouteGain = 98;
+static constexpr int kRouteGainDivisor = 100;
+
 struct YmBackend;
 
 struct YmInterface final : public ymfm::ymfm_interface {
@@ -43,8 +47,17 @@ struct YmInterface final : public ymfm::ymfm_interface {
 struct YmBackend {
     YmBackend() : intf(*this), chip(intf) {
         last_output.clear();
-        native_rate = chip.sample_rate(NG_NEO_YM2610_CLOCK_HZ);
+        configure_fidelity();
         reset();
+    }
+
+    void configure_fidelity() {
+        /* MAME's YM2610 device sets SSG_FIDELITY to OPN_FIDELITY_MED before
+           stream allocation.  That yields the hardware/MAME native stream rate
+           of clock/144 (~55.6 kHz for Neo Geo) while keeping FM/ADPCM at one
+           chip sample per stream sample. */
+        chip.set_fidelity(ymfm::OPN_FIDELITY_MED);
+        native_rate = chip.sample_rate(NG_NEO_YM2610_CLOCK_HZ);
     }
 
     void reset() {
@@ -54,6 +67,7 @@ struct YmBackend {
         irq_pending = false;
         native_phase = 0.0;
         last_output.clear();
+        configure_fidelity();
         chip.reset();
         native_rate = chip.sample_rate(NG_NEO_YM2610_CLOCK_HZ);
     }
@@ -268,8 +282,17 @@ void ng_neogeo_ym2610_generate(NgNeoYm2610 *ym,
         int32_t fm_adpcm_left = static_cast<int32_t>(accum[0] / generated);
         int32_t fm_adpcm_right = static_cast<int32_t>(accum[1] / generated);
         int32_t ssg_mono = static_cast<int32_t>(accum[2] / generated);
-        int32_t left = fm_adpcm_left + ssg_mono;
-        int32_t right = fm_adpcm_right + ssg_mono;
+        /* Match MAME's Neo Geo stereo routes after ymfm's SSG-output rotation:
+             SSG mono -> left/right at 0.84
+             FM + ADPCM left/right -> respective speaker at 0.98 */
+        int32_t left =
+            (fm_adpcm_left * kMameFmAdpcmRouteGain +
+             ssg_mono * kMameSsgRouteGain) /
+            kRouteGainDivisor;
+        int32_t right =
+            (fm_adpcm_right * kMameFmAdpcmRouteGain +
+             ssg_mono * kMameSsgRouteGain) /
+            kRouteGainDivisor;
         stereo_out[i * 2u + 0u] = clamp_i16(left);
         stereo_out[i * 2u + 1u] = clamp_i16(right);
     }

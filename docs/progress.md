@@ -159,8 +159,10 @@ exit logs include the key-on/key-off counts, last ADPCM-A channel, sample
 start/end address, channel level, total level, and pan bits so the next SFX
 report can distinguish "the game requested an effect but the host mixed it too
 quietly" from "the M1/Z80 never reached the effect command." YM2610 output
-resampling now averages the generated native 500 kHz samples into each host
-audio frame instead of retaining only the last native sample.
+resampling now follows MAME's `OPN_FIDELITY_MED` YM2610 stream rate
+(`clock/144`, about 55.6 kHz on Neo Geo), applies the same SSG/FM+ADPCM route
+weights, and averages native chip samples into each host audio frame instead of
+retaining only the last native sample.
 
 The live host now presents on emulated frame boundaries by default, and those
 boundaries come from generated 68k cycle hooks rather than an arbitrary

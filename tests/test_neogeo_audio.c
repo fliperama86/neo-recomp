@@ -170,7 +170,8 @@ static int test_audio_ym2610_generates_samples(void) {
         }
     }
     CHECK(nonzero != 0u);
-    CHECK(ng_neogeo_audio_ym2610_native_sample_rate(audio) != 0u);
+    CHECK(ng_neogeo_audio_ym2610_native_sample_rate(audio) ==
+          NG_NEO_YM2610_CLOCK_HZ / 144u);
 
     ng_neogeo_audio_destroy(audio);
     return 0;
