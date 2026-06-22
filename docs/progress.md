@@ -79,8 +79,8 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=627 discovery_files=0 jump_tables=74 runtime_dispatch=60
-function candidates: 51609
+game config functions: entry=0 extra=653 discovery_files=0 jump_tables=74 runtime_dispatch=60
+function candidates: 51713
 dispatch audit: sites=8768 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
@@ -134,12 +134,17 @@ registers; the recent log includes YM port-3 ADPCM/FM register writes such as
 
 Manual gameplay with input/audio then exposed concrete cart callback frontiers
 at `$08E4E6` when an enemy family enters the screen and later `$04F70E` as
-player-control enemy/effect objects advanced. The `$0E82D0-$0E82FC` abs32
-callback table seeds the first compact enemy/object state run, and the
-`$0E840C-$0E8438` vector-page slice seeds the live-action `$04F7xx` sibling run
-without widening back into the preceding `$083Bxx/$08B3xx` family. That pushed
-the audit above the older 8192-site storage ceiling, so dispatch-audit site
-storage now follows the 65536 discovery-candidate cap;
+player-control enemy/effect objects advanced. A follow-up manual run reached
+the stage-script predicate at `$0919B0`; that belongs to the same embedded
+scroll-threshold predicate family as the earlier `$09196E` frontier, so the
+current config seeds the exact `CMPI.W #imm,$106F50; Scc; LEA continuation,A1;
+RTS` predicate entries in that compact mixed command/data stream instead of
+widening the whole region. The `$0E82D0-$0E82FC` abs32 callback table seeds the
+first compact enemy/object state run, and the `$0E840C-$0E8438` vector-page
+slice seeds the live-action `$04F7xx` sibling run without widening back into the
+preceding `$083Bxx/$08B3xx` family. That pushed the audit above the older
+8192-site storage ceiling, so dispatch-audit site storage now follows the
+65536 discovery-candidate cap;
 `tests/test_dispatch_audit.c` covers an 8300-site audit and the Metal Slug
 static audit reports `sites=8768` without truncation.
 
@@ -153,12 +158,14 @@ combined V-ROM address space to both ADPCM engines, and
 `tests/test_neogeo_audio.c` covers an ADPCM-A sample that starts in the second
 chunk.
 
-Because short effects still need manual validation, the audio path now keeps a
-small ADPCM-A key-on diagnostic alongside the existing YM write ring. Live-host
-exit logs include the key-on/key-off counts, last ADPCM-A channel, sample
-start/end address, channel level, total level, and pan bits so the next SFX
-report can distinguish "the game requested an effect but the host mixed it too
-quietly" from "the M1/Z80 never reached the effect command." YM2610 output
+Because short effects still need manual validation, the audio path now keeps
+small ADPCM-A and ADPCM-B key-on diagnostics alongside the existing YM write
+ring. Live-host exit logs include ADPCM-A key-on/key-off counts, last channel,
+sample start/end address, channel level, total level, and pan bits, plus the
+last ADPCM-B key-on count, start/end, delta-N, level, control, pan, repeat, and
+speaker-off bits. That lets the next SFX/BIOS-jingle report distinguish "the
+game requested an effect but the host mixed or paced it incorrectly" from "the
+M1/Z80 never reached the effect command." YM2610 output
 resampling now follows MAME's `OPN_FIDELITY_MED` YM2610 stream rate
 (`clock/144`, about 55.6 kHz on Neo Geo), applies the same SSG/FM+ADPCM route
 weights, and averages native chip samples into each host audio frame instead of

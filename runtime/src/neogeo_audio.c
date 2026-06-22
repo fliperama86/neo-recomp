@@ -34,7 +34,9 @@ struct NgNeoAudio {
     NgNeoAudioYmWrite ym_write_log[NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY];
     uint32_t ym_write_log_head;
     uint8_t adpcm_a_regs[0x30];
+    uint8_t adpcm_b_regs[0x11];
     NgNeoAudioAdpcmAEvent last_adpcm_a;
+    NgNeoAudioAdpcmBEvent last_adpcm_b;
     NgNeoYm2610 *ym;
 };
 
@@ -177,31 +179,77 @@ static void ng_audio_refresh_last_adpcm_a_event(NgNeoAudio *audio) {
         (audio->adpcm_a_regs[0x08u + ch] & 0x40u) ? 1u : 0u;
 }
 
+static void ng_audio_refresh_last_adpcm_b_event(NgNeoAudio *audio) {
+    if (!audio || audio->last_adpcm_b.keyon_count == 0u) {
+        return;
+    }
+
+    audio->last_adpcm_b.start_addr =
+        (uint32_t)(audio->adpcm_b_regs[0x02u] |
+                   ((uint32_t)audio->adpcm_b_regs[0x03u] << 8)) << 8;
+    audio->last_adpcm_b.end_addr =
+        (uint32_t)(audio->adpcm_b_regs[0x04u] |
+                   ((uint32_t)audio->adpcm_b_regs[0x05u] << 8)) << 8;
+    audio->last_adpcm_b.delta_n =
+        (uint16_t)(audio->adpcm_b_regs[0x09u] |
+                   ((uint16_t)audio->adpcm_b_regs[0x0Au] << 8));
+    audio->last_adpcm_b.level = audio->adpcm_b_regs[0x0Bu];
+    audio->last_adpcm_b.control = audio->adpcm_b_regs[0x00u];
+    audio->last_adpcm_b.pan_left =
+        (audio->adpcm_b_regs[0x01u] & 0x80u) ? 1u : 0u;
+    audio->last_adpcm_b.pan_right =
+        (audio->adpcm_b_regs[0x01u] & 0x40u) ? 1u : 0u;
+    audio->last_adpcm_b.repeat =
+        (audio->adpcm_b_regs[0x00u] & 0x10u) ? 1u : 0u;
+    audio->last_adpcm_b.speaker_off =
+        (audio->adpcm_b_regs[0x00u] & 0x08u) ? 1u : 0u;
+}
+
 static void ng_audio_track_ym_data_write(NgNeoAudio *audio,
                                          uint8_t port,
                                          uint8_t address,
                                          uint8_t data) {
-    if (!audio || port != 3u || address >= sizeof(audio->adpcm_a_regs)) {
+    if (!audio) {
         return;
     }
 
-    audio->adpcm_a_regs[address] = data;
-    if (address == 0x00u) {
-        uint8_t channels = data & 0x3Fu;
-        uint8_t keyoff = data & 0x80u;
-        for (uint8_t ch = 0; ch < 6u; ++ch) {
-            if ((channels & (uint8_t)(1u << ch)) == 0u) {
-                continue;
-            }
-            if (keyoff) {
-                ++audio->last_adpcm_a.keyoff_count;
-            } else {
-                ++audio->last_adpcm_a.keyon_count;
-                audio->last_adpcm_a.channel = ch;
+    if (port == 3u && address < sizeof(audio->adpcm_a_regs)) {
+        audio->adpcm_a_regs[address] = data;
+        if (address == 0x00u) {
+            uint8_t channels = data & 0x3Fu;
+            uint8_t keyoff = data & 0x80u;
+            for (uint8_t ch = 0; ch < 6u; ++ch) {
+                if ((channels & (uint8_t)(1u << ch)) == 0u) {
+                    continue;
+                }
+                if (keyoff) {
+                    ++audio->last_adpcm_a.keyoff_count;
+                } else {
+                    ++audio->last_adpcm_a.keyon_count;
+                    audio->last_adpcm_a.channel = ch;
+                }
             }
         }
+        ng_audio_refresh_last_adpcm_a_event(audio);
+    } else if (port == 1u && address >= 0x10u && address <= 0x1Bu) {
+        uint8_t reg = (uint8_t)(address - 0x10u);
+        uint8_t effective = data;
+        if (reg == 0x00u) {
+            /* YM2610 ADPCM-B register 0 effectively has external mode forced
+               and recording disabled on writes, matching ymfm/MAME. */
+            effective = (uint8_t)((data | 0x20u) & (uint8_t)~0x40u);
+        }
+        audio->adpcm_b_regs[reg] = effective;
+        if (reg == 0x00u) {
+            if (effective & 0x80u) {
+                ++audio->last_adpcm_b.keyon_count;
+            }
+            if (effective & 0x01u) {
+                ++audio->last_adpcm_b.reset_count;
+            }
+        }
+        ng_audio_refresh_last_adpcm_b_event(audio);
     }
-    ng_audio_refresh_last_adpcm_a_event(audio);
 }
 
 static uint8_t ng_audio_ym_read(NgNeoAudio *audio, uint8_t port) {
@@ -554,6 +602,12 @@ NgNeoAudioAdpcmAEvent ng_neogeo_audio_last_adpcm_a_event(const NgNeoAudio *audio
     memset(&empty, 0, sizeof(empty));
     empty.channel = 0xFFu;
     return audio ? audio->last_adpcm_a : empty;
+}
+
+NgNeoAudioAdpcmBEvent ng_neogeo_audio_last_adpcm_b_event(const NgNeoAudio *audio) {
+    NgNeoAudioAdpcmBEvent empty;
+    memset(&empty, 0, sizeof(empty));
+    return audio ? audio->last_adpcm_b : empty;
 }
 
 int ng_neogeo_audio_copy_work_ram(const NgNeoAudio *audio,

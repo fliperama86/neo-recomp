@@ -58,12 +58,38 @@ extra = [
   0x001A58,
   0x001A64,
   0x001A70,
-  # Embedded stage-0 object script predicate reached after the START menu path
-  # installs the $0967FE script. The small routine compares $106F50 against
-  # $0150 and returns via A1 continuation; surrounding bytes are mixed table
-  # data, so seed only the concrete runtime frontier instead of widening the
-  # region.
+  # Embedded stage-0 object script predicates reached after the START menu path
+  # installs the $0967FE script. These small routines compare $106F50 against
+  # immediate scroll thresholds, set D0 from the condition, and return an A1
+  # script continuation. Surrounding bytes are mixed command/data records, so
+  # keep this to exact predicate entry points instead of widening the region.
   0x09196E,
+  0x0919B0,
+  0x0919C8,
+  0x091A0A,
+  0x091A4E,
+  0x091A7E,
+  0x091AC0,
+  0x091AF6,
+  0x091B26,
+  0x091B6C,
+  0x091BA4,
+  0x091BD4,
+  0x091C28,
+  0x091C6A,
+  0x091C88,
+  0x091CCC,
+  0x091D10,
+  0x091D26,
+  0x091D5E,
+  0x091D82,
+  0x091DC6,
+  0x091E3C,
+  0x091E52,
+  0x091E6A,
+  0x091E82,
+  0x091E9A,
+  0x091EB8,
   0x000400,
   0x001B4C,
   0x001B70,

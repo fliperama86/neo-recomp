@@ -34,6 +34,20 @@ typedef struct NgNeoAudioAdpcmAEvent {
     uint8_t pan_right;
 } NgNeoAudioAdpcmAEvent;
 
+typedef struct NgNeoAudioAdpcmBEvent {
+    uint32_t keyon_count;
+    uint32_t reset_count;
+    uint32_t start_addr;
+    uint32_t end_addr;
+    uint16_t delta_n;
+    uint8_t level;
+    uint8_t control;
+    uint8_t pan_left;
+    uint8_t pan_right;
+    uint8_t repeat;
+    uint8_t speaker_off;
+} NgNeoAudioAdpcmBEvent;
+
 NgNeoAudio *ng_neogeo_audio_create(void);
 void ng_neogeo_audio_destroy(NgNeoAudio *audio);
 
@@ -68,6 +82,7 @@ uint32_t ng_neogeo_audio_copy_recent_ym_writes(const NgNeoAudio *audio,
                                                NgNeoAudioYmWrite *out,
                                                uint32_t out_capacity);
 NgNeoAudioAdpcmAEvent ng_neogeo_audio_last_adpcm_a_event(const NgNeoAudio *audio);
+NgNeoAudioAdpcmBEvent ng_neogeo_audio_last_adpcm_b_event(const NgNeoAudio *audio);
 
 int ng_neogeo_audio_copy_work_ram(const NgNeoAudio *audio,
                                   uint8_t *out,
