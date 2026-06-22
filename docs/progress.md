@@ -79,9 +79,9 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=658 discovery_files=0 jump_tables=74 runtime_dispatch=60
-function candidates: 51745
-dispatch audit: sites=8782 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
+game config functions: entry=0 extra=666 discovery_files=0 jump_tables=74 runtime_dispatch=60
+function candidates: 51853
+dispatch audit: sites=8818 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
 
@@ -146,10 +146,11 @@ preceding `$083Bxx/$08B3xx` family. That pushed the audit above the older
 8192-site storage ceiling, so dispatch-audit site storage now follows the
 65536 discovery-candidate cap;
 `tests/test_dispatch_audit.c` covers an 8300-site audit and the Metal Slug
-static audit reports `sites=8782` without truncation. A later gameplay/manual
-frontier at `$03FC38` was seeded together with the exact `LEA target,A1;
-MOVE.L A1,(A6)` continuations in the neighboring `$03FC38-$03FCA4`
-object-state chain, leaving the dispatch audit clean at `sites=8782`.
+static audit reports `sites=8818` without truncation. Later gameplay/manual
+frontiers at `$03FC38` and `$04D70C` were seeded together with their exact
+`LEA target,A1; MOVE.L A1,(A6)` continuations in the neighboring
+`$03FC38-$03FCA4` and `$04D6EC-$04D81A` object-state chains, leaving the
+dispatch audit clean at `sites=8818`.
 
 The same manual run also made the first obvious audio gap concrete: music/PCM
 was audible, but short effects such as shots/bombs were silent. Grounding this
@@ -1871,14 +1872,16 @@ and `V` are only trusted where generated-exec tests cover them.
   accumulated queue wait time, and queue-clear count so audio glitches can be
   separated from YM/Z80 command or sample-decoding issues.
 
-- local: Matched the live host's 68000->Z80 sound delivery to MAME's
-  `generic_latch_8` semantics after the SDL queue diagnostics proved audio was
-  not being skipped by the host device. The host no longer grants a guaranteed
-  50us Z80 service window to every sound write; rapid writes now update the
-  single pending latch byte and can overwrite an unread command, just like
-  MAME/hardware. Live shutdown logs now include Z80 NMI-service count plus the
-  current command latch/reply bytes so command-overwrite issues can be separated
-  from YM2610 mixing/sample bugs.
+- local: Grounded the live host's 68000->Z80 sound delivery against MAME and
+  MiSTer, then reverted the no-service-window experiment after it collapsed the
+  BIOS jingle into a stuck single note. MAME's `generic_latch_8` and MiSTer's
+  `c1_regs`/`z80ctrl` both model one command latch, NMI asserted on the 68000
+  write edge, and clear/read behavior on the Z80 side; the current live host
+  still needs a short 50us Z80 service slice after each generated sound-write
+  event because 68000 writes arrive in coarse generated-host batches rather than
+  as truly parallel bus edges. Shutdown logs retain Z80 NMI-service count plus
+  command latch/reply bytes so future audio fixes can distinguish scheduling
+  issues from YM2610 mixing/sample bugs.
 
 ## Next Steps
 

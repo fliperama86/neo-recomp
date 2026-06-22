@@ -235,6 +235,18 @@ extra = [
   0x04A118,
   0x04A120,
   0x04A128,
+  # Mission object-state initializer siblings reached by the runtime object
+  # dispatcher after the first audio-enabled gameplay soak. These are exact
+  # MOVEA.L ($3C,A6),A1 / JSR $02942A-style state entries plus their
+  # PC-relative continuations, not a widened scan over nearby data.
+  0x04D6EC,
+  0x04D70C,
+  0x04D72E,
+  0x04D74A,
+  0x04D782,
+  0x04D7DC,
+  0x04D7EE,
+  0x04D81A,
   0x051F94,
   0x0523FA,
   0x08FD68,

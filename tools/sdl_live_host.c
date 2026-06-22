@@ -30,6 +30,7 @@
 #define NG_LIVE_AUDIO_CHUNK_FRAMES 1024u
 #define NG_LIVE_AUDIO_MAX_QUEUE_MS 250u
 #define NG_LIVE_AUDIO_SYNC_CYCLES (NG_NEO_CPU_CYCLES_PER_SCANLINE / 8u)
+#define NG_LIVE_AUDIO_COMMAND_SERVICE_US 50u
 #define NG_LIVE_AUDIO_DIAGNOSTIC_COMMAND 0xD5u
 #define NG_LIVE_AUDIO_NO_TEST_COMMAND UINT64_MAX
 #define NG_LIVE_INPUT_NO_AUTO_FRAME UINT64_MAX
@@ -775,10 +776,25 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     ctx->recent_sound_commands[ctx->recent_sound_command_head++ & 15u] =
         command;
 
-    /* Match MAME's generic_latch_8 behavior: a sound write updates one
-       latched byte and asserts data-pending/NMI, but another write before the
-       Z80 reads the latch overwrites the previous value instead of queueing a
-       second guaranteed command.  Timing comes from normal cycle sync below. */
+    /* MAME and MiSTer both model a single command latch with NMI asserted on
+       the 68000 sound-write edge and cleared when the Z80 reads/clears the
+       latch.  The live host sees generated 68000 writes in coarse callback
+       batches instead of true parallel CPU time, so give the Z80 a short
+       service slice after each write.  This preserves the observed hardware
+       behavior for rapid Metal Slug sound sequences until the host has a full
+       cooperative 68K/Z80 scheduler; removing this slice collapses the BIOS
+       jingle into a stuck single note. */
+    uint64_t command_service_cycles =
+        ((uint64_t)NG_NEO_MAIN_CPU_CLOCK_HZ *
+             (uint64_t)NG_LIVE_AUDIO_COMMAND_SERVICE_US +
+         999999ull) /
+        1000000ull;
+    if (command_service_cycles == 0u) {
+        command_service_cycles = 1u;
+    }
+    live_audio_advance_to_cpu_cycle(ctx,
+                                    ctx->last_cpu_cycles +
+                                        command_service_cycles);
 }
 
 static void live_audio_sync_to_runtime(NgLiveAudio *ctx) {
