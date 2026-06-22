@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define NG_DISPATCH_AUDIT_MAX_SITES 8192u
+#define NG_DISPATCH_AUDIT_MAX_SITES NG_FUNCTION_DISCOVERY_MAX_CANDIDATES
 
 typedef enum NgDispatchAuditKind {
     NG_DISPATCH_AUDIT_DIRECT,

@@ -239,5 +239,30 @@ int main(void) {
         ng_program_rom_free(&many_rom);
     }
 
+    {
+        const uint32_t dispatch_count = 8300u;
+        NgProgramRom many_dispatch_rom = make_rom(dispatch_count * 8u);
+        static NgFunctionDiscovery many_dispatch_discovery;
+        CHECK(many_dispatch_rom.data != NULL);
+
+        ng_function_discovery_init(&many_dispatch_discovery);
+        for (uint32_t i = 0; i < dispatch_count; ++i) {
+            uint32_t addr = i * 8u;
+            write16(&many_dispatch_rom, addr, 0x4EB9u); /* JSR $000000 */
+            write32(&many_dispatch_rom, addr + 2u, 0x00000000u);
+            write16(&many_dispatch_rom, addr + 6u, 0x4E75u); /* RTS */
+            many_dispatch_discovery.addrs[many_dispatch_discovery.count++] = addr;
+        }
+
+        CHECK(ng_dispatch_audit_build(&many_dispatch_rom,
+                                      &many_dispatch_discovery,
+                                      &audit));
+        CHECK(audit.count == dispatch_count);
+        CHECK(audit.direct_count == dispatch_count);
+        CHECK(!audit.truncated);
+
+        ng_program_rom_free(&many_dispatch_rom);
+    }
+
     return 0;
 }

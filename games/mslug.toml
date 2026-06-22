@@ -912,6 +912,16 @@ stride = 4
 format = "abs32"
 
 [[jump_table]]
+# Mission enemy/object callback run reached when the first gameplay enemy family
+# enters the screen.  The compact vector carries state entries such as $08E2AC,
+# $08E30C, $08E4E6, and later sibling routines through $08EE16; keep it
+# separate from the mixed $0E82A0-$0E82CC block before it.
+start = 0x0E82D0
+end = 0x0E8300
+stride = 4
+format = "abs32"
+
+[[jump_table]]
 # Focused object callback variant run reached after the $04A09A target tables.
 start = 0x0E8324
 end = 0x0E833C

@@ -1,6 +1,6 @@
 # Progress Tracker
 
-Last updated: 2026-06-21
+Last updated: 2026-06-22
 
 This is the live working document for `neo-recomp`. Keep the README focused on
 project orientation; update this file after each meaningful green slice.
@@ -79,16 +79,16 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=627 discovery_files=0 jump_tables=72 runtime_dispatch=60
-function candidates: 49369
-dispatch audit: sites=8139 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
+game config functions: entry=0 extra=627 discovery_files=0 jump_tables=73 runtime_dispatch=60
+function candidates: 50046
+dispatch audit: sites=8371 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
 
-The discovery candidate cap is 65536 entries, dispatch-audit seen storage is
-8192 entries, and game TOML jump-table metadata capacity is 128 entries so the
-current 72 Metal Slug tables are not silently truncated. The cart audit remains
-green under `--fail-on-dispatch-gaps`.
+The discovery candidate cap is 65536 entries, dispatch-audit site storage is
+tied to that same discovery cap, and game TOML jump-table metadata capacity is
+128 entries so the current 73 Metal Slug tables are not silently truncated. The
+cart audit remains green under `--fail-on-dispatch-gaps`.
 `games/mslug.toml` declares the Neo Geo program address map (`$000000-$0FFFFF`
 fixed P-ROM and `$200000-$2FFFFF` bank window), seeds structured task/callback
 tables plus the current banked action callback frontiers, and marks visible
@@ -131,6 +131,15 @@ forest stage, and produces real game-driven audio after the M1 banking fix
 `last_sound=$D5`). The last sound-side writes are no longer just YM timer
 registers; the recent log includes YM port-3 ADPCM/FM register writes such as
 `p3[$3D]=$02`, `p3[$4D]=$7F`, and `p3[$A5]=$31`.
+
+Manual gameplay with input/audio then exposed the next concrete cart callback
+frontier at `$08E4E6` when an enemy family enters the screen. The
+`$0E82D0-$0E82FC` abs32 callback table now seeds that compact enemy/object state
+run, and the generated cart dispatch includes `ng_func_08E4E6`. That pushed the
+audit above the older 8192-site storage ceiling, so dispatch-audit site storage
+now follows the 65536 discovery-candidate cap; `tests/test_dispatch_audit.c`
+covers an 8300-site audit and the Metal Slug static audit reports `sites=8371`
+without truncation.
 
 The live host now presents on emulated frame boundaries by default, and those
 boundaries come from generated 68k cycle hooks rather than an arbitrary
