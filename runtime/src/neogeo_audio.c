@@ -26,6 +26,7 @@ struct NgNeoAudio {
     uint8_t reply_latch;
     uint8_t nmi_enabled;
     uint8_t nmi_pending;
+    uint32_t command_ack_count;
     uint32_t nmi_service_count;
 
     uint8_t ym_address[2];
@@ -288,6 +289,7 @@ static uint8_t ng_audio_port_read_impl(NgNeoAudio *audio, uint16_t port_addr) {
 
     switch (port_addr & 0x000Fu) {
     case 0x00u:
+        ++audio->command_ack_count;
         audio->nmi_pending = 0u;
         return audio->command_latch;
     case 0x04u:
@@ -344,6 +346,7 @@ static void ng_audio_port_write_impl(NgNeoAudio *audio,
     case 0x00u:
         (void)value;
         audio->command_latch = 0u;
+        ++audio->command_ack_count;
         return;
     case 0x04u:
         ng_audio_ym_write(audio, 0u, value);
@@ -475,6 +478,25 @@ void ng_neogeo_audio_write_command(NgNeoAudio *audio, uint8_t command) {
     audio->nmi_pending = 1u;
 }
 
+static void ng_audio_step_z80(NgNeoAudio *audio) {
+    if (audio->nmi_pending && audio->nmi_enabled && !audio->cpu.nmi_pending) {
+        z80_gen_nmi(&audio->cpu);
+        audio->nmi_pending = 0u;
+        ++audio->nmi_service_count;
+    }
+    if (audio->ym && ng_neogeo_ym2610_irq_pending(audio->ym) &&
+        !audio->cpu.int_pending) {
+        z80_gen_int(&audio->cpu, 0xFFu);
+    }
+    unsigned long before = audio->cpu.cyc;
+    z80_step(&audio->cpu);
+    unsigned long after = audio->cpu.cyc;
+    if (after > before && audio->ym) {
+        uint32_t z80_step_cycles = (uint32_t)(after - before);
+        ng_neogeo_ym2610_advance_clocks(audio->ym, z80_step_cycles * 2u);
+    }
+}
+
 void ng_neogeo_audio_advance_z80_cycles(NgNeoAudio *audio, uint32_t cycles) {
     if (!audio || cycles == 0u) {
         return;
@@ -485,24 +507,29 @@ void ng_neogeo_audio_advance_z80_cycles(NgNeoAudio *audio, uint32_t cycles) {
     uint32_t max_instructions = cycles * 2u + 1024u;
     while ((uint32_t)(audio->cpu.cyc - start) < cycles &&
            instructions < max_instructions) {
-        if (audio->nmi_pending && audio->nmi_enabled && !audio->cpu.nmi_pending) {
-            z80_gen_nmi(&audio->cpu);
-            audio->nmi_pending = 0u;
-            ++audio->nmi_service_count;
-        }
-        if (audio->ym && ng_neogeo_ym2610_irq_pending(audio->ym) &&
-            !audio->cpu.int_pending) {
-            z80_gen_int(&audio->cpu, 0xFFu);
-        }
-        unsigned long before = audio->cpu.cyc;
-        z80_step(&audio->cpu);
-        unsigned long after = audio->cpu.cyc;
-        if (after > before && audio->ym) {
-            uint32_t z80_step_cycles = (uint32_t)(after - before);
-            ng_neogeo_ym2610_advance_clocks(audio->ym, z80_step_cycles * 2u);
-        }
+        ng_audio_step_z80(audio);
         ++instructions;
     }
+}
+
+uint32_t ng_neogeo_audio_advance_z80_cycles_until_command_ack(
+    NgNeoAudio *audio,
+    uint32_t max_cycles,
+    uint32_t initial_ack_count) {
+    if (!audio || max_cycles == 0u) {
+        return 0u;
+    }
+
+    unsigned long start = audio->cpu.cyc;
+    uint32_t instructions = 0u;
+    uint32_t max_instructions = max_cycles * 2u + 1024u;
+    while ((uint32_t)(audio->cpu.cyc - start) < max_cycles &&
+           audio->command_ack_count == initial_ack_count &&
+           instructions < max_instructions) {
+        ng_audio_step_z80(audio);
+        ++instructions;
+    }
+    return (uint32_t)(audio->cpu.cyc - start);
 }
 
 
@@ -550,6 +577,10 @@ uint64_t ng_neogeo_audio_z80_cycles(const NgNeoAudio *audio) {
 
 uint16_t ng_neogeo_audio_z80_pc(const NgNeoAudio *audio) {
     return audio ? audio->cpu.pc : 0u;
+}
+
+uint32_t ng_neogeo_audio_command_ack_count(const NgNeoAudio *audio) {
+    return audio ? audio->command_ack_count : 0u;
 }
 
 uint32_t ng_neogeo_audio_nmi_service_count(const NgNeoAudio *audio) {

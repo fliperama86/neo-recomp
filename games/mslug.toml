@@ -188,6 +188,30 @@ extra = [
   0x03CBE2,
   0x03CC32,
   0x03CC76,
+  # Later records in the same banked object block ($17F0xx-$1807xx) embed this
+  # exact fixed-code sprite-attribute callback family.  The longwords point to
+  # RTS-separated routines that all share the local $03CCD2 helper; seed the
+  # concrete function starts rather than widening the surrounding data block.
+  0x03CD3E,
+  0x03CD70,
+  0x03CDA2,
+  0x03CE22,
+  0x03CE54,
+  0x03CE86,
+  0x03CEB8,
+  0x03CEEA,
+  0x03CF24,
+  0x03D010,
+  0x03D042,
+  0x03D074,
+  0x03D0A6,
+  0x03D104,
+  0x03D162,
+  0x03D1C0,
+  0x03D21E,
+  0x03D27C,
+  0x03D2DA,
+  0x03D338,
   # Banked object records around $27ABxx/$27E0xx embed this fixed-code spawn
   # callback family; the records are not contiguous enough for a narrow table.
   0x03D616,

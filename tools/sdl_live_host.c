@@ -30,7 +30,7 @@
 #define NG_LIVE_AUDIO_CHUNK_FRAMES 1024u
 #define NG_LIVE_AUDIO_MAX_QUEUE_MS 250u
 #define NG_LIVE_AUDIO_SYNC_CYCLES (NG_NEO_CPU_CYCLES_PER_SCANLINE / 8u)
-#define NG_LIVE_AUDIO_COMMAND_SERVICE_US 50u
+#define NG_LIVE_AUDIO_COMMAND_SERVICE_MAX_US 50u
 #define NG_LIVE_AUDIO_DIAGNOSTIC_COMMAND 0xD5u
 #define NG_LIVE_AUDIO_NO_TEST_COMMAND UINT64_MAX
 #define NG_LIVE_INPUT_NO_AUTO_FRAME UINT64_MAX
@@ -770,6 +770,8 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     if (!ctx || !ctx->audio) {
         return;
     }
+    uint32_t initial_ack_count =
+        ng_neogeo_audio_command_ack_count(ctx->audio);
     ng_neogeo_audio_write_command(ctx->audio, command);
     ++ctx->sound_commands;
     ctx->last_sound_command = command;
@@ -779,22 +781,37 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     /* MAME and MiSTer both model a single command latch with NMI asserted on
        the 68000 sound-write edge and cleared when the Z80 reads/clears the
        latch.  The live host sees generated 68000 writes in coarse callback
-       batches instead of true parallel CPU time, so give the Z80 a short
-       service slice after each write.  This preserves the observed hardware
-       behavior for rapid Metal Slug sound sequences until the host has a full
-       cooperative 68K/Z80 scheduler; removing this slice collapses the BIOS
-       jingle into a stuck single note. */
-    uint64_t command_service_cycles =
-        ((uint64_t)NG_NEO_MAIN_CPU_CLOCK_HZ *
-             (uint64_t)NG_LIVE_AUDIO_COMMAND_SERVICE_US +
-         999999ull) /
-        1000000ull;
-    if (command_service_cycles == 0u) {
-        command_service_cycles = 1u;
+       batches instead of true parallel CPU time, so service the Z80 only until
+       the command is acknowledged, bounded by the old 50 us safety cap.  This
+       keeps rapid Metal Slug sound sequences from collapsing while avoiding a
+       fixed extra Z80/YM slice after commands that were read immediately. */
+    uint32_t command_service_z80_cycles =
+        (uint32_t)(((uint64_t)NG_NEO_AUDIO_CPU_CLOCK_HZ *
+                        (uint64_t)NG_LIVE_AUDIO_COMMAND_SERVICE_MAX_US +
+                    999999ull) /
+                   1000000ull);
+    if (command_service_z80_cycles == 0u) {
+        command_service_z80_cycles = 1u;
     }
-    live_audio_advance_to_cpu_cycle(ctx,
-                                    ctx->last_cpu_cycles +
-                                        command_service_cycles);
+
+    uint64_t before_z80 = ng_neogeo_audio_z80_cycles(ctx->audio);
+    uint32_t advanced_z80 =
+        ng_neogeo_audio_advance_z80_cycles_until_command_ack(
+            ctx->audio,
+            command_service_z80_cycles,
+            initial_ack_count);
+    uint64_t after_z80 = ng_neogeo_audio_z80_cycles(ctx->audio);
+    if (after_z80 >= before_z80) {
+        advanced_z80 = (uint32_t)(after_z80 - before_z80);
+    }
+    if (advanced_z80 == 0u) {
+        return;
+    }
+
+    uint64_t command_service_cycles = (uint64_t)advanced_z80 * 3ull;
+    live_audio_generate_and_queue(ctx, command_service_cycles);
+    ctx->last_cpu_cycles += command_service_cycles;
+    ng_neogeo_set_sound_reply(ng_neogeo_audio_reply_latch(ctx->audio));
 }
 
 static void live_audio_sync_to_runtime(NgLiveAudio *ctx) {
@@ -2181,7 +2198,7 @@ int main(int argc, char **argv) {
             "live host stopped: dispatches=%llu frame=%u scanline=%u budget_stop=$%06X "
             "audio_frames=%llu audio_nonzero=%llu audio_peak=%d "
             "audio_qmax_ms=%u audio_qwait_ms=%llu audio_qclears=%u "
-            "sound_cmds=%llu nmi=%u last_sound=$%02X latch=$%02X reply=$%02X "
+            "sound_cmds=%llu nmi=%u cmd_ack=%u last_sound=$%02X latch=$%02X reply=$%02X "
             "ym_writes=%u ym_reads=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             ng_neogeo_frame_count(),
@@ -2195,6 +2212,7 @@ int main(int argc, char **argv) {
             live_audio.queue_clears,
             (unsigned long long)live_audio.sound_commands,
             ng_neogeo_audio_nmi_service_count(live_audio.audio),
+            ng_neogeo_audio_command_ack_count(live_audio.audio),
             live_audio.last_sound_command,
             ng_neogeo_audio_command_latch(live_audio.audio),
             ng_neogeo_audio_reply_latch(live_audio.audio),

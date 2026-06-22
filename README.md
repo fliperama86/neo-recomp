@@ -304,14 +304,15 @@ yet; it reuses the headless runtime model and current renderer, but it is a
 real live host loop rather than a saved-snapshot reload.
 
 Current local status: the generated Metal Slug cart build is dispatch-audit
-clean with `function candidates: 51853` and
-`sites=8818 missing_direct=0 computed=0 runtime_computed=60`. The full test
+clean with `function candidates: 52209` and
+`sites=8850 missing_direct=0 computed=0 runtime_computed=60`. The full test
 suite is `16/16` passing. The live host now uses cycle-derived frame timing and
 runs beyond the earlier `$C18662`/`$09B90A` dispatch frontiers, the former
 cart-requested soft-reset/BIOS-reset white-screen loop, and the observed
 `$092252` dynamic script dispatch miss plus the gameplay enemy callback miss at
-`$08E4E6`/`$04F70E`, the stage-script predicate miss at `$0919B0`, and the
-object-state initializer misses at `$03FC38`/`$04D70C`. An automated cart-entry path with
+`$08E4E6`/`$04F70E`, the stage-script predicate miss at `$0919B0`, the
+object-state initializer misses at `$03FC38`/`$04D70C`, and the sprite-attribute
+callback miss at `$03CD3E`. An automated cart-entry path with
 coin/start/P1-A now reaches actual Mission 1 gameplay and produces nonzero
 game-driven YM2610 output. The current useful path is still
 cart-header entry plus a user-provided BIOS slice; next work is validating fresh
@@ -323,7 +324,8 @@ Metal Slug, ADPCM-A/ADPCM-B key-on diagnostics in live logs, native-sample avera
 when resampling YM output to the host rate, MAME-style YM2610 stream
 fidelity/routes, real-time SDL queue pacing that preserves queued samples instead
 of dropping them when the host runs ahead, MAME/MiSTer-grounded single-byte
-sound-latch diagnostics, a temporary Z80 service slice for coarse host batches,
+sound-latch diagnostics, a temporary latch-read-bounded Z80 service window for
+coarse host batches,
 and a gameplay smoke with nonzero game-driven audio.
 
 

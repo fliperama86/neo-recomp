@@ -61,6 +61,10 @@ void ng_neogeo_audio_set_roms(NgNeoAudio *audio,
 void ng_neogeo_audio_reset(NgNeoAudio *audio);
 void ng_neogeo_audio_write_command(NgNeoAudio *audio, uint8_t command);
 void ng_neogeo_audio_advance_z80_cycles(NgNeoAudio *audio, uint32_t cycles);
+uint32_t ng_neogeo_audio_advance_z80_cycles_until_command_ack(
+    NgNeoAudio *audio,
+    uint32_t max_cycles,
+    uint32_t initial_ack_count);
 void ng_neogeo_audio_generate(NgNeoAudio *audio,
                               int16_t *stereo_out,
                               uint32_t frames,
@@ -74,6 +78,7 @@ uint8_t ng_neogeo_audio_nmi_enabled(const NgNeoAudio *audio);
 uint8_t ng_neogeo_audio_nmi_pending(const NgNeoAudio *audio);
 uint64_t ng_neogeo_audio_z80_cycles(const NgNeoAudio *audio);
 uint16_t ng_neogeo_audio_z80_pc(const NgNeoAudio *audio);
+uint32_t ng_neogeo_audio_command_ack_count(const NgNeoAudio *audio);
 uint32_t ng_neogeo_audio_nmi_service_count(const NgNeoAudio *audio);
 uint32_t ng_neogeo_audio_ym_write_count(const NgNeoAudio *audio);
 uint32_t ng_neogeo_audio_ym_read_count(const NgNeoAudio *audio);

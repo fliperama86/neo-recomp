@@ -79,9 +79,9 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=666 discovery_files=0 jump_tables=74 runtime_dispatch=60
-function candidates: 51853
-dispatch audit: sites=8818 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
+game config functions: entry=0 extra=686 discovery_files=0 jump_tables=74 runtime_dispatch=60
+function candidates: 52209
+dispatch audit: sites=8850 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
 
@@ -127,7 +127,7 @@ coin at refresh 1000, P1 start at 12000, and P1 A at 13200 reaches actual
 Mission 1 gameplay by refresh 18000 with no dispatch miss. That run stops at
 `dispatches=19255025 frame=18000 scanline=0`, renders a gameplay frame in the
 forest stage, and produces real game-driven audio after the M1 banking fix
-(`audio_nonzero=8938259`, `audio_peak=21555`, `sound_cmds=79`,
+(`audio_nonzero=10609677`, `audio_peak=19747`, `sound_cmds=79`, `cmd_ack=79`,
 `last_sound=$D5`). The last sound-side writes are no longer just YM timer
 registers; the recent log includes YM port-3 ADPCM/FM register writes such as
 `p3[$3D]=$02`, `p3[$4D]=$7F`, and `p3[$A5]=$31`.
@@ -146,11 +146,19 @@ preceding `$083Bxx/$08B3xx` family. That pushed the audit above the older
 8192-site storage ceiling, so dispatch-audit site storage now follows the
 65536 discovery-candidate cap;
 `tests/test_dispatch_audit.c` covers an 8300-site audit and the Metal Slug
-static audit reports `sites=8818` without truncation. Later gameplay/manual
+static audit reports `sites=8850` without truncation. Later gameplay/manual
 frontiers at `$03FC38` and `$04D70C` were seeded together with their exact
 `LEA target,A1; MOVE.L A1,(A6)` continuations in the neighboring
 `$03FC38-$03FCA4` and `$04D6EC-$04D81A` object-state chains, leaving the
-dispatch audit clean at `sites=8818`.
+dispatch audit clean at `sites=8850`.
+Manual gameplay with audio later reached `$03CD3E`; that target is part of the
+same banked object-record block at `$17F0xx-$1807xx` whose longwords point at a
+compact fixed-code sprite-attribute callback family. The config now seeds the
+exact RTS-separated entries sharing the `$03CCD2` helper (`$03CD3E`, `$03CD70`,
+`$03CDA2`, `$03CE22`, `$03CE54`, `$03CE86`, `$03CEB8`, `$03CEEA`, `$03CF24`,
+`$03D010`, `$03D042`, `$03D074`, `$03D0A6`, `$03D104`, `$03D162`, `$03D1C0`,
+`$03D21E`, `$03D27C`, `$03D2DA`, and `$03D338`) instead of widening across the
+surrounding mixed code/data.
 
 The same manual run also made the first obvious audio gap concrete: music/PCM
 was audible, but short effects such as shots/bombs were silent. Grounding this
@@ -174,6 +182,11 @@ resampling now follows MAME's `OPN_FIDELITY_MED` YM2610 stream rate
 (`clock/144`, about 55.6 kHz on Neo Geo), applies the same SSG/FM+ADPCM route
 weights, and averages native chip samples into each host audio frame instead of
 retaining only the last native sample.
+The post-command Z80 catch-up is now latch-read bounded: after a 68000 sound
+write, the live host runs the M1 CPU only until the command latch is read or
+cleared, with the previous 50 us window retained only as a safety cap. Shutdown
+logs report `cmd_ack` alongside NMI count/latch/reply bytes so manual jingle/SFX
+reports can show whether commands are being consumed or merely queued.
 
 The live host now presents on emulated frame boundaries by default, and those
 boundaries come from generated 68k cycle hooks rather than an arbitrary
@@ -1862,7 +1875,7 @@ and `V` are only trusted where generated-exec tests cover them.
   whole M1; bank selection math must use that effective region, not the raw
   0x20000 size. After the fix, `build/neo-audio-probe ... 0xD5` renders nonzero
   samples, the live host's `m` diagnostic and `--audio-test-command` docs now
-  use `$D5`, and the 18k gameplay smoke reports `audio_nonzero=8938259` with
+  use `$D5`, and the 18k gameplay smoke reports `audio_nonzero=10609677` with
   real YM port-3/ADPCM/FM register writes instead of only timer register `$27`.
 
 - local: Adjusted live SDL audio queue handling after audible speed-up reports.
@@ -1873,15 +1886,22 @@ and `V` are only trusted where generated-exec tests cover them.
   separated from YM/Z80 command or sample-decoding issues.
 
 - local: Grounded the live host's 68000->Z80 sound delivery against MAME and
-  MiSTer, then reverted the no-service-window experiment after it collapsed the
-  BIOS jingle into a stuck single note. MAME's `generic_latch_8` and MiSTer's
-  `c1_regs`/`z80ctrl` both model one command latch, NMI asserted on the 68000
-  write edge, and clear/read behavior on the Z80 side; the current live host
-  still needs a short 50us Z80 service slice after each generated sound-write
-  event because 68000 writes arrive in coarse generated-host batches rather than
-  as truly parallel bus edges. Shutdown logs retain Z80 NMI-service count plus
-  command latch/reply bytes so future audio fixes can distinguish scheduling
-  issues from YM2610 mixing/sample bugs.
+  MiSTer, then made the coarse-host catch-up stop on the actual Z80-side
+  command-latch acknowledge instead of always consuming the whole 50us window.
+  MAME's `generic_latch_8` and MiSTer's `c1_regs`/`z80ctrl` both model one
+  command latch, NMI asserted on the 68000 write edge, and clear/read behavior
+  on the Z80 side; the live host still keeps the 50us window as a safety cap
+  because 68000 writes arrive in coarse generated-host batches rather than as
+  truly parallel bus edges. Shutdown logs now include `cmd_ack` with the Z80
+  NMI-service count and command latch/reply bytes.
+
+- local: Seeded the `$03CD3E` gameplay dispatch miss by adding the exact
+  `$17F0xx-$1807xx` banked object-record sprite-attribute callback family
+  (`$03CD3E` through `$03D338`, non-contiguous). Rebuilding Metal Slug now reports
+  `game config functions: entry=0 extra=686 discovery_files=0 jump_tables=74
+  runtime_dispatch=60`, `function candidates: 52209`, and a clean dispatch audit
+  at `sites=8850 missing_direct=0 external_direct=24 computed=0
+  runtime_computed=60 jump_tables=1`.
 
 ## Next Steps
 
