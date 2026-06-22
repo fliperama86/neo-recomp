@@ -16,14 +16,49 @@ static int parse_u32(const char *text, uint32_t *out) {
     return 1;
 }
 
+static int parse_command_list(const char *text,
+                              uint8_t *commands,
+                              uint32_t capacity,
+                              uint32_t *out_count) {
+    if (!text || !commands || capacity == 0u || !out_count) {
+        return 0;
+    }
+
+    const char *cursor = text;
+    uint32_t count = 0;
+    while (*cursor != '\0') {
+        if (count >= capacity) {
+            return 0;
+        }
+        char *end = NULL;
+        unsigned long value = strtoul(cursor, &end, 0);
+        if (end == cursor || value > 0xFFul) {
+            return 0;
+        }
+        commands[count++] = (uint8_t)value;
+        if (*end == '\0') {
+            break;
+        }
+        if (*end != ',') {
+            return 0;
+        }
+        cursor = end + 1;
+    }
+    if (count == 0u) {
+        return 0;
+    }
+    *out_count = count;
+    return 1;
+}
+
 static void usage(const char *argv0) {
     fprintf(stderr,
-            "usage: %s <game.neo> [command] [boot-cycles] [post-command-cycles]\n"
+            "usage: %s <game.neo> [command[,command...]] [boot-cycles] [post-command-cycles]\n"
             "\n"
             "Runs the cartridge M1 Z80 program against the Neo Geo audio bus\n"
             "and YM2610 backend, then renders a short diagnostic sample block.\n"
             "\n"
-            "Defaults: command=0x04 boot-cycles=200000 post-command-cycles=200000\n",
+            "Defaults: command=0xD5 boot-cycles=200000 post-command-cycles=200000\n",
             argv0);
 }
 
@@ -33,10 +68,16 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    uint32_t command = 0x04u;
+    uint8_t commands[64];
+    uint32_t command_count = 1u;
+    commands[0] = 0xD5u;
     uint32_t boot_cycles = 200000u;
     uint32_t post_cycles = 200000u;
-    if (argc >= 3 && !parse_u32(argv[2], &command)) {
+    if (argc >= 3 && !parse_command_list(argv[2],
+                                          commands,
+                                          (uint32_t)(sizeof(commands) /
+                                                     sizeof(commands[0])),
+                                          &command_count)) {
         fprintf(stderr, "invalid command: %s\n", argv[2]);
         return 2;
     }
@@ -81,13 +122,28 @@ int main(int argc, char **argv) {
            before_reads,
            ng_neogeo_audio_reply_latch(audio));
 
-    ng_neogeo_audio_write_command(audio, (uint8_t)command);
+    enum { command_quantum_us = 50u };
+    uint32_t command_quantum_cycles =
+        (uint32_t)(((uint64_t)NG_NEO_AUDIO_CPU_CLOCK_HZ *
+                        (uint64_t)command_quantum_us +
+                    999999ull) /
+                   1000000ull);
+    if (command_quantum_cycles == 0u) {
+        command_quantum_cycles = 1u;
+    }
+    for (uint32_t i = 0; i < command_count; ++i) {
+        ng_neogeo_audio_write_command(audio, commands[i]);
+        ng_neogeo_audio_advance_z80_cycles(audio, command_quantum_cycles);
+    }
     ng_neogeo_audio_advance_z80_cycles(audio, post_cycles);
     uint32_t after_writes = ng_neogeo_audio_ym_write_count(audio);
     uint32_t after_reads = ng_neogeo_audio_ym_read_count(audio);
     NgNeoAudioYmWrite last = ng_neogeo_audio_last_ym_write(audio);
-    printf("after command $%02X: cycles=%llu pc=$%04X nmi_enabled=%u nmi_pending=%u nmi_serviced=%u command=$%02X reply=$%02X\n",
-           command & 0xFFu,
+    printf("after command");
+    for (uint32_t i = 0; i < command_count; ++i) {
+        printf(" $%02X", commands[i]);
+    }
+    printf(": cycles=%llu pc=$%04X nmi_enabled=%u nmi_pending=%u nmi_serviced=%u command=$%02X reply=$%02X\n",
            (unsigned long long)ng_neogeo_audio_z80_cycles(audio),
            ng_neogeo_audio_z80_pc(audio),
            ng_neogeo_audio_nmi_enabled(audio),

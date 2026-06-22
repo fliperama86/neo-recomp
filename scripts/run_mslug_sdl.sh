@@ -25,6 +25,9 @@ STALL_REFRESHES="${NG_MSLUG_SDL_STALL_REFRESHES:-}"
 NO_THROTTLE="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
 AUDIO_OUTPUT="${NG_MSLUG_SDL_AUDIO:-1}"
 AUDIO_TEST_COMMAND="${NG_MSLUG_SDL_AUDIO_TEST_COMMAND:-}"
+AUTO_COIN_FRAME="${NG_MSLUG_SDL_AUTO_COIN_FRAME:-}"
+AUTO_START_FRAME="${NG_MSLUG_SDL_AUTO_START_FRAME:-}"
+AUTO_P1_A_FRAME="${NG_MSLUG_SDL_AUTO_P1_A_FRAME:-}"
 BUILD_ONLY="${NG_MSLUG_SDL_BUILD_ONLY:-0}"
 
 OPTFLAGS_VALUE="${NG_MSLUG_SDL_OPTFLAGS:--O1 -DNDEBUG}"
@@ -92,6 +95,15 @@ log_note "audio output: $AUDIO_OUTPUT"
 if [[ -n "$AUDIO_TEST_COMMAND" ]]; then
   log_note "audio test command: $AUDIO_TEST_COMMAND"
 fi
+if [[ -n "$AUTO_COIN_FRAME" ]]; then
+  log_note "auto coin frame: $AUTO_COIN_FRAME"
+fi
+if [[ -n "$AUTO_START_FRAME" ]]; then
+  log_note "auto start frame: $AUTO_START_FRAME"
+fi
+if [[ -n "$AUTO_P1_A_FRAME" ]]; then
+  log_note "auto P1 A frame: $AUTO_P1_A_FRAME"
+fi
 log_note "native C optimization flags: ${OPTFLAGS[*]:-(none)}"
 
 log_step "Configuring/building recompiler tools"
@@ -140,7 +152,7 @@ else
   grep -E "game config functions|function candidates|generated C:|dispatch audit:" "$RECOMP_LOG" || true
 fi
 
-BIOS_SEEDS="0xC00402,0xC00438,0xC00444,0xC0044A,0xC004C2,0xC004CE,0xC11142,0xC187C4,0xC187CC,0xC187D4,0xC18814,0xC1881A,0xC187B6,0xC17F0E,0xC1868A,0xC18690,0xC18832,0xC18012,0xC18074,0xC18082,0xC180DC,0xC1811A,0xC18194,0xC181AE,0xC18208,0xC188DC,0xC182A6"
+BIOS_SEEDS="0xC00402,0xC00438,0xC00444,0xC0044A,0xC00468,0xC004C2,0xC004CE,0xC11142,0xC133BA,0xC187C4,0xC187CC,0xC187D4,0xC18814,0xC1881A,0xC187B6,0xC17F0E,0xC1868A,0xC18690,0xC18832,0xC18012,0xC18074,0xC18082,0xC180DC,0xC1811A,0xC18194,0xC181AE,0xC18208,0xC188DC,0xC182A6"
 if is_fresh "$BIOS_C" "$BUILD_DIR/generate-bios-recomp" "$BIOS_PATH" "$ROOT/scripts/run_mslug_sdl.sh"; then
   log_step "Generating BIOS recomp slice"
   log_note "cached: $BIOS_C"
@@ -273,6 +285,15 @@ if [[ "$AUDIO_OUTPUT" == "0" ]]; then
 fi
 if [[ -n "$AUDIO_TEST_COMMAND" ]]; then
   HOST_ARGS+=(--audio-test-command "$AUDIO_TEST_COMMAND")
+fi
+if [[ -n "$AUTO_COIN_FRAME" ]]; then
+  HOST_ARGS+=(--auto-coin-frame "$AUTO_COIN_FRAME")
+fi
+if [[ -n "$AUTO_START_FRAME" ]]; then
+  HOST_ARGS+=(--auto-start-frame "$AUTO_START_FRAME")
+fi
+if [[ -n "$AUTO_P1_A_FRAME" ]]; then
+  HOST_ARGS+=(--auto-p1-a-frame "$AUTO_P1_A_FRAME")
 fi
 if [[ "$START_MODE" == "bios" ]]; then
   HOST_ARGS+=(--start-bios)

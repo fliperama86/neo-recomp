@@ -131,10 +131,26 @@ int main(void) {
     ng_neogeo_reset_runtime();
 
     CHECK(ng68k_read8(NG_NEO_REG_P1CNT) == 0xFFu);
+    ng_neogeo_set_p1_input(0xEFu);
+    CHECK(ng_neogeo_p1_input() == 0xEFu);
+    CHECK(ng68k_read8(NG_NEO_REG_P1CNT) == 0xEFu);
+    ng_neogeo_set_p1_input(0xFFu);
     CHECK(ng68k_read8(0x00310000u) == 0xFFu);
     CHECK(ng68k_read8(NG_NEO_REG_P2CNT) == 0xFFu);
+    ng_neogeo_set_p2_input(0xDFu);
+    CHECK(ng_neogeo_p2_input() == 0xDFu);
+    CHECK(ng68k_read8(NG_NEO_REG_P2CNT) == 0xDFu);
+    ng_neogeo_set_p2_input(0xFFu);
     CHECK(ng68k_read8(0x00350000u) == 0xFFu);
     CHECK(ng68k_read8(NG_NEO_REG_STATUS_B) == 0xFFu);
+    ng_neogeo_set_status_b_input(0xFEu);
+    CHECK(ng_neogeo_status_b_input() == 0xFEu);
+    CHECK(ng68k_read8(NG_NEO_REG_STATUS_B) == 0xFEu);
+    ng_neogeo_set_status_b_input(0xFFu);
+    CHECK(ng_neogeo_dipswitch_input() == 0xFFu);
+    ng_neogeo_set_dipswitch_input(0x7Fu);
+    CHECK(ng68k_read8(NG_NEO_REG_DIPSW) == 0x7Fu);
+    ng_neogeo_set_dipswitch_input(0xFFu);
     CHECK(ng68k_read8(0x00390000u) == 0xFFu);
     CHECK(ng_neogeo_port_output() == 0x00u);
     ng68k_write8(NG_NEO_REG_POUTPUT, 0x12u);
@@ -160,6 +176,11 @@ int main(void) {
     CHECK(ng68k_read8(NG_NEO_REG_SOUND) == 0xFFu);
     CHECK(ng68k_read8(0x00320001u) == 0xFFu);
     CHECK(ng68k_read8(0x00320001u) == 0xBFu);
+    ng_neogeo_set_status_a_input(0xBEu);
+    CHECK(ng_neogeo_status_a_input() == 0xBEu);
+    CHECK(ng68k_read8(0x00320001u) == 0xFEu);
+    CHECK(ng68k_read8(0x00320001u) == 0xBEu);
+    ng_neogeo_set_status_a_input(0xBFu);
     CHECK(ng68k_read8(0x00330000u) == 0xFFu);
     ng68k_write8(NG_NEO_REG_SOUND, 0x34u);
     CHECK(ng_neogeo_sound_command() == 0x34u);

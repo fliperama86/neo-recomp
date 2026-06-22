@@ -12,7 +12,7 @@ export NG_MSLUG_SDL_FAST_FORWARD
 
 usage() {
   cat >&2 <<USAGE
-usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--perf-log|--present-mode frame|video|slice|--video-settle N|--frame-hold N|--palette-bank active|auto|0|1|--watchdog-cycles N|--start-bios|--audio-test-command N] [game.neo bios.rom [lo-rom]]
+usage: scripts/mslug [quick|attract|rebuild|build|--ff N|--dpf N|--diag N|--perf-log|--present-mode frame|video|slice|--video-settle N|--frame-hold N|--palette-bank active|auto|0|1|--watchdog-cycles N|--start-bios|--audio-test-command N|--auto-coin-frame N|--auto-start-frame N|--auto-p1-a-frame N] [game.neo bios.rom [lo-rom]]
 
 Default paths:
   ~/Documents/Games/Mister/NEOGEO/mslug.neo
@@ -60,6 +60,9 @@ launch_cached_host() {
   local no_throttle="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
   local audio_output="${NG_MSLUG_SDL_AUDIO:-1}"
   local audio_test_command="${NG_MSLUG_SDL_AUDIO_TEST_COMMAND:-}"
+  local auto_coin_frame="${NG_MSLUG_SDL_AUTO_COIN_FRAME:-}"
+  local auto_start_frame="${NG_MSLUG_SDL_AUTO_START_FRAME:-}"
+  local auto_p1_a_frame="${NG_MSLUG_SDL_AUTO_P1_A_FRAME:-}"
 
   if [[ ! -x "$HOST_BIN" ]]; then
     echo "cached host missing: $HOST_BIN" >&2
@@ -113,6 +116,15 @@ launch_cached_host() {
   if [[ -n "$audio_test_command" ]]; then
     host_args+=(--audio-test-command "$audio_test_command")
   fi
+  if [[ -n "$auto_coin_frame" ]]; then
+    host_args+=(--auto-coin-frame "$auto_coin_frame")
+  fi
+  if [[ -n "$auto_start_frame" ]]; then
+    host_args+=(--auto-start-frame "$auto_start_frame")
+  fi
+  if [[ -n "$auto_p1_a_frame" ]]; then
+    host_args+=(--auto-p1-a-frame "$auto_p1_a_frame")
+  fi
   if [[ -n "$watchdog_timeout_cycles" ]]; then
     host_args+=(--watchdog-timeout-cycles "$watchdog_timeout_cycles")
   fi
@@ -136,6 +148,15 @@ launch_cached_host() {
   printf '    audio output: %s\n' "$audio_output" >&2
   if [[ -n "$audio_test_command" ]]; then
     printf '    audio test command: %s\n' "$audio_test_command" >&2
+  fi
+  if [[ -n "$auto_coin_frame" ]]; then
+    printf '    auto coin frame: %s\n' "$auto_coin_frame" >&2
+  fi
+  if [[ -n "$auto_start_frame" ]]; then
+    printf '    auto start frame: %s\n' "$auto_start_frame" >&2
+  fi
+  if [[ -n "$auto_p1_a_frame" ]]; then
+    printf '    auto P1 A frame: %s\n' "$auto_p1_a_frame" >&2
   fi
   exec "$HOST_BIN" "${host_args[@]}"
 }
@@ -280,6 +301,33 @@ while (($#)); do
       ;;
     --no-audio)
       export NG_MSLUG_SDL_AUDIO=0
+      ;;
+    --auto-coin-frame)
+      shift
+      if (($# == 0)); then
+        echo "--auto-coin-frame needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_AUTO_COIN_FRAME="$1"
+      ;;
+    --auto-start-frame)
+      shift
+      if (($# == 0)); then
+        echo "--auto-start-frame needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_AUTO_START_FRAME="$1"
+      ;;
+    --auto-p1-a-frame)
+      shift
+      if (($# == 0)); then
+        echo "--auto-p1-a-frame needs a value" >&2
+        usage
+        exit 2
+      fi
+      export NG_MSLUG_SDL_AUTO_P1_A_FRAME="$1"
       ;;
     --help|-h)
       usage

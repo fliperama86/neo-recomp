@@ -9,13 +9,14 @@ project orientation; update this file after each meaningful green slice.
 
 - Repository: `https://github.com/fliperama86/neo-recomp.git`
 - Branch: `main`
-- Latest pushed commit: `d6b38dd Update Metal Slug progress docs`
+- Latest pushed commit: `357c201 Use Neo Geo background pen for sprite frames`
 - Local validation: `cmake --build build -j4`;
   `ctest --test-dir build --output-on-failure`;
   `scripts/mslug build`;
   `SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_MAX_REFRESHES=120 scripts/mslug`;
-  `SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 NG_MSLUG_SDL_MAX_REFRESHES=1200 scripts/mslug`
-- Current test status: 15/15 passing
+  `SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 NG_MSLUG_SDL_MAX_REFRESHES=1200 scripts/mslug`;
+  `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 NG_MSLUG_SDL_MAX_REFRESHES=18000 scripts/mslug --auto-coin-frame 1000 --auto-start-frame 12000 --auto-p1-a-frame 13200`
+- Current test status: 16/16 passing
 - Detailed CPU correctness tracker: [`docs/68k_correctness_tracker.md`](68k_correctness_tracker.md)
 - Reference contrast: [`docs/segagenesisrecomp_contrast.md`](segagenesisrecomp_contrast.md)
 - Static opcode sweep: all decoder-recognized non-`UNKNOWN` opcodes emit without
@@ -61,10 +62,12 @@ Latest local Metal Slug build/live-smoke sequence used:
 
 ```sh
 scripts/mslug build
-SDL_VIDEODRIVER=dummy NG_MSLUG_SDL_NO_THROTTLE=1 \
-  NG_MSLUG_SDL_STATUS_INTERVAL=400 \
-  NG_MSLUG_SDL_MAX_REFRESHES=1200 scripts/mslug \
-  > /tmp/mslug_cycle_timed_1200.log 2>&1
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+  NG_MSLUG_SDL_NO_THROTTLE=1 \
+  NG_MSLUG_SDL_MAX_REFRESHES=18000 \
+  NG_MSLUG_SDL_DUMP_STATE_DIR=build/mslug_auto_audio_m1reload \
+  scripts/mslug --auto-coin-frame 1000 --auto-start-frame 12000 \
+  --auto-p1-a-frame 13200
 ```
 
 `scripts/mslug` / `./run.sh` launches the cached live SDL host;
@@ -76,16 +79,16 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=482 discovery_files=0 jump_tables=72 runtime_dispatch=59
-function candidates: 46396
-dispatch audit: sites=7485 missing_direct=0 external_direct=20 computed=0 runtime_computed=59 jump_tables=1
+game config functions: entry=0 extra=627 discovery_files=0 jump_tables=72 runtime_dispatch=60
+function candidates: 49369
+dispatch audit: sites=8139 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
 
-The discovery candidate cap and dispatch-audit seen storage are 65536 entries,
-and game TOML jump-table metadata capacity is now 128 entries so the current 72
-Metal Slug tables are not silently truncated. The cart audit still fits under
-the 8192-site audit limit and remains green under `--fail-on-dispatch-gaps`.
+The discovery candidate cap is 65536 entries, dispatch-audit seen storage is
+8192 entries, and game TOML jump-table metadata capacity is 128 entries so the
+current 72 Metal Slug tables are not silently truncated. The cart audit remains
+green under `--fail-on-dispatch-gaps`.
 `games/mslug.toml` declares the Neo Geo program address map (`$000000-$0FFFFF`
 fixed P-ROM and `$200000-$2FFFFF` bank window), seeds structured task/callback
 tables plus the current banked action callback frontiers, and marks visible
@@ -118,6 +121,16 @@ the `$043906`/`$043AA4` `JSR ($2,A1)` path when `A1=$092250`. The TOML now seeds
 fallback no longer recursively re-enters unknown cart addresses; the next
 unseeded dynamic cart target should fail loudly as a dispatch miss instead of
 silently burning the dispatch cap.
+
+The current cart-entry live path also has a deterministic input automation smoke:
+coin at refresh 1000, P1 start at 12000, and P1 A at 13200 reaches actual
+Mission 1 gameplay by refresh 18000 with no dispatch miss. That run stops at
+`dispatches=19255025 frame=18000 scanline=0`, renders a gameplay frame in the
+forest stage, and produces real game-driven audio after the M1 banking fix
+(`audio_nonzero=8938259`, `audio_peak=21555`, `sound_cmds=79`,
+`last_sound=$D5`). The last sound-side writes are no longer just YM timer
+registers; the recent log includes YM port-3 ADPCM/FM register writes such as
+`p3[$3D]=$02`, `p3[$4D]=$7F`, and `p3[$A5]=$31`.
 
 The live host now presents on emulated frame boundaries by default, and those
 boundaries come from generated 68k cycle hooks rather than an arbitrary
@@ -1786,10 +1799,28 @@ and `V` are only trusted where generated-exec tests cover them.
   audio alongside 68000 execution so sound replies are visible during a CPU
   slice. `tests/test_neogeo_audio.c` now proves synthesized samples with a
   programmed SSG tone, and a dummy SDL smoke with
-  `NG_MSLUG_SDL_AUDIO_TEST_COMMAND=0xF8` produces nonzero samples. Current
-  caveat: the cart-entry/default-soft-DIP attract path still sends mostly
-  silent game commands, so controls/soft-DIP validation are needed before
-  claiming game-driven music in the attract loop.
+  `NG_MSLUG_SDL_AUDIO_TEST_COMMAND=0xF8` produced nonzero samples before the
+  M1 banking fix below exposed that as a false-positive command under the old
+  raw-128K banking layout.
+
+- local: Advanced the cart-entry live path into actual Mission 1 gameplay with
+  deterministic input automation. The SDL host/runtime now expose active-low
+  P1/P2/status/DIP setters, keyboard controls, and `--auto-coin-frame`,
+  `--auto-start-frame`, plus `--auto-p1-a-frame` flags. Grounded frontiers added
+  for this path include BIOS service stubs `$C00468`/`$C133BA`, Metal Slug's
+  START/OPTION stage-entry table at `$001922-$001A70`, embedded stage script
+  predicate `$09196E`, and the full valid player-select callback pointer table
+  at `$025668-$0256AC`. The automated coin/start/A smoke reaches Mission 1 at
+  refresh 18000 without a dispatch miss.
+
+- local: Fixed Metal Slug game-driven audio by matching MAME's 128 KiB M1
+  `ROM_RELOAD` audio-region view. `NEO_BIOS_AUDIO_128K` maps the raw 0x20000 M1
+  into an effective 0x30000 region where `$10000-$2ffff` is a reload of the
+  whole M1; bank selection math must use that effective region, not the raw
+  0x20000 size. After the fix, `build/neo-audio-probe ... 0xD5` renders nonzero
+  samples, the live host's `m` diagnostic and `--audio-test-command` docs now
+  use `$D5`, and the 18k gameplay smoke reports `audio_nonzero=8938259` with
+  real YM port-3/ADPCM/FM register writes instead of only timer register `$27`.
 
 ## Next Steps
 
@@ -1807,17 +1838,14 @@ Use this loop:
 
 Immediate next slice:
 
-- Stay on the rendering/live-host path now that the former BIOS reset loop is
-  cleared. Capture fresh live frames after the backup-RAM directory seed, compare
-  them with the known-good offline/snapshot/MAME frames, and use the smallest
-  possible runtime probes to isolate missing/misaligned sprite or fix-layer
-  state before adding broader hardware.
-- Continue audio in small slices now that rendering is good enough for live
-  inspection: wire a real YM2610 core behind the current Z80/M1 bus scaffold,
-  then add SDL output. Keep full input and full-BIOS boot as follow-ups unless
-  they directly block audio/video liveness. If the live
-  path stalls again, use the new watchdog/backup/memcard/status diagnostics to
-  classify the next blocker before broadening the stack.
+- Stay on the live gameplay path now that rendering and game-driven audio both
+  have bounded validation. Manually spot-check SDL audio/video from a cached
+  host launch, then tighten any obvious sound/video timing glitches with MAME or
+  MiSTer as references rather than adding broad hardware at once.
+- Continue keeping input/full-BIOS boot as follow-ups unless they directly block
+  gameplay/audio validation. If the live path stalls again, use the
+  watchdog/backup/memcard/status/audio diagnostics to classify the next blocker
+  before broadening the stack.
 
 Near follow-ups:
 

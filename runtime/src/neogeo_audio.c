@@ -36,9 +36,34 @@ struct NgNeoAudio {
     NgNeoYm2610 *ym;
 };
 
+static uint32_t ng_audio_effective_m_rom_size(const NgNeoAudio *audio) {
+    if (!audio) {
+        return 0u;
+    }
+    if (audio->m_rom_size == 0x20000u) {
+        /* MAME's NEO_BIOS_AUDIO_128K layout loads the 128 KiB M1 at
+           $00000-$1ffff, then ROM_RELOADs it at $10000-$2ffff.  The reload
+           overwrites $10000-$1ffff with the first half, leaving an effective
+           0x30000-byte audio region:
+             $00000-$0ffff -> M1[$00000-$0ffff]
+             $10000-$1ffff -> M1[$00000-$0ffff]
+             $20000-$2ffff -> M1[$10000-$1ffff]
+           Neo Geo bank math is defined against that effective region. */
+        return 0x30000u;
+    }
+    return audio->m_rom_size;
+}
+
 static uint8_t ng_audio_read_m(const NgNeoAudio *audio, uint32_t addr) {
     if (!audio || !audio->m_rom || audio->m_rom_size == 0u) {
         return 0xFFu;
+    }
+    uint32_t effective_size = ng_audio_effective_m_rom_size(audio);
+    if (effective_size != 0u && addr >= effective_size) {
+        addr %= effective_size;
+    }
+    if (audio->m_rom_size == 0x20000u && addr >= 0x10000u) {
+        return audio->m_rom[(addr - 0x10000u) & 0x1FFFFu];
     }
     if (addr < audio->m_rom_size) {
         return audio->m_rom[addr];
@@ -49,19 +74,20 @@ static uint8_t ng_audio_read_m(const NgNeoAudio *audio, uint32_t addr) {
 static uint32_t ng_audio_m_bank_base(const NgNeoAudio *audio,
                                      uint8_t bank,
                                      uint8_t shift) {
-    if (!audio || audio->m_rom_size <= 0x10000u) {
+    uint32_t effective_size = ng_audio_effective_m_rom_size(audio);
+    if (!audio || effective_size <= 0x10000u) {
         return 0u;
     }
 
     /* MAME's Neo Geo audio banking configures entries from
        0x10000 + ((bank << shift) & ((len - 0x10000 - 1) & 0x3ffff)). */
-    uint32_t mask = (audio->m_rom_size - 0x10000u - 1u) & 0x3FFFFu;
+    uint32_t mask = (effective_size - 0x10000u - 1u) & 0x3FFFFu;
     uint32_t base = 0x10000u + (((uint32_t)bank << shift) & mask);
-    if (base < audio->m_rom_size) {
+    if (base < effective_size) {
         return base;
     }
 
-    uint32_t bank_span = audio->m_rom_size - 0x10000u;
+    uint32_t bank_span = effective_size - 0x10000u;
     if (bank_span == 0u) {
         return 0u;
     }
@@ -248,15 +274,13 @@ static void ng_audio_z80_write(void *userdata, uint16_t addr, uint8_t value) {
     ng_audio_debug_write_z80_impl((NgNeoAudio *)userdata, addr, value);
 }
 
-static uint8_t ng_audio_z80_port_in(z80 *cpu, uint8_t port) {
+static uint8_t ng_audio_z80_port_in(z80 *cpu, uint16_t port_addr) {
     NgNeoAudio *audio = (NgNeoAudio *)cpu->userdata;
-    uint16_t port_addr = (uint16_t)(((uint16_t)cpu->b << 8) | port);
     return ng_audio_port_read_impl(audio, port_addr);
 }
 
-static void ng_audio_z80_port_out(z80 *cpu, uint8_t port, uint8_t value) {
+static void ng_audio_z80_port_out(z80 *cpu, uint16_t port_addr, uint8_t value) {
     NgNeoAudio *audio = (NgNeoAudio *)cpu->userdata;
-    uint16_t port_addr = (uint16_t)(((uint16_t)cpu->b << 8) | port);
     ng_audio_port_write_impl(audio, port_addr, value);
 }
 

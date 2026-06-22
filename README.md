@@ -288,11 +288,12 @@ CPU/render/SDL costs while running; add `./run.sh --perf-log` (or
 `work_ram.bin`, `backup_ram.bin`, `palette_ram.bin`, `vram_be.bin`, and a
 `summary.txt` when the live host exits. The live host also opens SDL audio and
 feeds the cartridge M1 Z80 through a YM2610 backend; press `m` to inject an
-audible Metal Slug M1 diagnostic command (`0xF8`), or set
-`NG_MSLUG_SDL_AUDIO_TEST_COMMAND=0xF8` / run
-`./run.sh --audio-test-command 0xF8` for a noninteractive smoke. Attract-mode
-game commands can still be silent with the current cart-entry/default-soft-DIP
-path, so controls/soft-DIP handling remain follow-ups for game-driven music.
+audible Metal Slug M1 diagnostic command (`0xD5`), or set
+`NG_MSLUG_SDL_AUDIO_TEST_COMMAND=0xD5` / run
+`./run.sh --audio-test-command 0xD5` for a noninteractive smoke. For automated
+gameplay/audio validation, use `--auto-coin-frame`, `--auto-start-frame`, and
+`--auto-p1-a-frame` (or the matching `NG_MSLUG_SDL_AUTO_*` variables) to feed
+the minimal coin/start/A sequence without manual input.
 The cart-entry live path seeds the
 minimal Metal Slug MVS backup-RAM directory seen in a fresh MAME boot so the
 BIOS save/load services address the correct game block without a full cold BIOS
@@ -303,17 +304,19 @@ yet; it reuses the headless runtime model and current renderer, but it is a
 real live host loop rather than a saved-snapshot reload.
 
 Current local status: the generated Metal Slug cart build is dispatch-audit
-clean with `function candidates: 46396` and
-`sites=7485 missing_direct=0 computed=0 runtime_computed=59`. The full test
+clean with `function candidates: 49369` and
+`sites=8139 missing_direct=0 computed=0 runtime_computed=60`. The full test
 suite is `16/16` passing. The live host now uses cycle-derived frame timing and
 runs beyond the earlier `$C18662`/`$09B90A` dispatch frontiers, the former
 cart-requested soft-reset/BIOS-reset white-screen loop, and the observed
-`$092252` dynamic script dispatch miss. The current useful path is still
+`$092252` dynamic script dispatch miss. An automated cart-entry path with
+coin/start/P1-A now reaches actual Mission 1 gameplay and produces nonzero
+game-driven YM2610 output. The current useful path is still
 cart-header entry plus a user-provided BIOS slice; next work is validating fresh
 live frames and isolating remaining renderer/runtime state, not complete yet.
 The audio path now has a tested Z80/M1 bus, YM2610 FM/SSG/ADPCM backend, SDL
-queue output, and an audible diagnostic command path; game-driven attract audio
-still needs input/soft-DIP validation.
+queue output, MAME-style 128 KiB M1 `ROM_RELOAD` banking, an audible diagnostic
+command path, and a gameplay smoke with nonzero game-driven audio.
 
 
 ### Audio probe
@@ -323,7 +326,7 @@ banking, 68000->Z80 command/NMI latches, Z80->68000 reply latch, and the same
 YM2610 backend used by the live host:
 
 ```sh
-build/neo-audio-probe ~/Documents/Games/Mister/NEOGEO/mslug.neo 0x03
+build/neo-audio-probe ~/Documents/Games/Mister/NEOGEO/mslug.neo 0xD5
 ```
 
 It reports Z80 PC/cycles, NMI state, reply-latch state, YM2610 register-write

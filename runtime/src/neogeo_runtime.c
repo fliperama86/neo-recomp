@@ -34,6 +34,7 @@ static uint8_t g_ng_neogeo_bios_vectors_enabled;
 static uint8_t g_ng_neogeo_board_fix_enabled;
 static uint8_t g_ng_neogeo_p1cnt = 0xFFu;
 static uint8_t g_ng_neogeo_p2cnt = 0xFFu;
+static uint8_t g_ng_neogeo_status_a = 0xBFu;
 static uint8_t g_ng_neogeo_status_b = 0xFFu;
 static uint8_t g_ng_neogeo_system_input_low = 0xFFu;
 static uint32_t g_ng_neogeo_status_a_reads;
@@ -467,7 +468,8 @@ uint8_t ng68k_read8(uint32_t addr) {
     }
     if (ng_neogeo_is_status_a_addr(addr)) {
         ++g_ng_neogeo_status_a_reads;
-        return (uint8_t)(0xBFu | ((g_ng_neogeo_status_a_reads & 1u) ? 0x40u : 0x00u));
+        return (uint8_t)((g_ng_neogeo_status_a & 0xBFu) |
+                         ((g_ng_neogeo_status_a_reads & 1u) ? 0x40u : 0x00u));
     }
     if (ng_neogeo_is_status_b_addr(addr)) {
         return g_ng_neogeo_status_b;
@@ -806,6 +808,7 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_last_bios_vector_value = 0;
     g_ng_neogeo_p1cnt = 0xFFu;
     g_ng_neogeo_p2cnt = 0xFFu;
+    g_ng_neogeo_status_a = 0xBFu;
     g_ng_neogeo_status_b = 0xFFu;
     g_ng_neogeo_system_input_low = 0xFFu;
     g_ng_neogeo_status_a_reads = 0;
@@ -844,6 +847,26 @@ void ng_neogeo_reset_runtime(void) {
     g_ng_neogeo_backup_ram_last_addr = 0;
     g_ng_neogeo_backup_ram_last_value = 0;
     ng_m68k_clear_interrupt_level();
+}
+
+void ng_neogeo_set_p1_input(uint8_t active_low) {
+    g_ng_neogeo_p1cnt = active_low;
+}
+
+void ng_neogeo_set_p2_input(uint8_t active_low) {
+    g_ng_neogeo_p2cnt = active_low;
+}
+
+void ng_neogeo_set_status_a_input(uint8_t active_low) {
+    g_ng_neogeo_status_a = active_low;
+}
+
+void ng_neogeo_set_status_b_input(uint8_t active_low) {
+    g_ng_neogeo_status_b = active_low;
+}
+
+void ng_neogeo_set_dipswitch_input(uint8_t active_low) {
+    g_ng_neogeo_dipswitch = active_low;
 }
 
 void ng_neogeo_set_auto_vblank_interval(uint32_t interrupt_polls) {
@@ -1059,6 +1082,26 @@ uint8_t ng_neogeo_cycle_timing_active(void) {
 
 uint8_t ng_neogeo_port_output(void) {
     return g_ng_neogeo_port_output;
+}
+
+uint8_t ng_neogeo_p1_input(void) {
+    return g_ng_neogeo_p1cnt;
+}
+
+uint8_t ng_neogeo_p2_input(void) {
+    return g_ng_neogeo_p2cnt;
+}
+
+uint8_t ng_neogeo_status_a_input(void) {
+    return g_ng_neogeo_status_a;
+}
+
+uint8_t ng_neogeo_status_b_input(void) {
+    return g_ng_neogeo_status_b;
+}
+
+uint8_t ng_neogeo_dipswitch_input(void) {
+    return g_ng_neogeo_dipswitch;
 }
 
 uint32_t ng_neogeo_last_port_output_pc(void) {

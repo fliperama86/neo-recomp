@@ -40,8 +40,10 @@ than baking rendering knowledge into emitted 68000 C.
 
 Audio follows the same boundary. `neo_audio` owns the Z80/M1-side sound bus,
 command/reply latches, M-ROM banking, YM2610 synthesis, and rendered sample
-generation. The 68000 runtime exposes only CPU-visible sound latch behavior
-plus a narrow command/reply event boundary for hosts; generated 68000 code
-should not know about Z80 or YM2610 internals.
+generation. Its M-ROM bank view intentionally follows MAME's Neo Geo audio
+layout, including the 128 KiB M1 `ROM_RELOAD` effective region used by Metal
+Slug. The 68000 runtime exposes only CPU-visible sound latch behavior plus a
+narrow command/reply event boundary for hosts; generated 68000 code should not
+know about Z80 or YM2610 internals.
 
 The first useful milestone is function-level parity against an interpreter for selected 68000 routines, not full game boot.

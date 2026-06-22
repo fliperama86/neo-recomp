@@ -30,7 +30,13 @@
 #define NG_LIVE_AUDIO_CHUNK_FRAMES 1024u
 #define NG_LIVE_AUDIO_MAX_QUEUE_MS 250u
 #define NG_LIVE_AUDIO_SYNC_CYCLES (NG_NEO_CPU_CYCLES_PER_SCANLINE / 8u)
+#define NG_LIVE_AUDIO_COMMAND_QUANTUM_US 50u
+#define NG_LIVE_AUDIO_DIAGNOSTIC_COMMAND 0xD5u
 #define NG_LIVE_AUDIO_NO_TEST_COMMAND UINT64_MAX
+#define NG_LIVE_INPUT_NO_AUTO_FRAME UINT64_MAX
+#define NG_LIVE_AUTO_COIN_HOLD_REFRESHES 6u
+#define NG_LIVE_AUTO_START_HOLD_REFRESHES 30u
+#define NG_LIVE_AUTO_BUTTON_HOLD_REFRESHES 30u
 
 typedef struct NgLivePerfWindow {
     uint64_t cpu_ticks;
@@ -59,6 +65,29 @@ typedef struct NgLiveAudio {
     int output_enabled;
     int device_open;
 } NgLiveAudio;
+
+enum {
+    NG_LIVE_P1_UP = 0x01u,
+    NG_LIVE_P1_DOWN = 0x02u,
+    NG_LIVE_P1_LEFT = 0x04u,
+    NG_LIVE_P1_RIGHT = 0x08u,
+    NG_LIVE_P1_A = 0x10u,
+    NG_LIVE_P1_B = 0x20u,
+    NG_LIVE_P1_C = 0x40u,
+    NG_LIVE_P1_D = 0x80u,
+    NG_LIVE_STATUS_P1_START = 0x01u,
+    NG_LIVE_STATUS_P1_SELECT = 0x02u,
+    NG_LIVE_AUDIO_COIN1 = 0x01u,
+    NG_LIVE_AUDIO_SERVICE = 0x04u
+};
+
+typedef struct NgLiveInput {
+    uint8_t p1_buttons;
+    uint8_t p2_buttons;
+    uint8_t status_a;
+    uint8_t status_b;
+    uint8_t dipswitch;
+} NgLiveInput;
 
 void ng_generated_call(uint32_t addr);
 void ng_generated_smoke_reset_dispatch_stats(void);
@@ -110,6 +139,92 @@ static double live_perf_average_ms(uint64_t ticks,
 static void live_perf_reset(NgLivePerfWindow *window) {
     if (window) {
         memset(window, 0, sizeof(*window));
+    }
+}
+
+static void live_input_reset(NgLiveInput *input) {
+    if (!input) {
+        return;
+    }
+    input->p1_buttons = 0xFFu;
+    input->p2_buttons = 0xFFu;
+    input->status_a = 0xBFu;
+    input->status_b = 0xFFu;
+    input->dipswitch = 0xFFu;
+}
+
+static void live_input_apply(const NgLiveInput *input) {
+    if (!input) {
+        return;
+    }
+    ng_neogeo_set_p1_input(input->p1_buttons);
+    ng_neogeo_set_p2_input(input->p2_buttons);
+    ng_neogeo_set_status_a_input(input->status_a);
+    ng_neogeo_set_status_b_input(input->status_b);
+    ng_neogeo_set_dipswitch_input(input->dipswitch);
+}
+
+static void live_input_set_active_low(uint8_t *value, uint8_t mask, int pressed) {
+    if (!value) {
+        return;
+    }
+    if (pressed) {
+        *value = (uint8_t)(*value & (uint8_t)~mask);
+    } else {
+        *value = (uint8_t)(*value | mask);
+    }
+}
+
+static int live_input_handle_key(NgLiveInput *input, SDL_Keycode key, int pressed) {
+    if (!input) {
+        return 0;
+    }
+    switch (key) {
+    case SDLK_UP:
+        live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_UP, pressed);
+        return 1;
+    case SDLK_DOWN:
+        live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_DOWN, pressed);
+        return 1;
+    case SDLK_LEFT:
+        live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_LEFT, pressed);
+        return 1;
+    case SDLK_RIGHT:
+        live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_RIGHT, pressed);
+        return 1;
+    case SDLK_z:
+        live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_A, pressed);
+        return 1;
+    case SDLK_x:
+        live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_B, pressed);
+        return 1;
+    case SDLK_c:
+        live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_C, pressed);
+        return 1;
+    case SDLK_v:
+        live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_D, pressed);
+        return 1;
+    case SDLK_RETURN:
+        live_input_set_active_low(&input->status_b,
+                                  NG_LIVE_STATUS_P1_START,
+                                  pressed);
+        return 1;
+    case SDLK_RSHIFT:
+    case SDLK_LSHIFT:
+        live_input_set_active_low(&input->status_b,
+                                  NG_LIVE_STATUS_P1_SELECT,
+                                  pressed);
+        return 1;
+    case SDLK_5:
+        live_input_set_active_low(&input->status_a, NG_LIVE_AUDIO_COIN1, pressed);
+        return 1;
+    case SDLK_6:
+        live_input_set_active_low(&input->status_a,
+                                  NG_LIVE_AUDIO_SERVICE,
+                                  pressed);
+        return 1;
+    default:
+        return 0;
     }
 }
 
@@ -630,6 +745,23 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     ctx->last_sound_command = command;
     ctx->recent_sound_commands[ctx->recent_sound_command_head++ & 15u] =
         command;
+
+    /* MAME gives the Z80 a short perfect-quantum window after every 68K sound
+       latch write so immediate multi-byte command streams are not overwritten
+       before the audio CPU can service the NMI.  Mirror that scheduling hint in
+       the live host by advancing the audio timeline by the same 50 us window
+       after each command event. */
+    uint64_t command_quantum_cycles =
+        ((uint64_t)NG_NEO_MAIN_CPU_CLOCK_HZ *
+             (uint64_t)NG_LIVE_AUDIO_COMMAND_QUANTUM_US +
+         999999ull) /
+        1000000ull;
+    if (command_quantum_cycles == 0u) {
+        command_quantum_cycles = 1u;
+    }
+    live_audio_advance_to_cpu_cycle(ctx,
+                                    ctx->last_cpu_cycles +
+                                        command_quantum_cycles);
 }
 
 static void live_audio_sync_to_runtime(NgLiveAudio *ctx) {
@@ -1434,7 +1566,10 @@ static void usage(const char *argv0) {
             "  --dump-state-dir <dir>         write work/backup/palette/VRAM dumps on exit\n"
             "  --stall-refreshes <n>          log if scanline/frame stalls for n refreshes (default: 180, 0 disables)\n"
             "  --no-audio                     run the Z80/YM2610 core but do not open SDL audio output\n"
-            "  --audio-test-command <n>       inject one M1 command at launch for audio diagnostics (for mslug, 0xF8 is audible)\n"
+            "  --audio-test-command <n>       inject one M1 command at launch for audio diagnostics (for mslug, 0xD5 is audible)\n"
+            "  --auto-coin-frame <n>          hold coin 1 for a few refreshes starting at n (diagnostic input automation)\n"
+            "  --auto-start-frame <n>         hold P1 start for a few refreshes starting at n (diagnostic input automation)\n"
+            "  --auto-p1-a-frame <n>          hold P1 A for a few refreshes starting at n (diagnostic input automation)\n"
             "  --no-throttle                  do not sleep to ~60Hz after each refresh\n"
             "  --scale <n>                    integer window scale (default: %u)\n",
             argv0,
@@ -1460,6 +1595,9 @@ int main(int argc, char **argv) {
     uint64_t frame_hold = NG_LIVE_DEFAULT_FRAME_HOLD;
     uint64_t scale = NG_LIVE_DEFAULT_SCALE;
     uint64_t audio_test_command = NG_LIVE_AUDIO_NO_TEST_COMMAND;
+    uint64_t auto_coin_frame = NG_LIVE_INPUT_NO_AUTO_FRAME;
+    uint64_t auto_start_frame = NG_LIVE_INPUT_NO_AUTO_FRAME;
+    uint64_t auto_p1_a_frame = NG_LIVE_INPUT_NO_AUTO_FRAME;
     int start_bios = 0;
     int perf_log = 0;
     int audio_output_enabled = 1;
@@ -1542,6 +1680,12 @@ int main(int argc, char **argv) {
             target = &scale;
         } else if (strcmp(option, "--audio-test-command") == 0) {
             target = &audio_test_command;
+        } else if (strcmp(option, "--auto-coin-frame") == 0) {
+            target = &auto_coin_frame;
+        } else if (strcmp(option, "--auto-start-frame") == 0) {
+            target = &auto_start_frame;
+        } else if (strcmp(option, "--auto-p1-a-frame") == 0) {
+            target = &auto_p1_a_frame;
         } else if (strcmp(option, "--no-throttle") == 0) {
             no_throttle = 1u;
             continue;
@@ -1593,7 +1737,9 @@ int main(int argc, char **argv) {
     SDL_Renderer *renderer = NULL;
     SDL_Texture *texture = NULL;
     NgLiveAudio live_audio;
+    NgLiveInput live_input;
     memset(&live_audio, 0, sizeof(live_audio));
+    live_input_reset(&live_input);
 
     if (!ng_neo_rom_image_load(&image, neo_path) ||
         !read_file(bios_path, &bios_data, &bios_size)) {
@@ -1629,6 +1775,7 @@ int main(int argc, char **argv) {
         cart_entry;
 
     ng_neogeo_reset_runtime();
+    live_input_apply(&live_input);
     if (!start_bios) {
         /* We enter through the cart header for fast iteration, bypassing the
          * cold MVS BIOS save-RAM directory setup.  Seed the same minimal
@@ -1739,7 +1886,7 @@ int main(int argc, char **argv) {
                 (uint32_t)live_audio.spec.freq : NG_LIVE_AUDIO_SAMPLE_RATE,
             ng_neogeo_audio_ym2610_native_sample_rate(live_audio.audio));
     fprintf(stderr,
-            "keys: q/Escape quit, Space pause/resume, n/. step one frame, m audio test, +/- adjust safety dispatch cap\n");
+            "keys: q/Escape quit, Space pause/resume, n/. step one frame, m audio test, +/- cap; P1 arrows+Z/X/C/V, Enter start, 5 coin\n");
 
     int quit = 0;
     int paused = 0;
@@ -1779,7 +1926,8 @@ int main(int argc, char **argv) {
                     step_requested = 1;
                     hold_phase = 0;
                 } else if (key == SDLK_m) {
-                    live_audio_send_command(&live_audio, 0xF8u);
+                    live_audio_send_command(&live_audio,
+                                            NG_LIVE_AUDIO_DIAGNOSTIC_COMMAND);
                 } else if (key == SDLK_EQUALS || key == SDLK_PLUS) {
                     dispatches_per_refresh += dispatches_per_refresh / 4u + 1u;
                 } else if (key == SDLK_MINUS && dispatches_per_refresh > 1u) {
@@ -1787,8 +1935,41 @@ int main(int argc, char **argv) {
                     if (dispatches_per_refresh == 0u) {
                         dispatches_per_refresh = 1u;
                     }
+                } else if (live_input_handle_key(&live_input, key, 1)) {
+                    live_input_apply(&live_input);
+                }
+            } else if (event.type == SDL_KEYUP) {
+                SDL_Keycode key = event.key.keysym.sym;
+                if (live_input_handle_key(&live_input, key, 0)) {
+                    live_input_apply(&live_input);
                 }
             }
+        }
+        if (auto_coin_frame != NG_LIVE_INPUT_NO_AUTO_FRAME) {
+            int active = refreshes >= auto_coin_frame &&
+                refreshes < auto_coin_frame + NG_LIVE_AUTO_COIN_HOLD_REFRESHES;
+            live_input_set_active_low(&live_input.status_a,
+                                      NG_LIVE_AUDIO_COIN1,
+                                      active);
+        }
+        if (auto_start_frame != NG_LIVE_INPUT_NO_AUTO_FRAME) {
+            int active = refreshes >= auto_start_frame &&
+                refreshes < auto_start_frame + NG_LIVE_AUTO_START_HOLD_REFRESHES;
+            live_input_set_active_low(&live_input.status_b,
+                                      NG_LIVE_STATUS_P1_START,
+                                      active);
+        }
+        if (auto_p1_a_frame != NG_LIVE_INPUT_NO_AUTO_FRAME) {
+            int active = refreshes >= auto_p1_a_frame &&
+                refreshes < auto_p1_a_frame + NG_LIVE_AUTO_BUTTON_HOLD_REFRESHES;
+            live_input_set_active_low(&live_input.p1_buttons,
+                                      NG_LIVE_P1_A,
+                                      active);
+        }
+        if (auto_coin_frame != NG_LIVE_INPUT_NO_AUTO_FRAME ||
+            auto_start_frame != NG_LIVE_INPUT_NO_AUTO_FRAME ||
+            auto_p1_a_frame != NG_LIVE_INPUT_NO_AUTO_FRAME) {
+            live_input_apply(&live_input);
         }
 
         uint64_t perf_start = SDL_GetPerformanceCounter();

@@ -19,6 +19,51 @@ entry = []
 extra = [
   0x0008F6,
   0x000122,
+  # Cartridge header service trampolines used by BIOS/player-start paths.
+  0x000128,
+  0x00012E,
+  0x000134,
+  # Player-start/menu state entries reached through the cartridge's runtime
+  # state table (`MOVEA.L (A0),A0; JMP (A0)` at $000FDC) after coin/start
+  # input. These are the code entries from the $000BAE/$000BDE state lists;
+  # later list slots intentionally include data/script pointers, so keep this
+  # block explicit instead of modeling the whole mixed table as an abs32 table.
+  0x001020,
+  0x00109C,
+  0x0010E8,
+  0x0010F2,
+  0x001148,
+  0x001172,
+  0x0011CA,
+  0x00135E,
+  0x001368,
+  0x0013C6,
+  0x001416,
+  0x001438,
+  0x001452,
+  # Stage/demo start entries reached after the START/OPTION menu accepts P1 A.
+  # The entries are the code slots in the contiguous $001922-$001A58 table;
+  # the game writes the selected stage id to $106ECE, installs an object script,
+  # then returns to the common $00188A transition path.
+  0x001922,
+  0x001940,
+  0x00195E,
+  0x00197C,
+  0x00199A,
+  0x0019B8,
+  0x0019D6,
+  0x0019FE,
+  0x001A1C,
+  0x001A3A,
+  0x001A58,
+  0x001A64,
+  0x001A70,
+  # Embedded stage-0 object script predicate reached after the START menu path
+  # installs the $0967FE script. The small routine compares $106F50 against
+  # $0150 and returns via A1 continuation; surrounding bytes are mixed table
+  # data, so seed only the concrete runtime frontier instead of widening the
+  # region.
+  0x09196E,
   0x000400,
   0x001B4C,
   0x001B70,
@@ -696,8 +741,11 @@ stride = 4
 format = "bra16"
 
 [[jump_table]]
-# Player-select transition callback table reached from $025DE0.
-start = 0x025690
+# Player-select transition callback table reached from $025DE0/$025E48.
+# The valid abs32 slots begin after the preceding sentinel/config words at
+# $025660-$025667; widening this table covers the START-path callbacks such as
+# $026010 without treating the earlier data as code pointers.
+start = 0x025668
 end = 0x0256B0
 stride = 4
 format = "abs32"
@@ -1263,4 +1311,4 @@ format = "bra16"
 # Callback target is loaded from RAM through A6 and dispatched via JSR (A0).
 # The additional sites are reached after seeding the VBlank handler and are
 # intentionally left as runtime-computed dispatch boundaries for now.
-runtime = [0x0006C8, 0x000FDE, 0x001F3C, 0x025DE0, 0x025EA8, 0x02841E, 0x028602, 0x028DD2, 0x02912A, 0x02A336, 0x02A35C, 0x02A382, 0x02FB3C, 0x0335A4, 0x039600, 0x03962E, 0x039664, 0x0396A0, 0x0396C2, 0x0396F8, 0x039734, 0x039756, 0x039790, 0x0397CC, 0x0397F6, 0x03982A, 0x03985C, 0x039890, 0x043818, 0x043906, 0x043A02, 0x043AA4, 0x0443E0, 0x0446D6, 0x04A09A, 0x05032C, 0x057714, 0x05AA60, 0x05B542, 0x05B57C, 0x05B782, 0x05B988, 0x05BB50, 0x05BC92, 0x05BE5A, 0x05BF8A, 0x05BFC4, 0x05C1D0, 0x05C3DC, 0x05C5A4, 0x05C6EC, 0x05C8B4, 0x06ACF4, 0x06AD7A, 0x06ADDA, 0x06AE54, 0x06AE9C, 0x06AEF8, 0x06AF3C]
+runtime = [0x0006C8, 0x000FDE, 0x001F3C, 0x025DE0, 0x025EA8, 0x02841E, 0x028602, 0x028DD2, 0x02912A, 0x02A336, 0x02A35C, 0x02A382, 0x02FB3C, 0x0335A4, 0x039600, 0x03962E, 0x039664, 0x0396A0, 0x0396C2, 0x0396F8, 0x039734, 0x039756, 0x039790, 0x0397CC, 0x0397F6, 0x03982A, 0x03985C, 0x039890, 0x043818, 0x043906, 0x043A02, 0x043AA4, 0x0443E0, 0x0446D6, 0x04A09A, 0x05032C, 0x057714, 0x05AA60, 0x09829E, 0x05B542, 0x05B57C, 0x05B782, 0x05B988, 0x05BB50, 0x05BC92, 0x05BE5A, 0x05BF8A, 0x05BFC4, 0x05C1D0, 0x05C3DC, 0x05C5A4, 0x05C6EC, 0x05C8B4, 0x06ACF4, 0x06AD7A, 0x06ADDA, 0x06AE54, 0x06AE9C, 0x06AEF8, 0x06AF3C]

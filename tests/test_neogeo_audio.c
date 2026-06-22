@@ -16,12 +16,13 @@ static int test_audio_initial_banks(void) {
     uint8_t *m_rom = (uint8_t *)calloc(0x20000u, 1u);
     CHECK(m_rom != NULL);
     m_rom[0x0000u] = 0x10u;
-    m_rom[0x10000u] = 0xA0u;
-    m_rom[0x12000u] = 0xB1u;
-    m_rom[0x18000u] = 0xA2u;
-    m_rom[0x1C000u] = 0xB6u;
-    m_rom[0x1E000u] = 0xCEu;
-    m_rom[0x1F000u] = 0xDFu;
+    m_rom[0x2000u] = 0xB1u;
+    m_rom[0x8000u] = 0xA2u;
+    m_rom[0xC000u] = 0xB6u;
+    m_rom[0xE000u] = 0xCEu;
+    m_rom[0xF000u] = 0xDFu;
+    m_rom[0x10000u] = 0x50u;
+    m_rom[0x18000u] = 0x60u;
 
     NgNeoAudio *audio = ng_neogeo_audio_create();
     CHECK(audio != NULL);
@@ -29,15 +30,21 @@ static int test_audio_initial_banks(void) {
     ng_neogeo_audio_reset(audio);
 
     CHECK(ng_neogeo_audio_debug_read_z80(audio, 0x0000u) == 0x10u);
+    /* 128 KiB M1 ROMs use MAME's 0x30000-byte ROM_RELOAD view for bank
+       math: initial banks $02/$06/$0e/$1e point at the first half's
+       $8000/$c000/$e000/$f000 windows, not the raw second half. */
     CHECK(ng_neogeo_audio_debug_read_z80(audio, 0x8000u) == 0xA2u);
     CHECK(ng_neogeo_audio_debug_read_z80(audio, 0xC000u) == 0xB6u);
     CHECK(ng_neogeo_audio_debug_read_z80(audio, 0xE000u) == 0xCEu);
     CHECK(ng_neogeo_audio_debug_read_z80(audio, 0xF000u) == 0xDFu);
+    CHECK(ng_neogeo_audio_debug_read_z80(audio, 0xF7FFu) == 0x00u);
 
     CHECK(ng_neogeo_audio_debug_port_read(audio, 0x000Bu) == 0x00u);
-    CHECK(ng_neogeo_audio_debug_read_z80(audio, 0x8000u) == 0xA0u);
+    CHECK(ng_neogeo_audio_debug_read_z80(audio, 0x8000u) == 0x10u);
     CHECK(ng_neogeo_audio_debug_port_read(audio, 0x010Au) == 0x00u);
     CHECK(ng_neogeo_audio_debug_read_z80(audio, 0xC000u) == 0xB1u);
+    CHECK(ng_neogeo_audio_debug_port_read(audio, 0x040Bu) == 0x00u);
+    CHECK(ng_neogeo_audio_debug_read_z80(audio, 0x8000u) == 0x50u);
 
     ng_neogeo_audio_destroy(audio);
     free(m_rom);
