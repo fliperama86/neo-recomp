@@ -274,6 +274,11 @@ extra = [
   # Later entry from the same $096B9C-selected action-record block; the record
   # at $096BE4 embeds $04F46A as an exact object-state initializer.
   0x04F46A,
+  # Tiny sibling SFX/spawn helper callbacks embedded in the $1948A8 action
+  # records. Manual audio-enabled gameplay reached $04FA40; the neighboring
+  # records embed $04FA40/$04FA58 exactly.
+  0x04FA40,
+  0x04FA58,
   0x051F94,
   0x0523FA,
   0x08FD68,

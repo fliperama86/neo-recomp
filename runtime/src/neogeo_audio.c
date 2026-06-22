@@ -516,27 +516,6 @@ void ng_neogeo_audio_advance_z80_cycles(NgNeoAudio *audio, uint32_t cycles) {
     }
 }
 
-uint32_t ng_neogeo_audio_advance_z80_cycles_until_command_clear(
-    NgNeoAudio *audio,
-    uint32_t max_cycles,
-    uint32_t initial_clear_count) {
-    if (!audio || max_cycles == 0u) {
-        return 0u;
-    }
-
-    unsigned long start = audio->cpu.cyc;
-    uint32_t instructions = 0u;
-    uint32_t max_instructions = max_cycles * 2u + 1024u;
-    while ((uint32_t)(audio->cpu.cyc - start) < max_cycles &&
-           audio->command_clear_count == initial_clear_count &&
-           instructions < max_instructions) {
-        ng_audio_step_z80(audio);
-        ++instructions;
-    }
-    return (uint32_t)(audio->cpu.cyc - start);
-}
-
-
 void ng_neogeo_audio_generate(NgNeoAudio *audio,
                               int16_t *stereo_out,
                               uint32_t frames,

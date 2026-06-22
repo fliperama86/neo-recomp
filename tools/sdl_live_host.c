@@ -770,8 +770,6 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     if (!ctx || !ctx->audio) {
         return;
     }
-    uint32_t initial_clear_count =
-        ng_neogeo_audio_command_clear_count(ctx->audio);
     ng_neogeo_audio_write_command(ctx->audio, command);
     ++ctx->sound_commands;
     ctx->last_sound_command = command;
@@ -781,39 +779,22 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     /* MAME and MiSTer both model a single command latch with NMI asserted on
        the 68000 sound-write edge and cleared when the Z80 reads/clears the
        latch.  The live host sees generated 68000 writes in coarse callback
-       batches instead of true parallel CPU time, so service the Z80 through the
-       Z80-side clear/write when the M1 program performs one, bounded by the
-       existing 50 us safety cap.  Metal Slug's M1 commonly only reads the
-       latch (MAME's generic latch treats the read as acknowledge), so the cap is
-       still required to let the command handler run far enough to write YM/ADPCM
-       registers after the read. */
-    uint32_t command_service_z80_cycles =
-        (uint32_t)(((uint64_t)NG_NEO_AUDIO_CPU_CLOCK_HZ *
-                        (uint64_t)NG_LIVE_AUDIO_COMMAND_SERVICE_MAX_US +
-                    999999ull) /
-                   1000000ull);
-    if (command_service_z80_cycles == 0u) {
-        command_service_z80_cycles = 1u;
+       batches instead of true parallel CPU time, so give the Z80 a short
+       fixed service slice after each write.  Read/clear-bounded experiments
+       were too early for Metal Slug's M1 command handler: it usually
+       acknowledges by reading the latch without a separate clear, then still
+       needs cycles to write YM/ADPCM registers. */
+    uint64_t command_service_cycles =
+        ((uint64_t)NG_NEO_MAIN_CPU_CLOCK_HZ *
+             (uint64_t)NG_LIVE_AUDIO_COMMAND_SERVICE_MAX_US +
+         999999ull) /
+        1000000ull;
+    if (command_service_cycles == 0u) {
+        command_service_cycles = 1u;
     }
-
-    uint64_t before_z80 = ng_neogeo_audio_z80_cycles(ctx->audio);
-    uint32_t advanced_z80 =
-        ng_neogeo_audio_advance_z80_cycles_until_command_clear(
-            ctx->audio,
-            command_service_z80_cycles,
-            initial_clear_count);
-    uint64_t after_z80 = ng_neogeo_audio_z80_cycles(ctx->audio);
-    if (after_z80 >= before_z80) {
-        advanced_z80 = (uint32_t)(after_z80 - before_z80);
-    }
-    if (advanced_z80 == 0u) {
-        return;
-    }
-
-    uint64_t command_service_cycles = (uint64_t)advanced_z80 * 3ull;
-    live_audio_generate_and_queue(ctx, command_service_cycles);
-    ctx->last_cpu_cycles += command_service_cycles;
-    ng_neogeo_set_sound_reply(ng_neogeo_audio_reply_latch(ctx->audio));
+    live_audio_advance_to_cpu_cycle(ctx,
+                                    ctx->last_cpu_cycles +
+                                        command_service_cycles);
 }
 
 static void live_audio_sync_to_runtime(NgLiveAudio *ctx) {
