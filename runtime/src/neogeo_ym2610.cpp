@@ -58,18 +58,40 @@ struct YmBackend {
         native_rate = chip.sample_rate(NG_NEO_YM2610_CLOCK_HZ);
     }
 
-    uint8_t read_pcm_a(uint32_t address) const {
-        if (v1_rom && v1_rom_size != 0) {
-            return v1_rom[address % v1_rom_size];
+    uint32_t combined_v_rom_size() const {
+        return v1_rom_size + v2_rom_size;
+    }
+
+    uint8_t read_combined_v(uint32_t address) const {
+        uint32_t total = combined_v_rom_size();
+        if (total == 0) {
+            return 0x00;
+        }
+        address %= total;
+        if (v1_rom && address < v1_rom_size) {
+            return v1_rom[address];
+        }
+        if (v2_rom && address >= v1_rom_size) {
+            uint32_t v2_offset = address - v1_rom_size;
+            if (v2_offset < v2_rom_size) {
+                return v2_rom[v2_offset];
+            }
         }
         return 0x00;
     }
 
+    uint8_t read_pcm_a(uint32_t address) const {
+        return read_combined_v(address);
+    }
+
     uint8_t read_pcm_b(uint32_t address) const {
-        if (v2_rom && v2_rom_size != 0) {
-            return v2_rom[address % v2_rom_size];
-        }
-        return read_pcm_a(address);
+        /* MAME maps Metal Slug's 201-v1/201-v2 as one contiguous
+           ymsnd:adpcma region, and if a separate adpcmb region is absent the
+           YM2610 ADPCM-B space falls back to that same region.  The current
+           .neo loader passes those V-ROM chunks as v1/v2, not as explicit
+           A/B spaces, so present a combined sample address space to both
+           engines. */
+        return read_combined_v(address);
     }
 
     void advance_clocks(uint32_t clocks) {

@@ -317,7 +317,8 @@ cart-header entry plus a user-provided BIOS slice; next work is validating fresh
 live frames and isolating remaining renderer/runtime state, not complete yet.
 The audio path now has a tested Z80/M1 bus, YM2610 FM/SSG/ADPCM backend, SDL
 queue output, MAME-style 128 KiB M1 `ROM_RELOAD` banking, an audible diagnostic
-command path, and a gameplay smoke with nonzero game-driven audio.
+command path, MAME-style contiguous `201-v1/201-v2` sample-region reads for
+Metal Slug, and a gameplay smoke with nonzero game-driven audio.
 
 
 ### Audio probe

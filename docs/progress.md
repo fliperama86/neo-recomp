@@ -141,6 +141,16 @@ now follows the 65536 discovery-candidate cap; `tests/test_dispatch_audit.c`
 covers an 8300-site audit and the Metal Slug static audit reports `sites=8371`
 without truncation.
 
+The same manual run also made the first obvious audio gap concrete: music/PCM
+was audible, but short effects such as shots/bombs were silent. Grounding this
+against MAME showed Metal Slug maps `201-v1.v1` and `201-v2.v2` as one
+contiguous `ymsnd:adpcma` sample region, with YM2610 ADPCM-B falling back to the
+same region when no explicit `adpcmb` region exists. The `.neo` loader was
+passing those chunks as `v1`/`v2`; the YM2610 wrapper now presents them as one
+combined V-ROM address space to both ADPCM engines, and
+`tests/test_neogeo_audio.c` covers an ADPCM-A sample that starts in the second
+chunk.
+
 The live host now presents on emulated frame boundaries by default, and those
 boundaries come from generated 68k cycle hooks rather than an arbitrary
 scanline-poll interval. Emitted instructions call `NG_GENERATED_CYCLE_HOOK`

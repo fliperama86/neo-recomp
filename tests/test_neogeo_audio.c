@@ -176,11 +176,59 @@ static int test_audio_ym2610_generates_samples(void) {
     return 0;
 }
 
+static int test_audio_ym2610_combines_v_rom_chunks_for_adpcm(void) {
+    uint8_t v1[0x100u];
+    uint8_t v2[0x100u];
+    memset(v1, 0, sizeof(v1));
+    memset(v2, 0, sizeof(v2));
+    v2[0] = 0x77u;
+    v2[1] = 0x77u;
+
+    NgNeoAudio *audio = ng_neogeo_audio_create();
+    CHECK(audio != NULL);
+    ng_neogeo_audio_set_roms(audio, NULL, 0u, v1, sizeof(v1), v2, sizeof(v2));
+    ng_neogeo_audio_reset(audio);
+
+    /* Program ADPCM-A channel 0 to start at $0100, i.e. the first byte after
+       v1.  If v1/v2 are treated as separate A/B regions this reads silence;
+       Metal Slug's MAME map treats 201-v1/201-v2 as one ADPCM region. */
+    ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x01u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0x3Fu); /* total level */
+    ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x08u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0xDFu); /* pan L/R, max */
+    ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x10u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0x01u); /* start low */
+    ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x18u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0x00u); /* start high */
+    ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x20u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0x01u); /* end low */
+    ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x28u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0x00u); /* end high */
+    ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x00u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0x01u); /* key on ch0 */
+
+    int16_t samples[512 * 2];
+    memset(samples, 0, sizeof(samples));
+    ng_neogeo_audio_generate(audio, samples, 512u, 48000u);
+
+    uint32_t nonzero = 0;
+    for (uint32_t i = 0; i < 512u * 2u; ++i) {
+        if (samples[i] != 0) {
+            ++nonzero;
+        }
+    }
+    CHECK(nonzero != 0u);
+
+    ng_neogeo_audio_destroy(audio);
+    return 0;
+}
+
 int main(void) {
     if (test_audio_initial_banks() != 0) return 1;
     if (test_audio_ram_window() != 0) return 1;
     if (test_audio_z80_polls_command_and_writes_ym() != 0) return 1;
     if (test_audio_nmi_command_path() != 0) return 1;
     if (test_audio_ym2610_generates_samples() != 0) return 1;
+    if (test_audio_ym2610_combines_v_rom_chunks_for_adpcm() != 0) return 1;
     return 0;
 }
