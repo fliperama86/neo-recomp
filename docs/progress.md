@@ -1861,6 +1861,13 @@ and `V` are only trusted where generated-exec tests cover them.
   use `$D5`, and the 18k gameplay smoke reports `audio_nonzero=8938259` with
   real YM port-3/ADPCM/FM register writes instead of only timer register `$27`.
 
+- local: Adjusted live SDL audio queue handling after audible speed-up reports.
+  Real-time runs now wait for queued-audio headroom instead of clearing the SDL
+  queue when generated audio gets ahead of playback, while no-throttle smoke
+  runs retain the old drop policy. Shutdown logs include maximum queued audio,
+  accumulated queue wait time, and queue-clear count so audio glitches can be
+  separated from YM/Z80 command or sample-decoding issues.
+
 ## Next Steps
 
 Use this loop:

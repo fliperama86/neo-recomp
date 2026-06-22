@@ -56,6 +56,9 @@ typedef struct NgLiveAudio {
     uint64_t generated_audio_frames;
     uint64_t nonzero_audio_samples;
     uint64_t sound_commands;
+    uint64_t queue_wait_ms;
+    uint32_t queue_clears;
+    uint32_t max_queued_audio_bytes;
     int32_t peak_audio_sample;
     uint8_t last_sound_command;
     uint8_t recent_sound_commands[16];
@@ -64,6 +67,7 @@ typedef struct NgLiveAudio {
     uint32_t output_buffer_frames;
     int output_enabled;
     int device_open;
+    int realtime_pacing;
 } NgLiveAudio;
 
 enum {
@@ -637,17 +641,43 @@ static void live_audio_flush_output(NgLiveAudio *ctx) {
 
     uint32_t sample_rate = ctx->spec.freq > 0 ?
         (uint32_t)ctx->spec.freq : NG_LIVE_AUDIO_SAMPLE_RATE;
+    uint32_t chunk_bytes =
+        ctx->output_buffer_frames * 2u * (uint32_t)sizeof(int16_t);
     uint32_t queued = SDL_GetQueuedAudioSize(ctx->device);
+    if (queued > ctx->max_queued_audio_bytes) {
+        ctx->max_queued_audio_bytes = queued;
+    }
     uint32_t max_queue =
         (sample_rate * 2u * (uint32_t)sizeof(int16_t) *
          NG_LIVE_AUDIO_MAX_QUEUE_MS) / 1000u;
-    if (queued > max_queue) {
-        SDL_ClearQueuedAudio(ctx->device);
+
+    if (max_queue != 0u && queued + chunk_bytes > max_queue) {
+        if (ctx->realtime_pacing) {
+            uint32_t waited_ms = 0u;
+            while (queued + chunk_bytes > max_queue &&
+                   waited_ms < NG_LIVE_AUDIO_MAX_QUEUE_MS) {
+                SDL_Delay(1u);
+                ++waited_ms;
+                queued = SDL_GetQueuedAudioSize(ctx->device);
+                if (queued > ctx->max_queued_audio_bytes) {
+                    ctx->max_queued_audio_bytes = queued;
+                }
+            }
+            ctx->queue_wait_ms += waited_ms;
+        }
+
+        queued = SDL_GetQueuedAudioSize(ctx->device);
+        if (queued > ctx->max_queued_audio_bytes) {
+            ctx->max_queued_audio_bytes = queued;
+        }
+        if (!ctx->realtime_pacing && queued > max_queue) {
+            SDL_ClearQueuedAudio(ctx->device);
+            ++ctx->queue_clears;
+        }
     }
     (void)SDL_QueueAudio(ctx->device,
                          ctx->output_buffer,
-                         ctx->output_buffer_frames * 2u *
-                             (uint32_t)sizeof(int16_t));
+                         chunk_bytes);
     ctx->output_buffer_frames = 0u;
 }
 
@@ -1798,6 +1828,7 @@ int main(int argc, char **argv) {
     ng_generated_smoke_reset_dispatch_stats();
     ng_generated_smoke_set_scanline_poll_interval((uint32_t)scanline_poll_interval);
     (void)live_audio_create(&live_audio, &image, audio_output_enabled);
+    live_audio.realtime_pacing = no_throttle == 0u;
     if (live_audio.audio) {
         g_live_audio_cycle_context = &live_audio;
         ng_generated_smoke_set_cycle_observer(live_audio_cycle_observer);
@@ -2137,9 +2168,16 @@ int main(int argc, char **argv) {
                                                       perf_after_throttle);
     }
 
+    uint32_t audio_report_sample_rate = live_audio.device_open && live_audio.spec.freq > 0 ?
+        (uint32_t)live_audio.spec.freq : NG_LIVE_AUDIO_SAMPLE_RATE;
+    uint32_t audio_queue_max_ms = audio_report_sample_rate != 0u ?
+        (uint32_t)(((uint64_t)live_audio.max_queued_audio_bytes * 1000u) /
+                   ((uint64_t)audio_report_sample_rate * 2u * sizeof(int16_t))) :
+        0u;
     fprintf(stderr,
             "live host stopped: dispatches=%llu frame=%u scanline=%u budget_stop=$%06X "
             "audio_frames=%llu audio_nonzero=%llu audio_peak=%d "
+            "audio_qmax_ms=%u audio_qwait_ms=%llu audio_qclears=%u "
             "sound_cmds=%llu last_sound=$%02X ym_writes=%u ym_reads=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             ng_neogeo_frame_count(),
@@ -2148,6 +2186,9 @@ int main(int argc, char **argv) {
             (unsigned long long)live_audio.generated_audio_frames,
             (unsigned long long)live_audio.nonzero_audio_samples,
             (int)live_audio.peak_audio_sample,
+            audio_queue_max_ms,
+            (unsigned long long)live_audio.queue_wait_ms,
+            live_audio.queue_clears,
             (unsigned long long)live_audio.sound_commands,
             live_audio.last_sound_command,
             ng_neogeo_audio_ym_write_count(live_audio.audio),

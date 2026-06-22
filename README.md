@@ -320,7 +320,9 @@ queue output, MAME-style 128 KiB M1 `ROM_RELOAD` banking, an audible diagnostic
 command path, MAME-style contiguous `201-v1/201-v2` sample-region reads for
 Metal Slug, ADPCM-A/ADPCM-B key-on diagnostics in live logs, native-sample averaging
 when resampling YM output to the host rate, MAME-style YM2610 stream
-fidelity/routes, and a gameplay smoke with nonzero game-driven audio.
+fidelity/routes, real-time SDL queue pacing that preserves queued samples instead
+of dropping them when the host runs ahead, and a gameplay smoke with nonzero
+game-driven audio.
 
 
 ### Audio probe
