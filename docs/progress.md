@@ -79,9 +79,9 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=653 discovery_files=0 jump_tables=74 runtime_dispatch=60
-function candidates: 51713
-dispatch audit: sites=8768 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
+game config functions: entry=0 extra=658 discovery_files=0 jump_tables=74 runtime_dispatch=60
+function candidates: 51745
+dispatch audit: sites=8782 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
 
@@ -146,7 +146,10 @@ preceding `$083Bxx/$08B3xx` family. That pushed the audit above the older
 8192-site storage ceiling, so dispatch-audit site storage now follows the
 65536 discovery-candidate cap;
 `tests/test_dispatch_audit.c` covers an 8300-site audit and the Metal Slug
-static audit reports `sites=8768` without truncation.
+static audit reports `sites=8782` without truncation. A later gameplay/manual
+frontier at `$03FC38` was seeded together with the exact `LEA target,A1;
+MOVE.L A1,(A6)` continuations in the neighboring `$03FC38-$03FCA4`
+object-state chain, leaving the dispatch audit clean at `sites=8782`.
 
 The same manual run also made the first obvious audio gap concrete: music/PCM
 was audible, but short effects such as shots/bombs were silent. Grounding this
@@ -1867,6 +1870,15 @@ and `V` are only trusted where generated-exec tests cover them.
   runs retain the old drop policy. Shutdown logs include maximum queued audio,
   accumulated queue wait time, and queue-clear count so audio glitches can be
   separated from YM/Z80 command or sample-decoding issues.
+
+- local: Matched the live host's 68000->Z80 sound delivery to MAME's
+  `generic_latch_8` semantics after the SDL queue diagnostics proved audio was
+  not being skipped by the host device. The host no longer grants a guaranteed
+  50us Z80 service window to every sound write; rapid writes now update the
+  single pending latch byte and can overwrite an unread command, just like
+  MAME/hardware. Live shutdown logs now include Z80 NMI-service count plus the
+  current command latch/reply bytes so command-overwrite issues can be separated
+  from YM2610 mixing/sample bugs.
 
 ## Next Steps
 

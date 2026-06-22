@@ -30,7 +30,6 @@
 #define NG_LIVE_AUDIO_CHUNK_FRAMES 1024u
 #define NG_LIVE_AUDIO_MAX_QUEUE_MS 250u
 #define NG_LIVE_AUDIO_SYNC_CYCLES (NG_NEO_CPU_CYCLES_PER_SCANLINE / 8u)
-#define NG_LIVE_AUDIO_COMMAND_QUANTUM_US 50u
 #define NG_LIVE_AUDIO_DIAGNOSTIC_COMMAND 0xD5u
 #define NG_LIVE_AUDIO_NO_TEST_COMMAND UINT64_MAX
 #define NG_LIVE_INPUT_NO_AUTO_FRAME UINT64_MAX
@@ -776,22 +775,10 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     ctx->recent_sound_commands[ctx->recent_sound_command_head++ & 15u] =
         command;
 
-    /* MAME gives the Z80 a short perfect-quantum window after every 68K sound
-       latch write so immediate multi-byte command streams are not overwritten
-       before the audio CPU can service the NMI.  Mirror that scheduling hint in
-       the live host by advancing the audio timeline by the same 50 us window
-       after each command event. */
-    uint64_t command_quantum_cycles =
-        ((uint64_t)NG_NEO_MAIN_CPU_CLOCK_HZ *
-             (uint64_t)NG_LIVE_AUDIO_COMMAND_QUANTUM_US +
-         999999ull) /
-        1000000ull;
-    if (command_quantum_cycles == 0u) {
-        command_quantum_cycles = 1u;
-    }
-    live_audio_advance_to_cpu_cycle(ctx,
-                                    ctx->last_cpu_cycles +
-                                        command_quantum_cycles);
+    /* Match MAME's generic_latch_8 behavior: a sound write updates one
+       latched byte and asserts data-pending/NMI, but another write before the
+       Z80 reads the latch overwrites the previous value instead of queueing a
+       second guaranteed command.  Timing comes from normal cycle sync below. */
 }
 
 static void live_audio_sync_to_runtime(NgLiveAudio *ctx) {
@@ -2178,7 +2165,8 @@ int main(int argc, char **argv) {
             "live host stopped: dispatches=%llu frame=%u scanline=%u budget_stop=$%06X "
             "audio_frames=%llu audio_nonzero=%llu audio_peak=%d "
             "audio_qmax_ms=%u audio_qwait_ms=%llu audio_qclears=%u "
-            "sound_cmds=%llu last_sound=$%02X ym_writes=%u ym_reads=%u\n",
+            "sound_cmds=%llu nmi=%u last_sound=$%02X latch=$%02X reply=$%02X "
+            "ym_writes=%u ym_reads=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             ng_neogeo_frame_count(),
             ng_neogeo_current_scanline(),
@@ -2190,7 +2178,10 @@ int main(int argc, char **argv) {
             (unsigned long long)live_audio.queue_wait_ms,
             live_audio.queue_clears,
             (unsigned long long)live_audio.sound_commands,
+            ng_neogeo_audio_nmi_service_count(live_audio.audio),
             live_audio.last_sound_command,
+            ng_neogeo_audio_command_latch(live_audio.audio),
+            ng_neogeo_audio_reply_latch(live_audio.audio),
             ng_neogeo_audio_ym_write_count(live_audio.audio),
             ng_neogeo_audio_ym_read_count(live_audio.audio));
     if (live_audio.sound_commands != 0u) {

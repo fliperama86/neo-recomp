@@ -200,7 +200,15 @@ extra = [
   # callback.
   0x03EFEC,
   # Object-state callback family reached from the $0E82xx object vector and
-  # its LEA target,A1 / MOVE.L A1,(A6) continuations.
+  # its LEA target,A1 / MOVE.L A1,(A6) continuations. The $03FC38
+  # initializer and its exact stored continuations are part of the same
+  # MAME-visible object state chain as the already-seeded $03FCC0/$03FCD8
+  # siblings, not arbitrary data in the preceding pointer block.
+  0x03FC38,
+  0x03FC4C,
+  0x03FC6A,
+  0x03FC7A,
+  0x03FCA4,
   0x03FCC0,
   0x03FCD8,
   0x03FD22,

@@ -144,6 +144,52 @@ static int test_audio_nmi_command_path(void) {
     return 0;
 }
 
+
+static int test_audio_pending_command_overwrites_before_nmi_service(void) {
+    uint8_t m_rom[0x20000u];
+    memset(m_rom, 0, sizeof(m_rom));
+
+    const uint8_t main_program[] = {
+        0xD3u, 0x08u,       /* out ($08),a: enable NMI */
+        0x18u, 0xFEu,       /* jr $0002 */
+    };
+    const uint8_t nmi_handler[] = {
+        0xDBu, 0x00u,       /* in a,($00): command */
+        0xD3u, 0x04u,       /* out ($04),a: YM2610 address A */
+        0x3Eu, 0x44u,       /* ld a,$44 */
+        0xD3u, 0x05u,       /* out ($05),a: YM2610 data A */
+        0xD3u, 0x00u,       /* out ($00),a: clear sound latch */
+        0xC9u,              /* ret */
+    };
+    memcpy(m_rom, main_program, sizeof(main_program));
+    memcpy(m_rom + 0x0066u, nmi_handler, sizeof(nmi_handler));
+
+    NgNeoAudio *audio = ng_neogeo_audio_create();
+    CHECK(audio != NULL);
+    ng_neogeo_audio_set_roms(audio, m_rom, sizeof(m_rom), NULL, 0u, NULL, 0u);
+    ng_neogeo_audio_reset(audio);
+    ng_neogeo_audio_advance_z80_cycles(audio, 40u);
+    CHECK(ng_neogeo_audio_nmi_enabled(audio) == 1u);
+
+    /* MAME's generic_latch_8 is a single pending byte, not a FIFO.  A second
+       68000 sound write before the Z80 reads port $00 overwrites the first
+       latched command and should still produce only one NMI service. */
+    ng_neogeo_audio_write_command(audio, 0x11u);
+    ng_neogeo_audio_write_command(audio, 0x22u);
+    ng_neogeo_audio_advance_z80_cycles(audio, 240u);
+
+    CHECK(ng_neogeo_audio_nmi_service_count(audio) == 1u);
+    CHECK(ng_neogeo_audio_ym_write_count(audio) == 1u);
+    NgNeoAudioYmWrite last = ng_neogeo_audio_last_ym_write(audio);
+    CHECK(last.port == 1u);
+    CHECK(last.address == 0x22u);
+    CHECK(last.data == 0x44u);
+    CHECK(ng_neogeo_audio_command_latch(audio) == 0x00u);
+
+    ng_neogeo_audio_destroy(audio);
+    return 0;
+}
+
 static int test_audio_ym2610_generates_samples(void) {
     NgNeoAudio *audio = ng_neogeo_audio_create();
     CHECK(audio != NULL);
@@ -299,6 +345,7 @@ int main(void) {
     if (test_audio_ram_window() != 0) return 1;
     if (test_audio_z80_polls_command_and_writes_ym() != 0) return 1;
     if (test_audio_nmi_command_path() != 0) return 1;
+    if (test_audio_pending_command_overwrites_before_nmi_service() != 0) return 1;
     if (test_audio_ym2610_generates_samples() != 0) return 1;
     if (test_audio_ym2610_combines_v_rom_chunks_for_adpcm() != 0) return 1;
     if (test_audio_tracks_adpcm_b_keyon_diagnostics() != 0) return 1;
