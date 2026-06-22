@@ -79,9 +79,9 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=686 discovery_files=0 jump_tables=74 runtime_dispatch=60
-function candidates: 52209
-dispatch audit: sites=8850 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
+game config functions: entry=0 extra=687 discovery_files=0 jump_tables=74 runtime_dispatch=60
+function candidates: 52241
+dispatch audit: sites=8861 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
 
@@ -127,7 +127,7 @@ coin at refresh 1000, P1 start at 12000, and P1 A at 13200 reaches actual
 Mission 1 gameplay by refresh 18000 with no dispatch miss. That run stops at
 `dispatches=19255025 frame=18000 scanline=0`, renders a gameplay frame in the
 forest stage, and produces real game-driven audio after the M1 banking fix
-(`audio_nonzero=10609677`, `audio_peak=19747`, `sound_cmds=79`, `cmd_ack=79`,
+(`audio_nonzero=8931454`, `audio_peak=20868`, `sound_cmds=79`, `cmd_read=79`, `cmd_clear=0`,
 `last_sound=$D5`). The last sound-side writes are no longer just YM timer
 registers; the recent log includes YM port-3 ADPCM/FM register writes such as
 `p3[$3D]=$02`, `p3[$4D]=$7F`, and `p3[$A5]=$31`.
@@ -146,11 +146,11 @@ preceding `$083Bxx/$08B3xx` family. That pushed the audit above the older
 8192-site storage ceiling, so dispatch-audit site storage now follows the
 65536 discovery-candidate cap;
 `tests/test_dispatch_audit.c` covers an 8300-site audit and the Metal Slug
-static audit reports `sites=8850` without truncation. Later gameplay/manual
+static audit reports `sites=8861` without truncation. Later gameplay/manual
 frontiers at `$03FC38` and `$04D70C` were seeded together with their exact
 `LEA target,A1; MOVE.L A1,(A6)` continuations in the neighboring
 `$03FC38-$03FCA4` and `$04D6EC-$04D81A` object-state chains, leaving the
-dispatch audit clean at `sites=8850`.
+dispatch audit clean at `sites=8861`.
 Manual gameplay with audio later reached `$03CD3E`; that target is part of the
 same banked object-record block at `$17F0xx-$1807xx` whose longwords point at a
 compact fixed-code sprite-attribute callback family. The config now seeds the
@@ -159,6 +159,9 @@ exact RTS-separated entries sharing the `$03CCD2` helper (`$03CD3E`, `$03CD70`,
 `$03D010`, `$03D042`, `$03D074`, `$03D0A6`, `$03D104`, `$03D162`, `$03D1C0`,
 `$03D21E`, `$03D27C`, `$03D2DA`, and `$03D338`) instead of widening across the
 surrounding mixed code/data.
+A later attract/gameplay run hit `$04F46A` from the `$096B9C` selected action
+records; the record at `$096BE4` embeds that exact object-state initializer, so
+the config now seeds just `$04F46A` alongside the existing `$04D7xx` family.
 
 The same manual run also made the first obvious audio gap concrete: music/PCM
 was audible, but short effects such as shots/bombs were silent. Grounding this
@@ -182,11 +185,12 @@ resampling now follows MAME's `OPN_FIDELITY_MED` YM2610 stream rate
 (`clock/144`, about 55.6 kHz on Neo Geo), applies the same SSG/FM+ADPCM route
 weights, and averages native chip samples into each host audio frame instead of
 retaining only the last native sample.
-The post-command Z80 catch-up is now latch-read bounded: after a 68000 sound
-write, the live host runs the M1 CPU only until the command latch is read or
-cleared, with the previous 50 us window retained only as a safety cap. Shutdown
-logs report `cmd_ack` alongside NMI count/latch/reply bytes so manual jingle/SFX
-reports can show whether commands are being consumed or merely queued.
+The post-command Z80 catch-up now runs through a Z80-side latch clear/write when
+the M1 program performs one, with the previous 50 us window retained as a safety
+cap. Metal Slug's M1 commonly acknowledges commands by reading the latch without
+a separate clear, so stopping at the read alone left the BIOS jingle stuck on one
+note; shutdown logs now report `cmd_read`/`cmd_clear` alongside `cmd_ack`, NMI
+count, latch, and reply bytes.
 
 The live host now presents on emulated frame boundaries by default, and those
 boundaries come from generated 68k cycle hooks rather than an arbitrary
@@ -1875,7 +1879,7 @@ and `V` are only trusted where generated-exec tests cover them.
   whole M1; bank selection math must use that effective region, not the raw
   0x20000 size. After the fix, `build/neo-audio-probe ... 0xD5` renders nonzero
   samples, the live host's `m` diagnostic and `--audio-test-command` docs now
-  use `$D5`, and the 18k gameplay smoke reports `audio_nonzero=10609677` with
+  use `$D5`, and the 18k gameplay smoke reports `audio_nonzero=8931454` with
   real YM port-3/ADPCM/FM register writes instead of only timer register `$27`.
 
 - local: Adjusted live SDL audio queue handling after audible speed-up reports.
@@ -1886,22 +1890,26 @@ and `V` are only trusted where generated-exec tests cover them.
   separated from YM/Z80 command or sample-decoding issues.
 
 - local: Grounded the live host's 68000->Z80 sound delivery against MAME and
-  MiSTer, then made the coarse-host catch-up stop on the actual Z80-side
-  command-latch acknowledge instead of always consuming the whole 50us window.
-  MAME's `generic_latch_8` and MiSTer's `c1_regs`/`z80ctrl` both model one
-  command latch, NMI asserted on the 68000 write edge, and clear/read behavior
-  on the Z80 side; the live host still keeps the 50us window as a safety cap
-  because 68000 writes arrive in coarse generated-host batches rather than as
-  truly parallel bus edges. Shutdown logs now include `cmd_ack` with the Z80
+  MiSTer. The read-bounded experiment was too early for Metal Slug's M1 and made
+  the BIOS jingle stick on one note, because the handler still needed cycles
+  after reading the latch to write YM/ADPCM registers. The live host now runs
+  through a Z80-side clear/write when present, otherwise to the 50us safety cap.
+  Shutdown logs include `cmd_ack`, `cmd_read`, and `cmd_clear` with the Z80
   NMI-service count and command latch/reply bytes.
 
 - local: Seeded the `$03CD3E` gameplay dispatch miss by adding the exact
   `$17F0xx-$1807xx` banked object-record sprite-attribute callback family
   (`$03CD3E` through `$03D338`, non-contiguous). Rebuilding Metal Slug now reports
-  `game config functions: entry=0 extra=686 discovery_files=0 jump_tables=74
-  runtime_dispatch=60`, `function candidates: 52209`, and a clean dispatch audit
-  at `sites=8850 missing_direct=0 external_direct=24 computed=0
+  `game config functions: entry=0 extra=687 discovery_files=0 jump_tables=74
+  runtime_dispatch=60`, `function candidates: 52241`, and a clean dispatch audit
+  at `sites=8861 missing_direct=0 external_direct=24 computed=0
   runtime_computed=60 jump_tables=1`.
+
+- local: Seeded the follow-up `$04F46A` dispatch miss from the `$096B9C` action
+  record selector. The dummy no-throttle attract smoke reaches 5000 refreshes
+  with no dispatch miss and shows Metal Slug's M1 reads but does not separately
+  clear the latch in that path (`sound_cmds=20`, `cmd_read=20`, `cmd_clear=0`),
+  matching why the catch-up cannot stop at the first read.
 
 ## Next Steps
 

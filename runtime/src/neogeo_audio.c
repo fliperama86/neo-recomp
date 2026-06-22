@@ -27,6 +27,8 @@ struct NgNeoAudio {
     uint8_t nmi_enabled;
     uint8_t nmi_pending;
     uint32_t command_ack_count;
+    uint32_t command_read_count;
+    uint32_t command_clear_count;
     uint32_t nmi_service_count;
 
     uint8_t ym_address[2];
@@ -290,6 +292,7 @@ static uint8_t ng_audio_port_read_impl(NgNeoAudio *audio, uint16_t port_addr) {
     switch (port_addr & 0x000Fu) {
     case 0x00u:
         ++audio->command_ack_count;
+        ++audio->command_read_count;
         audio->nmi_pending = 0u;
         return audio->command_latch;
     case 0x04u:
@@ -347,6 +350,7 @@ static void ng_audio_port_write_impl(NgNeoAudio *audio,
         (void)value;
         audio->command_latch = 0u;
         ++audio->command_ack_count;
+        ++audio->command_clear_count;
         return;
     case 0x04u:
         ng_audio_ym_write(audio, 0u, value);
@@ -512,10 +516,10 @@ void ng_neogeo_audio_advance_z80_cycles(NgNeoAudio *audio, uint32_t cycles) {
     }
 }
 
-uint32_t ng_neogeo_audio_advance_z80_cycles_until_command_ack(
+uint32_t ng_neogeo_audio_advance_z80_cycles_until_command_clear(
     NgNeoAudio *audio,
     uint32_t max_cycles,
-    uint32_t initial_ack_count) {
+    uint32_t initial_clear_count) {
     if (!audio || max_cycles == 0u) {
         return 0u;
     }
@@ -524,7 +528,7 @@ uint32_t ng_neogeo_audio_advance_z80_cycles_until_command_ack(
     uint32_t instructions = 0u;
     uint32_t max_instructions = max_cycles * 2u + 1024u;
     while ((uint32_t)(audio->cpu.cyc - start) < max_cycles &&
-           audio->command_ack_count == initial_ack_count &&
+           audio->command_clear_count == initial_clear_count &&
            instructions < max_instructions) {
         ng_audio_step_z80(audio);
         ++instructions;
@@ -581,6 +585,14 @@ uint16_t ng_neogeo_audio_z80_pc(const NgNeoAudio *audio) {
 
 uint32_t ng_neogeo_audio_command_ack_count(const NgNeoAudio *audio) {
     return audio ? audio->command_ack_count : 0u;
+}
+
+uint32_t ng_neogeo_audio_command_read_count(const NgNeoAudio *audio) {
+    return audio ? audio->command_read_count : 0u;
+}
+
+uint32_t ng_neogeo_audio_command_clear_count(const NgNeoAudio *audio) {
+    return audio ? audio->command_clear_count : 0u;
 }
 
 uint32_t ng_neogeo_audio_nmi_service_count(const NgNeoAudio *audio) {

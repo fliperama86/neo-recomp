@@ -770,8 +770,8 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     if (!ctx || !ctx->audio) {
         return;
     }
-    uint32_t initial_ack_count =
-        ng_neogeo_audio_command_ack_count(ctx->audio);
+    uint32_t initial_clear_count =
+        ng_neogeo_audio_command_clear_count(ctx->audio);
     ng_neogeo_audio_write_command(ctx->audio, command);
     ++ctx->sound_commands;
     ctx->last_sound_command = command;
@@ -781,10 +781,12 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     /* MAME and MiSTer both model a single command latch with NMI asserted on
        the 68000 sound-write edge and cleared when the Z80 reads/clears the
        latch.  The live host sees generated 68000 writes in coarse callback
-       batches instead of true parallel CPU time, so service the Z80 only until
-       the command is acknowledged, bounded by the old 50 us safety cap.  This
-       keeps rapid Metal Slug sound sequences from collapsing while avoiding a
-       fixed extra Z80/YM slice after commands that were read immediately. */
+       batches instead of true parallel CPU time, so service the Z80 through the
+       Z80-side clear/write when the M1 program performs one, bounded by the
+       existing 50 us safety cap.  Metal Slug's M1 commonly only reads the
+       latch (MAME's generic latch treats the read as acknowledge), so the cap is
+       still required to let the command handler run far enough to write YM/ADPCM
+       registers after the read. */
     uint32_t command_service_z80_cycles =
         (uint32_t)(((uint64_t)NG_NEO_AUDIO_CPU_CLOCK_HZ *
                         (uint64_t)NG_LIVE_AUDIO_COMMAND_SERVICE_MAX_US +
@@ -796,10 +798,10 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
 
     uint64_t before_z80 = ng_neogeo_audio_z80_cycles(ctx->audio);
     uint32_t advanced_z80 =
-        ng_neogeo_audio_advance_z80_cycles_until_command_ack(
+        ng_neogeo_audio_advance_z80_cycles_until_command_clear(
             ctx->audio,
             command_service_z80_cycles,
-            initial_ack_count);
+            initial_clear_count);
     uint64_t after_z80 = ng_neogeo_audio_z80_cycles(ctx->audio);
     if (after_z80 >= before_z80) {
         advanced_z80 = (uint32_t)(after_z80 - before_z80);
@@ -2198,7 +2200,7 @@ int main(int argc, char **argv) {
             "live host stopped: dispatches=%llu frame=%u scanline=%u budget_stop=$%06X "
             "audio_frames=%llu audio_nonzero=%llu audio_peak=%d "
             "audio_qmax_ms=%u audio_qwait_ms=%llu audio_qclears=%u "
-            "sound_cmds=%llu nmi=%u cmd_ack=%u last_sound=$%02X latch=$%02X reply=$%02X "
+            "sound_cmds=%llu nmi=%u cmd_ack=%u cmd_read=%u cmd_clear=%u last_sound=$%02X latch=$%02X reply=$%02X "
             "ym_writes=%u ym_reads=%u\n",
             (unsigned long long)ng_generated_smoke_dispatch_count(),
             ng_neogeo_frame_count(),
@@ -2213,6 +2215,8 @@ int main(int argc, char **argv) {
             (unsigned long long)live_audio.sound_commands,
             ng_neogeo_audio_nmi_service_count(live_audio.audio),
             ng_neogeo_audio_command_ack_count(live_audio.audio),
+            ng_neogeo_audio_command_read_count(live_audio.audio),
+            ng_neogeo_audio_command_clear_count(live_audio.audio),
             live_audio.last_sound_command,
             ng_neogeo_audio_command_latch(live_audio.audio),
             ng_neogeo_audio_reply_latch(live_audio.audio),

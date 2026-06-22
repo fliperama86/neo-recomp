@@ -195,23 +195,31 @@ static int test_audio_command_ack_counter_tracks_read_and_clear(void) {
     CHECK(audio != NULL);
 
     CHECK(ng_neogeo_audio_command_ack_count(audio) == 0u);
+    CHECK(ng_neogeo_audio_command_read_count(audio) == 0u);
+    CHECK(ng_neogeo_audio_command_clear_count(audio) == 0u);
     ng_neogeo_audio_write_command(audio, 0x77u);
     CHECK(ng_neogeo_audio_nmi_pending(audio) == 1u);
     CHECK(ng_neogeo_audio_command_ack_count(audio) == 0u);
+    CHECK(ng_neogeo_audio_command_read_count(audio) == 0u);
+    CHECK(ng_neogeo_audio_command_clear_count(audio) == 0u);
 
     CHECK(ng_neogeo_audio_debug_port_read(audio, 0x0000u) == 0x77u);
     CHECK(ng_neogeo_audio_nmi_pending(audio) == 0u);
     CHECK(ng_neogeo_audio_command_ack_count(audio) == 1u);
+    CHECK(ng_neogeo_audio_command_read_count(audio) == 1u);
+    CHECK(ng_neogeo_audio_command_clear_count(audio) == 0u);
 
     ng_neogeo_audio_debug_port_write(audio, 0x0000u, 0x00u);
     CHECK(ng_neogeo_audio_command_latch(audio) == 0x00u);
     CHECK(ng_neogeo_audio_command_ack_count(audio) == 2u);
+    CHECK(ng_neogeo_audio_command_read_count(audio) == 1u);
+    CHECK(ng_neogeo_audio_command_clear_count(audio) == 1u);
 
     ng_neogeo_audio_destroy(audio);
     return 0;
 }
 
-static int test_audio_advance_until_command_ack_stops_at_latch_read(void) {
+static int test_audio_advance_until_command_clear_runs_past_latch_read(void) {
     uint8_t m_rom[0x20000u];
     memset(m_rom, 0, sizeof(m_rom));
 
@@ -238,22 +246,69 @@ static int test_audio_advance_until_command_ack_stops_at_latch_read(void) {
     CHECK(ng_neogeo_audio_nmi_enabled(audio) == 1u);
 
     uint32_t initial_ack = ng_neogeo_audio_command_ack_count(audio);
+    uint32_t initial_read = ng_neogeo_audio_command_read_count(audio);
+    uint32_t initial_clear = ng_neogeo_audio_command_clear_count(audio);
     ng_neogeo_audio_write_command(audio, 0x33u);
     uint32_t advanced =
-        ng_neogeo_audio_advance_z80_cycles_until_command_ack(
+        ng_neogeo_audio_advance_z80_cycles_until_command_clear(
             audio,
             240u,
-            initial_ack);
+            initial_clear);
 
     CHECK(advanced > 0u);
-    CHECK(ng_neogeo_audio_command_ack_count(audio) == initial_ack + 1u);
-    CHECK(ng_neogeo_audio_ym_write_count(audio) == 0u);
-
-    ng_neogeo_audio_advance_z80_cycles(audio, 240u);
+    CHECK(ng_neogeo_audio_command_read_count(audio) == initial_read + 1u);
+    CHECK(ng_neogeo_audio_command_clear_count(audio) == initial_clear + 1u);
+    CHECK(ng_neogeo_audio_command_ack_count(audio) == initial_ack + 2u);
     CHECK(ng_neogeo_audio_ym_write_count(audio) == 1u);
     NgNeoAudioYmWrite last = ng_neogeo_audio_last_ym_write(audio);
     CHECK(last.address == 0x33u);
     CHECK(last.data == 0x55u);
+
+    ng_neogeo_audio_destroy(audio);
+    return 0;
+}
+
+static int test_audio_advance_until_command_clear_uses_cap_without_clear(void) {
+    uint8_t m_rom[0x20000u];
+    memset(m_rom, 0, sizeof(m_rom));
+
+    const uint8_t main_program[] = {
+        0xD3u, 0x08u,       /* out ($08),a: enable NMI */
+        0x18u, 0xFEu,       /* jr $0002 */
+    };
+    const uint8_t nmi_handler[] = {
+        0xDBu, 0x00u,       /* in a,($00): acknowledge command */
+        0xD3u, 0x04u,       /* out ($04),a: YM2610 address A */
+        0x3Eu, 0x66u,       /* ld a,$66 */
+        0xD3u, 0x05u,       /* out ($05),a: YM2610 data A */
+        0xC9u,              /* ret: no explicit latch clear */
+    };
+    memcpy(m_rom, main_program, sizeof(main_program));
+    memcpy(m_rom + 0x0066u, nmi_handler, sizeof(nmi_handler));
+
+    NgNeoAudio *audio = ng_neogeo_audio_create();
+    CHECK(audio != NULL);
+    ng_neogeo_audio_set_roms(audio, m_rom, sizeof(m_rom), NULL, 0u, NULL, 0u);
+    ng_neogeo_audio_reset(audio);
+    ng_neogeo_audio_advance_z80_cycles(audio, 40u);
+    CHECK(ng_neogeo_audio_nmi_enabled(audio) == 1u);
+
+    uint32_t initial_read = ng_neogeo_audio_command_read_count(audio);
+    uint32_t initial_clear = ng_neogeo_audio_command_clear_count(audio);
+    ng_neogeo_audio_write_command(audio, 0x44u);
+    uint32_t advanced =
+        ng_neogeo_audio_advance_z80_cycles_until_command_clear(
+            audio,
+            240u,
+            initial_clear);
+
+    CHECK(advanced >= 240u);
+    CHECK(ng_neogeo_audio_command_read_count(audio) == initial_read + 1u);
+    CHECK(ng_neogeo_audio_command_clear_count(audio) == initial_clear);
+    CHECK(ng_neogeo_audio_ym_write_count(audio) == 1u);
+    NgNeoAudioYmWrite last = ng_neogeo_audio_last_ym_write(audio);
+    CHECK(last.address == 0x44u);
+    CHECK(last.data == 0x66u);
 
     ng_neogeo_audio_destroy(audio);
     return 0;
@@ -416,7 +471,8 @@ int main(void) {
     if (test_audio_nmi_command_path() != 0) return 1;
     if (test_audio_pending_command_overwrites_before_nmi_service() != 0) return 1;
     if (test_audio_command_ack_counter_tracks_read_and_clear() != 0) return 1;
-    if (test_audio_advance_until_command_ack_stops_at_latch_read() != 0) return 1;
+    if (test_audio_advance_until_command_clear_runs_past_latch_read() != 0) return 1;
+    if (test_audio_advance_until_command_clear_uses_cap_without_clear() != 0) return 1;
     if (test_audio_ym2610_generates_samples() != 0) return 1;
     if (test_audio_ym2610_combines_v_rom_chunks_for_adpcm() != 0) return 1;
     if (test_audio_tracks_adpcm_b_keyon_diagnostics() != 0) return 1;

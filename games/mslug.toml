@@ -271,6 +271,9 @@ extra = [
   0x04D7DC,
   0x04D7EE,
   0x04D81A,
+  # Later entry from the same $096B9C-selected action-record block; the record
+  # at $096BE4 embeds $04F46A as an exact object-state initializer.
+  0x04F46A,
   0x051F94,
   0x0523FA,
   0x08FD68,
