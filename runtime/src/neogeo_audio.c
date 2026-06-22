@@ -33,6 +33,8 @@ struct NgNeoAudio {
     uint32_t ym_read_count;
     NgNeoAudioYmWrite ym_write_log[NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY];
     uint32_t ym_write_log_head;
+    uint8_t adpcm_a_regs[0x30];
+    NgNeoAudioAdpcmAEvent last_adpcm_a;
     NgNeoYm2610 *ym;
 };
 
@@ -154,6 +156,54 @@ static void ng_audio_record_ym_write(NgNeoAudio *audio,
     ++audio->ym_write_count;
 }
 
+static void ng_audio_refresh_last_adpcm_a_event(NgNeoAudio *audio) {
+    if (!audio || audio->last_adpcm_a.keyon_count == 0u ||
+        audio->last_adpcm_a.channel >= 6u) {
+        return;
+    }
+
+    uint8_t ch = audio->last_adpcm_a.channel;
+    audio->last_adpcm_a.start_addr =
+        (uint32_t)(audio->adpcm_a_regs[0x10u + ch] |
+                   ((uint32_t)audio->adpcm_a_regs[0x18u + ch] << 8)) << 8;
+    audio->last_adpcm_a.end_addr =
+        (uint32_t)(audio->adpcm_a_regs[0x20u + ch] |
+                   ((uint32_t)audio->adpcm_a_regs[0x28u + ch] << 8)) << 8;
+    audio->last_adpcm_a.level = audio->adpcm_a_regs[0x08u + ch] & 0x1Fu;
+    audio->last_adpcm_a.total_level = audio->adpcm_a_regs[0x01u] & 0x3Fu;
+    audio->last_adpcm_a.pan_left =
+        (audio->adpcm_a_regs[0x08u + ch] & 0x80u) ? 1u : 0u;
+    audio->last_adpcm_a.pan_right =
+        (audio->adpcm_a_regs[0x08u + ch] & 0x40u) ? 1u : 0u;
+}
+
+static void ng_audio_track_ym_data_write(NgNeoAudio *audio,
+                                         uint8_t port,
+                                         uint8_t address,
+                                         uint8_t data) {
+    if (!audio || port != 3u || address >= sizeof(audio->adpcm_a_regs)) {
+        return;
+    }
+
+    audio->adpcm_a_regs[address] = data;
+    if (address == 0x00u) {
+        uint8_t channels = data & 0x3Fu;
+        uint8_t keyoff = data & 0x80u;
+        for (uint8_t ch = 0; ch < 6u; ++ch) {
+            if ((channels & (uint8_t)(1u << ch)) == 0u) {
+                continue;
+            }
+            if (keyoff) {
+                ++audio->last_adpcm_a.keyoff_count;
+            } else {
+                ++audio->last_adpcm_a.keyon_count;
+                audio->last_adpcm_a.channel = ch;
+            }
+        }
+    }
+    ng_audio_refresh_last_adpcm_a_event(audio);
+}
+
 static uint8_t ng_audio_ym_read(NgNeoAudio *audio, uint8_t port) {
     if (!audio) {
         return 0xFFu;
@@ -177,6 +227,7 @@ static void ng_audio_ym_write(NgNeoAudio *audio, uint8_t port, uint8_t data) {
 
     uint8_t address = audio->ym_address[(port >> 1u) & 1u];
     ng_audio_record_ym_write(audio, port, address, data);
+    ng_audio_track_ym_data_write(audio, port, address, data);
     if (audio->ym) {
         ng_neogeo_ym2610_write(audio->ym, port, data);
     }
@@ -361,6 +412,7 @@ void ng_neogeo_audio_reset(NgNeoAudio *audio) {
     audio->bank_c = 0x0Eu;
     audio->bank_d = 0x1Eu;
     audio->reply_latch = 0xFFu;
+    audio->last_adpcm_a.channel = 0xFFu;
     if (audio->ym) {
         ng_neogeo_ym2610_set_roms(audio->ym, v1_rom, v1_rom_size, v2_rom, v2_rom_size);
         ng_neogeo_ym2610_reset(audio->ym);
@@ -495,6 +547,13 @@ uint32_t ng_neogeo_audio_copy_recent_ym_writes(const NgNeoAudio *audio,
                                      NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY];
     }
     return count;
+}
+
+NgNeoAudioAdpcmAEvent ng_neogeo_audio_last_adpcm_a_event(const NgNeoAudio *audio) {
+    NgNeoAudioAdpcmAEvent empty;
+    memset(&empty, 0, sizeof(empty));
+    empty.channel = 0xFFu;
+    return audio ? audio->last_adpcm_a : empty;
 }
 
 int ng_neogeo_audio_copy_work_ram(const NgNeoAudio *audio,

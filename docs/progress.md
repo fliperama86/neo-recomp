@@ -79,15 +79,15 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=627 discovery_files=0 jump_tables=73 runtime_dispatch=60
-function candidates: 50046
-dispatch audit: sites=8371 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
+game config functions: entry=0 extra=627 discovery_files=0 jump_tables=74 runtime_dispatch=60
+function candidates: 51609
+dispatch audit: sites=8768 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
 
 The discovery candidate cap is 65536 entries, dispatch-audit site storage is
 tied to that same discovery cap, and game TOML jump-table metadata capacity is
-128 entries so the current 73 Metal Slug tables are not silently truncated. The
+128 entries so the current 74 Metal Slug tables are not silently truncated. The
 cart audit remains green under `--fail-on-dispatch-gaps`.
 `games/mslug.toml` declares the Neo Geo program address map (`$000000-$0FFFFF`
 fixed P-ROM and `$200000-$2FFFFF` bank window), seeds structured task/callback
@@ -132,14 +132,16 @@ forest stage, and produces real game-driven audio after the M1 banking fix
 registers; the recent log includes YM port-3 ADPCM/FM register writes such as
 `p3[$3D]=$02`, `p3[$4D]=$7F`, and `p3[$A5]=$31`.
 
-Manual gameplay with input/audio then exposed the next concrete cart callback
-frontier at `$08E4E6` when an enemy family enters the screen. The
-`$0E82D0-$0E82FC` abs32 callback table now seeds that compact enemy/object state
-run, and the generated cart dispatch includes `ng_func_08E4E6`. That pushed the
-audit above the older 8192-site storage ceiling, so dispatch-audit site storage
-now follows the 65536 discovery-candidate cap; `tests/test_dispatch_audit.c`
-covers an 8300-site audit and the Metal Slug static audit reports `sites=8371`
-without truncation.
+Manual gameplay with input/audio then exposed concrete cart callback frontiers
+at `$08E4E6` when an enemy family enters the screen and later `$04F70E` as
+player-control enemy/effect objects advanced. The `$0E82D0-$0E82FC` abs32
+callback table seeds the first compact enemy/object state run, and the
+`$0E840C-$0E8438` vector-page slice seeds the live-action `$04F7xx` sibling run
+without widening back into the preceding `$083Bxx/$08B3xx` family. That pushed
+the audit above the older 8192-site storage ceiling, so dispatch-audit site
+storage now follows the 65536 discovery-candidate cap;
+`tests/test_dispatch_audit.c` covers an 8300-site audit and the Metal Slug
+static audit reports `sites=8768` without truncation.
 
 The same manual run also made the first obvious audio gap concrete: music/PCM
 was audible, but short effects such as shots/bombs were silent. Grounding this
@@ -150,6 +152,15 @@ passing those chunks as `v1`/`v2`; the YM2610 wrapper now presents them as one
 combined V-ROM address space to both ADPCM engines, and
 `tests/test_neogeo_audio.c` covers an ADPCM-A sample that starts in the second
 chunk.
+
+Because short effects still need manual validation, the audio path now keeps a
+small ADPCM-A key-on diagnostic alongside the existing YM write ring. Live-host
+exit logs include the key-on/key-off counts, last ADPCM-A channel, sample
+start/end address, channel level, total level, and pan bits so the next SFX
+report can distinguish "the game requested an effect but the host mixed it too
+quietly" from "the M1/Z80 never reached the effect command." YM2610 output
+resampling now averages the generated native 500 kHz samples into each host
+audio frame instead of retaining only the last native sample.
 
 The live host now presents on emulated frame boundaries by default, and those
 boundaries come from generated 68k cycle hooks rather than an arbitrary

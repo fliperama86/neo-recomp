@@ -207,6 +207,18 @@ static int test_audio_ym2610_combines_v_rom_chunks_for_adpcm(void) {
     ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x00u);
     ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0x01u); /* key on ch0 */
 
+    NgNeoAudioAdpcmAEvent event =
+        ng_neogeo_audio_last_adpcm_a_event(audio);
+    CHECK(event.keyon_count == 1u);
+    CHECK(event.keyoff_count == 0u);
+    CHECK(event.channel == 0u);
+    CHECK(event.start_addr == 0x000100u);
+    CHECK(event.end_addr == 0x000100u);
+    CHECK(event.level == 0x1Fu);
+    CHECK(event.total_level == 0x3Fu);
+    CHECK(event.pan_left == 1u);
+    CHECK(event.pan_right == 1u);
+
     int16_t samples[512 * 2];
     memset(samples, 0, sizeof(samples));
     ng_neogeo_audio_generate(audio, samples, 512u, 48000u);
@@ -218,6 +230,19 @@ static int test_audio_ym2610_combines_v_rom_chunks_for_adpcm(void) {
         }
     }
     CHECK(nonzero != 0u);
+
+    ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x08u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0x80u);
+    event = ng_neogeo_audio_last_adpcm_a_event(audio);
+    CHECK(event.keyon_count == 1u);
+    CHECK(event.level == 0x00u);
+    CHECK(event.pan_left == 1u);
+    CHECK(event.pan_right == 0u);
+
+    ng_neogeo_audio_debug_port_write(audio, 0x0006u, 0x00u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0007u, 0x81u); /* key off ch0 */
+    event = ng_neogeo_audio_last_adpcm_a_event(audio);
+    CHECK(event.keyoff_count == 1u);
 
     ng_neogeo_audio_destroy(audio);
     return 0;

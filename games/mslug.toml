@@ -937,6 +937,16 @@ stride = 4
 format = "abs32"
 
 [[jump_table]]
+# Gameplay object/action callbacks in the same vector page reached once player
+# control starts spawning enemy/effect objects.  Seed the compact live-action
+# run that contains $04F70E and its sibling $04F7xx entries without widening
+# back into the preceding $083Bxx/$08B3xx object family.
+start = 0x0E840C
+end = 0x0E843C
+stride = 4
+format = "abs32"
+
+[[jump_table]]
 # Sprite/action callback targets reached by the two-level ROM lookup around
 # $04A09A.  The game selects one of four pointer tables, stores a target on the
 # stack while running setup code, then returns through `JMP (A0)`.

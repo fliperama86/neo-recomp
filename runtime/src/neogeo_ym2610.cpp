@@ -248,13 +248,28 @@ void ng_neogeo_ym2610_generate(NgNeoYm2610 *ym,
         if (backend.native_phase < 1.0) {
             backend.native_phase = 1.0;
         }
+        int64_t accum[3] = {0, 0, 0};
+        uint32_t generated = 0;
         while (backend.native_phase >= 1.0) {
             backend.chip.generate(&backend.last_output);
+            accum[0] += backend.last_output.data[0];
+            accum[1] += backend.last_output.data[1];
+            accum[2] += backend.last_output.data[2];
+            ++generated;
             backend.native_phase -= 1.0;
         }
+        if (generated == 0) {
+            accum[0] = backend.last_output.data[0];
+            accum[1] = backend.last_output.data[1];
+            accum[2] = backend.last_output.data[2];
+            generated = 1;
+        }
 
-        int32_t left = backend.last_output.data[0] + backend.last_output.data[2];
-        int32_t right = backend.last_output.data[1] + backend.last_output.data[2];
+        int32_t fm_adpcm_left = static_cast<int32_t>(accum[0] / generated);
+        int32_t fm_adpcm_right = static_cast<int32_t>(accum[1] / generated);
+        int32_t ssg_mono = static_cast<int32_t>(accum[2] / generated);
+        int32_t left = fm_adpcm_left + ssg_mono;
+        int32_t right = fm_adpcm_right + ssg_mono;
         stereo_out[i * 2u + 0u] = clamp_i16(left);
         stereo_out[i * 2u + 1u] = clamp_i16(right);
     }

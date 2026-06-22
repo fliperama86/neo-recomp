@@ -2165,6 +2165,23 @@ int main(int argc, char **argv) {
         fprintf(stderr, "\n");
     }
     if (live_audio.audio) {
+        NgNeoAudioAdpcmAEvent adpcm_a =
+            ng_neogeo_audio_last_adpcm_a_event(live_audio.audio);
+        if (adpcm_a.keyon_count != 0u || adpcm_a.keyoff_count != 0u) {
+            fprintf(stderr,
+                    "live audio ADPCM-A: keyons=%u keyoffs=%u last_ch=%u "
+                    "start=$%06X end=$%06X level=$%02X total=$%02X pan=%u%u\n",
+                    adpcm_a.keyon_count,
+                    adpcm_a.keyoff_count,
+                    adpcm_a.channel,
+                    adpcm_a.start_addr & 0x00FFFFFFu,
+                    adpcm_a.end_addr & 0x00FFFFFFu,
+                    adpcm_a.level,
+                    adpcm_a.total_level,
+                    adpcm_a.pan_left,
+                    adpcm_a.pan_right);
+        }
+
         NgNeoAudioYmWrite recent_writes[16];
         uint32_t write_count =
             ng_neogeo_audio_copy_recent_ym_writes(live_audio.audio,
