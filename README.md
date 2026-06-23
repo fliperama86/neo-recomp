@@ -304,13 +304,13 @@ yet; it reuses the headless runtime model and current renderer, but it is a
 real live host loop rather than a saved-snapshot reload.
 
 Current local status: the generated Metal Slug cart build is dispatch-audit
-clean with `function candidates: 52912` and
+clean with `function candidates: 52916` and
 `sites=9005 missing_direct=0 computed=0 runtime_computed=60`. The full test
 suite is `16/16` passing. The live host now uses cycle-derived frame timing and
 runs beyond the earlier `$C18662`/`$09B90A` dispatch frontiers, the former
 cart-requested soft-reset/BIOS-reset white-screen loop, and the observed
 `$092252` dynamic script dispatch miss plus the gameplay enemy callback miss at
-`$08E4E6`/`$04F70E`, the stage-script predicate miss at `$0919B0`, the
+`$08E4E6`/`$04F70E`, the stage-script predicate misses at `$0919B0`/`$091A60`, the
 object-state initializer misses at `$03FC38`/`$04D70C`/`$04F46A`/`$060E62`,
 the tiny SFX/spawn helper misses at `$04FA40`/`$04FA58`, and the
 sprite-attribute callback miss at `$03CD3E`. An automated cart-entry path with
@@ -325,8 +325,8 @@ Metal Slug, ADPCM-A/ADPCM-B key-on diagnostics in live logs, native-sample avera
 when resampling YM output to the host rate, MAME-style YM2610 stream
 fidelity/routes, real-time SDL queue pacing that preserves queued samples instead
 of dropping them when the host runs ahead, MAME/MiSTer-grounded single-byte
-sound-latch diagnostics, a MAME-style 50us post-command tight scheduling
-window for coarse host batches plus command read/clear diagnostics,
+sound-latch diagnostics, a MAME-style borrowed 50us post-command Z80 preadvance
+for coarse host batches plus command read/clear diagnostics,
 and a gameplay smoke with nonzero game-driven audio.
 
 

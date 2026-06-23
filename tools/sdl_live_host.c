@@ -52,11 +52,11 @@ typedef struct NgLiveAudio {
     SDL_AudioSpec spec;
     uint64_t last_cpu_cycles;
     uint64_t z80_cycle_remainder;
+    uint64_t z80_preadvance_cpu_credit;
     uint64_t sample_remainder;
     uint64_t generated_audio_frames;
     uint64_t nonzero_audio_samples;
     uint64_t sound_commands;
-    uint64_t command_quantum_until_cpu_cycles;
     uint64_t queue_wait_ms;
     uint32_t queue_clears;
     uint32_t max_queued_audio_bytes;
@@ -185,27 +185,35 @@ static int live_input_handle_key(NgLiveInput *input, SDL_Keycode key, int presse
         return 0;
     }
     switch (key) {
+    case SDLK_w:
     case SDLK_UP:
         live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_UP, pressed);
         return 1;
+    case SDLK_s:
     case SDLK_DOWN:
         live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_DOWN, pressed);
         return 1;
+    case SDLK_a:
     case SDLK_LEFT:
         live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_LEFT, pressed);
         return 1;
+    case SDLK_d:
     case SDLK_RIGHT:
         live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_RIGHT, pressed);
         return 1;
+    case SDLK_u:
     case SDLK_z:
         live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_A, pressed);
         return 1;
+    case SDLK_j:
     case SDLK_x:
         live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_B, pressed);
         return 1;
+    case SDLK_i:
     case SDLK_c:
         live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_C, pressed);
         return 1;
+    case SDLK_k:
     case SDLK_v:
         live_input_set_active_low(&input->p1_buttons, NG_LIVE_P1_D, pressed);
         return 1;
@@ -624,6 +632,16 @@ static void live_audio_advance_z80(NgLiveAudio *ctx, uint64_t m68k_cycles) {
         return;
     }
 
+    if (ctx->z80_preadvance_cpu_credit != 0u) {
+        if (ctx->z80_preadvance_cpu_credit >= m68k_cycles) {
+            ctx->z80_preadvance_cpu_credit -= m68k_cycles;
+            ng_neogeo_set_sound_reply(ng_neogeo_audio_reply_latch(ctx->audio));
+            return;
+        }
+        m68k_cycles -= ctx->z80_preadvance_cpu_credit;
+        ctx->z80_preadvance_cpu_credit = 0u;
+    }
+
     uint64_t total = ctx->z80_cycle_remainder + m68k_cycles;
     uint64_t z80_cycles = total / 3u;
     ctx->z80_cycle_remainder = total % 3u;
@@ -780,29 +798,34 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     /* MAME and MiSTer both model a single command latch with NMI asserted on
        the 68000 sound-write edge and cleared when the Z80 reads/clears the
        latch.  MAME's Neo Geo driver requests a 50us perfect-quantum after
-       writes so the two CPUs interleave closely; it does not run the sound
-       side an extra 50us ahead.  Mirror that in the live host by tightening the
-       cycle-observer sync window for the next 50us rather than generating an
-       immediate extra audio slice.  Metal Slug's M1 commonly acknowledges by
-       reading the latch without a separate clear, then still needs subsequent
-       cycles to write YM/ADPCM registers. */
-    uint64_t command_service_cycles =
-        ((uint64_t)NG_NEO_MAIN_CPU_CLOCK_HZ *
+       writes so the two CPUs interleave closely.  Mirror that in the live host
+       by running the Z80 side of that window immediately, but record it as
+       borrowed CPU time so subsequent normal audio syncs do not also run the
+       Z80 ahead or generate extra host-audio duration.  Metal Slug's M1
+       commonly acknowledges by reading the latch without a separate clear,
+       then still needs subsequent cycles to write YM/ADPCM registers. */
+    uint64_t command_service_z80_cycles =
+        ((uint64_t)NG_NEO_AUDIO_CPU_CLOCK_HZ *
              (uint64_t)NG_LIVE_AUDIO_COMMAND_SERVICE_MAX_US +
          999999ull) /
         1000000ull;
-    if (command_service_cycles == 0u) {
-        command_service_cycles = 1u;
+    if (command_service_z80_cycles == 0u) {
+        command_service_z80_cycles = 1u;
     }
-
-    uint64_t now = ng_neogeo_cpu_cycles();
-    uint64_t until = now + command_service_cycles;
-    if (until < now) {
-        until = UINT64_MAX;
+    uint64_t command_service_z80_credit = command_service_z80_cycles;
+    while (command_service_z80_cycles != 0u) {
+        uint32_t step = command_service_z80_cycles > UINT32_MAX ?
+            UINT32_MAX : (uint32_t)command_service_z80_cycles;
+        ng_neogeo_audio_advance_z80_cycles(ctx->audio, step);
+        command_service_z80_cycles -= step;
     }
-    if (until > ctx->command_quantum_until_cpu_cycles) {
-        ctx->command_quantum_until_cpu_cycles = until;
+    uint64_t cpu_credit = command_service_z80_credit * 3ull;
+    if (UINT64_MAX - ctx->z80_preadvance_cpu_credit < cpu_credit) {
+        ctx->z80_preadvance_cpu_credit = UINT64_MAX;
+    } else {
+        ctx->z80_preadvance_cpu_credit += cpu_credit;
     }
+    ng_neogeo_set_sound_reply(ng_neogeo_audio_reply_latch(ctx->audio));
 }
 
 static void live_audio_sync_to_runtime(NgLiveAudio *ctx) {
@@ -833,16 +856,8 @@ static void live_audio_cycle_observer(uint32_t addr, uint32_t cycles) {
     }
 
     uint64_t current_cycles = ng_neogeo_cpu_cycles();
-    uint64_t sync_cycles = NG_LIVE_AUDIO_SYNC_CYCLES;
-    if (ctx->command_quantum_until_cpu_cycles != 0u) {
-        if (current_cycles <= ctx->command_quantum_until_cpu_cycles) {
-            sync_cycles = 1u;
-        } else {
-            ctx->command_quantum_until_cpu_cycles = 0u;
-        }
-    }
     if (ng_neogeo_sound_command_events_available() != 0u ||
-        current_cycles - ctx->last_cpu_cycles >= sync_cycles) {
+        current_cycles - ctx->last_cpu_cycles >= NG_LIVE_AUDIO_SYNC_CYCLES) {
         live_audio_sync_to_runtime(ctx);
     }
 }
@@ -1936,7 +1951,7 @@ int main(int argc, char **argv) {
                 (uint32_t)live_audio.spec.freq : NG_LIVE_AUDIO_SAMPLE_RATE,
             ng_neogeo_audio_ym2610_native_sample_rate(live_audio.audio));
     fprintf(stderr,
-            "keys: q/Escape quit, Space pause/resume, n/. step one frame, m audio test, +/- cap; P1 arrows+Z/X/C/V, Enter start, 5 coin\n");
+            "keys: q/Escape quit, Space pause/resume, n/. step one frame, m audio test, +/- cap; P1 WASD+U/J/I/K, Enter start, 5 coin\n");
 
     int quit = 0;
     int paused = 0;

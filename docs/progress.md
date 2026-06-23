@@ -79,8 +79,8 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=690 discovery_files=0 jump_tables=74 runtime_dispatch=60
-function candidates: 52912
+game config functions: entry=0 extra=691 discovery_files=0 jump_tables=74 runtime_dispatch=60
+function candidates: 52916
 dispatch audit: sites=9005 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
@@ -127,22 +127,23 @@ coin at refresh 1000, P1 start at 12000, and P1 A at 13200 reaches actual
 Mission 1 gameplay by refresh 18000 with no dispatch miss. That run stops at
 `dispatches=19254986 frame=18000 scanline=0`, renders a gameplay frame in the
 forest stage, and produces real game-driven audio after the M1 banking fix
-(`audio_nonzero=8549561`, `audio_peak=15923`, `sound_cmds=79`, `cmd_read=79`, `cmd_clear=0`,
+(`audio_nonzero=8931509`, `audio_peak=20868`, `sound_cmds=79`, `cmd_read=79`, `cmd_clear=0`,
 `last_sound=$D5`). The last sound-side writes are no longer just YM timer
 registers; the recent log includes YM port-3 ADPCM/FM register writes such as
 `p3[$14]=$3D`, `p3[$2C]=$2B`, and `p1[$28]=$F2`.
 
 Manual gameplay with input/audio then exposed concrete cart callback frontiers
 at `$08E4E6` when an enemy family enters the screen and later `$04F70E` as
-player-control enemy/effect objects advanced. A follow-up manual run reached
-the stage-script predicate at `$0919B0`; that belongs to the same embedded
-scroll-threshold predicate family as the earlier `$09196E` frontier, so the
-current config seeds the exact `CMPI.W #imm,$106F50; Scc; LEA continuation,A1;
-RTS` predicate entries in that compact mixed command/data stream instead of
-widening the whole region. The `$0E82D0-$0E82FC` abs32 callback table seeds the
-first compact enemy/object state run, and the `$0E840C-$0E8438` vector-page
-slice seeds the live-action `$04F7xx` sibling run without widening back into the
-preceding `$083Bxx/$08B3xx` family. That pushed the audit above the older
+player-control enemy/effect objects advanced. Follow-up manual runs reached
+stage-script predicates at `$0919B0` and `$091A60`; they belong to the same
+embedded scroll-threshold predicate family as the earlier `$09196E` frontier,
+so the current config seeds the exact `CMPI.W #imm,$106F50/$106E88; Scc; LEA
+continuation,A1; RTS` predicate entries in that compact mixed command/data
+stream instead of widening the whole region. The `$0E82D0-$0E82FC` abs32
+callback table seeds the first compact enemy/object state run, and the
+`$0E840C-$0E8438` vector-page slice seeds the live-action `$04F7xx` sibling run
+without widening back into the preceding `$083Bxx/$08B3xx` family. That pushed
+the audit above the older
 8192-site storage ceiling, so dispatch-audit site storage now follows the
 65536 discovery-candidate cap;
 `tests/test_dispatch_audit.c` covers an 8300-site audit and the Metal Slug
@@ -1926,15 +1927,26 @@ and `V` are only trusted where generated-exec tests cover them.
 
 - local: Seeded the follow-up `$060E62` dispatch miss from the exact `$0E8238`
   object-vector entry reached just after entering Mission 1. Rebuilding Metal
-  Slug now reports `game config functions: entry=0 extra=690 discovery_files=0
-  jump_tables=74 runtime_dispatch=60`, `function candidates: 52912`, and a
+  Slug now reports `game config functions: entry=0 extra=691 discovery_files=0
+  jump_tables=74 runtime_dispatch=60`, `function candidates: 52916`, and a
   clean dispatch audit at `sites=9005 missing_direct=0 external_direct=24
   computed=0 runtime_computed=60 jump_tables=1`. The dummy 5000-refresh attract
   smoke, 18k automated coin/start/P1-A smoke, and a shorter early-start 9k stage
   smoke complete without a dispatch miss. The 18k run still reports nonzero
-  game-driven audio after moving post-command service to the tight scheduling
-  window (`audio_nonzero=8549561`, `audio_peak=15923`, `sound_cmds=79`,
-  `cmd_read=79`, `cmd_clear=0`, `ym_writes=84043`).
+  game-driven audio after moving post-command service to borrowed Z80 preadvance
+  timing (`audio_nonzero=8931509`, `audio_peak=20868`, `sound_cmds=79`,
+  `cmd_read=79`, `cmd_clear=0`, `ym_writes=92080`).
+
+- local: Mapped live P1 controls to WASD for directions and U/J/I/K for ABCD,
+  while preserving the old arrow-key and Z/X/C/V aliases. Seeded the concrete
+  `$091A60` stage-script predicate dispatch miss (`CMPI.W #0,$106E88; SNE; LEA
+  continuation,A1; RTS`). The MAME 50us command quantum is now represented as
+  a borrowed Z80 preadvance: the sound CPU services the command immediately,
+  then normal sync repays that credit so the host does not add extra audio
+  duration. Dummy smokes pass through 5000 attract refreshes and the 18k
+  automated gameplay path with no dispatch miss; the 18k run reports
+  `audio_nonzero=8931509`, `audio_peak=20868`, `sound_cmds=79`, `cmd_read=79`,
+  `cmd_clear=0`, and `ym_writes=92080`.
 
 ## Next Steps
 
