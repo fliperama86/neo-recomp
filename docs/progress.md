@@ -193,16 +193,19 @@ resampling now follows MAME's `OPN_FIDELITY_MED` YM2610 stream rate
 (`clock/144`, about 55.6 kHz on Neo Geo), applies the same SSG/FM+ADPCM route
 weights, and averages native chip samples into each host audio frame instead of
 retaining only the last native sample.
-The post-command Z80 catch-up now mirrors MAME's Neo Geo sound-write
-`perfect_quantum(50us)` more closely: a sound write opens a 50us tight
-cycle-observer scheduling window instead of immediately generating an extra
-50us audio slice. Metal Slug's M1 commonly acknowledges commands by reading the
-latch without a separate clear (`cmd_clear=0` in the live logs), and
-read/clear-bounded experiments stopped too early for the handler to finish its
-YM/ADPCM register writes, leaving the BIOS jingle stuck on one note. Shutdown
-logs now report `cmd_read`/`cmd_clear` alongside `cmd_ack`, NMI count, latch,
-and reply bytes so the eventual cooperative 68K/Z80 scheduler work has a
-concrete timing signal.
+The post-command Z80 catch-up now treats MAME's Neo Geo sound-write
+`perfect_quantum(50us)` as borrowed Z80 preadvance: a sound write immediately
+lets the M1/Z80 service that 50us window, then normal audio sync repays the same
+amount of Z80 time so the live host does not also add extra host-audio duration.
+Metal Slug's M1 commonly acknowledges commands by reading the latch without a
+separate clear (`cmd_clear=0` in the live logs), and read/clear-bounded
+experiments stopped too early for the handler to finish its YM/ADPCM register
+writes, leaving the BIOS jingle stuck on one note. The latest manual check can
+progress farther into Mission 1, but the BIOS jingle is still audibly sped up,
+so audio remains a timing/scheduler validation task rather than trusted
+playability. Shutdown logs report `cmd_read`/`cmd_clear` alongside `cmd_ack`,
+NMI count, latch, and reply bytes so the eventual cooperative 68K/Z80 scheduler
+work has a concrete timing signal.
 
 The live host now presents on emulated frame boundaries by default, and those
 boundaries come from generated 68k cycle hooks rather than an arbitrary
@@ -1948,6 +1951,12 @@ and `V` are only trusted where generated-exec tests cover them.
   `audio_nonzero=8931509`, `audio_peak=20868`, `sound_cmds=79`, `cmd_read=79`,
   `cmd_clear=0`, and `ym_writes=92080`.
 
+- local wrap-up: Manual SDL validation after the borrowed-quantum change still
+  reports a sped-up BIOS jingle, but gameplay progresses a little farther into
+  Mission 1. Keep the current code as the checkpoint: rendering/input are useful
+  for inspection, dispatch moved past the latest `$091A60` frontier, and the
+  next risky area is audio timing rather than more broad runtime surface area.
+
 ## Next Steps
 
 Use this loop:
@@ -1964,10 +1973,11 @@ Use this loop:
 
 Immediate next slice:
 
-- Stay on the live gameplay path now that rendering and game-driven audio both
-  have bounded validation. Manually spot-check SDL audio/video from a cached
-  host launch, then tighten any obvious sound/video timing glitches with MAME or
-  MiSTer as references rather than adding broad hardware at once.
+- Stay on the live gameplay/audio path: rendering and input are good enough for
+  Mission 1 inspection, but the BIOS jingle is still sped up. Next focus should
+  be MAME/MiSTer-grounded 68K/Z80/YM timing instead of blind audio constants;
+  compare command cadence, Z80 service windows, YM native sample production, and
+  SDL queue pacing against the references before changing mixer behavior.
 - Continue keeping input/full-BIOS boot as follow-ups unless they directly block
   gameplay/audio validation. If the live path stalls again, use the
   watchdog/backup/memcard/status/audio diagnostics to classify the next blocker

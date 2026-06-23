@@ -327,7 +327,10 @@ fidelity/routes, real-time SDL queue pacing that preserves queued samples instea
 of dropping them when the host runs ahead, MAME/MiSTer-grounded single-byte
 sound-latch diagnostics, a MAME-style borrowed 50us post-command Z80 preadvance
 for coarse host batches plus command read/clear diagnostics,
-and a gameplay smoke with nonzero game-driven audio.
+and a gameplay smoke with nonzero game-driven audio. Manual status: rendering/input
+are good enough to inspect Mission 1 and gameplay now progresses farther, but
+audio timing is still not trusted; the BIOS jingle remains audibly sped up and
+SFX/attract-mode coverage still needs MAME/MiSTer-grounded scheduler validation.
 
 
 ### Audio probe
