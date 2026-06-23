@@ -56,6 +56,7 @@ typedef struct NgLiveAudio {
     uint64_t generated_audio_frames;
     uint64_t nonzero_audio_samples;
     uint64_t sound_commands;
+    uint64_t command_quantum_until_cpu_cycles;
     uint64_t queue_wait_ms;
     uint32_t queue_clears;
     uint32_t max_queued_audio_bytes;
@@ -778,12 +779,13 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
 
     /* MAME and MiSTer both model a single command latch with NMI asserted on
        the 68000 sound-write edge and cleared when the Z80 reads/clears the
-       latch.  The live host sees generated 68000 writes in coarse callback
-       batches instead of true parallel CPU time, so give the Z80 a short
-       fixed service slice after each write.  Read/clear-bounded experiments
-       were too early for Metal Slug's M1 command handler: it usually
-       acknowledges by reading the latch without a separate clear, then still
-       needs cycles to write YM/ADPCM registers. */
+       latch.  MAME's Neo Geo driver requests a 50us perfect-quantum after
+       writes so the two CPUs interleave closely; it does not run the sound
+       side an extra 50us ahead.  Mirror that in the live host by tightening the
+       cycle-observer sync window for the next 50us rather than generating an
+       immediate extra audio slice.  Metal Slug's M1 commonly acknowledges by
+       reading the latch without a separate clear, then still needs subsequent
+       cycles to write YM/ADPCM registers. */
     uint64_t command_service_cycles =
         ((uint64_t)NG_NEO_MAIN_CPU_CLOCK_HZ *
              (uint64_t)NG_LIVE_AUDIO_COMMAND_SERVICE_MAX_US +
@@ -792,9 +794,15 @@ static void live_audio_send_command(NgLiveAudio *ctx, uint8_t command) {
     if (command_service_cycles == 0u) {
         command_service_cycles = 1u;
     }
-    live_audio_advance_to_cpu_cycle(ctx,
-                                    ctx->last_cpu_cycles +
-                                        command_service_cycles);
+
+    uint64_t now = ng_neogeo_cpu_cycles();
+    uint64_t until = now + command_service_cycles;
+    if (until < now) {
+        until = UINT64_MAX;
+    }
+    if (until > ctx->command_quantum_until_cpu_cycles) {
+        ctx->command_quantum_until_cpu_cycles = until;
+    }
 }
 
 static void live_audio_sync_to_runtime(NgLiveAudio *ctx) {
@@ -825,8 +833,16 @@ static void live_audio_cycle_observer(uint32_t addr, uint32_t cycles) {
     }
 
     uint64_t current_cycles = ng_neogeo_cpu_cycles();
+    uint64_t sync_cycles = NG_LIVE_AUDIO_SYNC_CYCLES;
+    if (ctx->command_quantum_until_cpu_cycles != 0u) {
+        if (current_cycles <= ctx->command_quantum_until_cpu_cycles) {
+            sync_cycles = 1u;
+        } else {
+            ctx->command_quantum_until_cpu_cycles = 0u;
+        }
+    }
     if (ng_neogeo_sound_command_events_available() != 0u ||
-        current_cycles - ctx->last_cpu_cycles >= NG_LIVE_AUDIO_SYNC_CYCLES) {
+        current_cycles - ctx->last_cpu_cycles >= sync_cycles) {
         live_audio_sync_to_runtime(ctx);
     }
 }

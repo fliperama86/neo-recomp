@@ -386,6 +386,9 @@ extra = [
   # Banked command stream at $2C1A7E embeds this one fixed-code spawn
   # callback among non-uniform command bytes.
   0x06034C,
+  # Exact stage object initializer embedded in the $0E8238 object-vector entry;
+  # reached by manual audio-enabled gameplay shortly after entering Mission 1.
+  0x060E62,
   0x060B7A,
   0x060B84,
   # Paired attract-mode object initializers immediately before the larger

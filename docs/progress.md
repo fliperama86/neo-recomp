@@ -79,9 +79,9 @@ interpreting unoptimized generated C. Generated
 cart C still compiles, and the static dispatch audit is clean:
 
 ```text
-game config functions: entry=0 extra=689 discovery_files=0 jump_tables=74 runtime_dispatch=60
-function candidates: 52253
-dispatch audit: sites=8863 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
+game config functions: entry=0 extra=690 discovery_files=0 jump_tables=74 runtime_dispatch=60
+function candidates: 52912
+dispatch audit: sites=9005 missing_direct=0 external_direct=24 computed=0 runtime_computed=60 jump_tables=1
 BIOS candidates: 65536 (truncated)
 ```
 
@@ -125,12 +125,12 @@ silently burning the dispatch cap.
 The current cart-entry live path also has a deterministic input automation smoke:
 coin at refresh 1000, P1 start at 12000, and P1 A at 13200 reaches actual
 Mission 1 gameplay by refresh 18000 with no dispatch miss. That run stops at
-`dispatches=19255025 frame=18000 scanline=0`, renders a gameplay frame in the
+`dispatches=19254986 frame=18000 scanline=0`, renders a gameplay frame in the
 forest stage, and produces real game-driven audio after the M1 banking fix
-(`audio_nonzero=8931454`, `audio_peak=20868`, `sound_cmds=79`, `cmd_read=79`, `cmd_clear=0`,
+(`audio_nonzero=8549561`, `audio_peak=15923`, `sound_cmds=79`, `cmd_read=79`, `cmd_clear=0`,
 `last_sound=$D5`). The last sound-side writes are no longer just YM timer
 registers; the recent log includes YM port-3 ADPCM/FM register writes such as
-`p3[$3D]=$02`, `p3[$4D]=$7F`, and `p3[$A5]=$31`.
+`p3[$14]=$3D`, `p3[$2C]=$2B`, and `p1[$28]=$F2`.
 
 Manual gameplay with input/audio then exposed concrete cart callback frontiers
 at `$08E4E6` when an enemy family enters the screen and later `$04F70E` as
@@ -146,7 +146,7 @@ preceding `$083Bxx/$08B3xx` family. That pushed the audit above the older
 8192-site storage ceiling, so dispatch-audit site storage now follows the
 65536 discovery-candidate cap;
 `tests/test_dispatch_audit.c` covers an 8300-site audit and the Metal Slug
-static audit reports `sites=8863` without truncation. Later gameplay/manual
+static audit reports `sites=9005` without truncation. Later gameplay/manual
 frontiers at `$03FC38` and `$04D70C` were seeded together with their exact
 `LEA target,A1; MOVE.L A1,(A6)` continuations in the neighboring
 `$03FC38-$03FCA4` and `$04D6EC-$04D81A` object-state chains, leaving the
@@ -166,6 +166,9 @@ The follow-up manual audio-enabled run hit `$04FA40`; the exact neighboring
 action records at `$1948A8`/`$1948BC`/`$1948D0`/`$1948E4` embed
 `$04FA40`/`$04FA58`, so those two tiny SFX/spawn helper callbacks are now
 seeded without widening the surrounding mixed data.
+Manual stage entry later reached `$060E62`; that target is the exact object
+initializer embedded in the `$0E8238` object-vector slot, so the config seeds
+that one fixed-code entry rather than widening the whole `$0E82xx` vector.
 
 The same manual run also made the first obvious audio gap concrete: music/PCM
 was audible, but short effects such as shots/bombs were silent. Grounding this
@@ -189,8 +192,10 @@ resampling now follows MAME's `OPN_FIDELITY_MED` YM2610 stream rate
 (`clock/144`, about 55.6 kHz on Neo Geo), applies the same SSG/FM+ADPCM route
 weights, and averages native chip samples into each host audio frame instead of
 retaining only the last native sample.
-The post-command Z80 catch-up is back to a fixed 50 us service slice after each
-68000 sound write. Metal Slug's M1 commonly acknowledges commands by reading the
+The post-command Z80 catch-up now mirrors MAME's Neo Geo sound-write
+`perfect_quantum(50us)` more closely: a sound write opens a 50us tight
+cycle-observer scheduling window instead of immediately generating an extra
+50us audio slice. Metal Slug's M1 commonly acknowledges commands by reading the
 latch without a separate clear (`cmd_clear=0` in the live logs), and
 read/clear-bounded experiments stopped too early for the handler to finish its
 YM/ADPCM register writes, leaving the BIOS jingle stuck on one note. Shutdown
@@ -1885,8 +1890,8 @@ and `V` are only trusted where generated-exec tests cover them.
   whole M1; bank selection math must use that effective region, not the raw
   0x20000 size. After the fix, `build/neo-audio-probe ... 0xD5` renders nonzero
   samples, the live host's `m` diagnostic and `--audio-test-command` docs now
-  use `$D5`, and the 18k gameplay smoke reports `audio_nonzero=8931454` with
-  real YM port-3/ADPCM/FM register writes instead of only timer register `$27`.
+  use `$D5`; subsequent 18k gameplay smokes report nonzero audio with real YM
+  port-3/ADPCM/FM register writes instead of only timer register `$27`.
 
 - local: Adjusted live SDL audio queue handling after audible speed-up reports.
   Real-time runs now wait for queued-audio headroom instead of clearing the SDL
@@ -1899,9 +1904,10 @@ and `V` are only trusted where generated-exec tests cover them.
   MiSTer. The read/clear-bounded experiments were too early for Metal Slug's M1
   and made the BIOS jingle stick on one note, because the handler commonly reads
   the latch without a separate clear and still needs cycles afterward to write
-  YM/ADPCM registers. The live host is back to the fixed 50us post-command Z80
-  service slice while keeping `cmd_ack`, `cmd_read`, and `cmd_clear` logs with
-  the Z80 NMI-service count and command latch/reply bytes.
+  YM/ADPCM registers. The live host now treats MAME's 50us perfect-quantum as a
+  temporary tight 68K/Z80 scheduling window rather than an immediate extra audio
+  slice, while keeping `cmd_ack`, `cmd_read`, and `cmd_clear` logs with the Z80
+  NMI-service count and command latch/reply bytes.
 
 - local: Seeded the `$03CD3E` gameplay dispatch miss by adding the exact
   `$17F0xx-$1807xx` banked object-record sprite-attribute callback family
@@ -1916,14 +1922,19 @@ and `V` are only trusted where generated-exec tests cover them.
 
 - local: Seeded the follow-up `$04FA40` dispatch miss plus the sibling
   `$04FA58` tiny callback from the exact `$1948A8` action records. Rebuilding
-  Metal Slug now reports `game config functions: entry=0 extra=689
-  discovery_files=0 jump_tables=74 runtime_dispatch=60`, `function candidates:
-  52253`, and a clean dispatch audit at `sites=8863 missing_direct=0
-  external_direct=24 computed=0 runtime_computed=60 jump_tables=1`. The dummy
-  5000-refresh attract smoke and the 18k automated coin/start/P1-A gameplay
-  smoke both complete without a dispatch miss; the 18k run still reports
-  nonzero game-driven audio (`audio_nonzero=8931454`, `audio_peak=20868`,
-  `sound_cmds=79`, `cmd_read=79`, `cmd_clear=0`, `ym_writes=92080`).
+  Metal Slug kept the audit clean before the next manual gameplay frontier.
+
+- local: Seeded the follow-up `$060E62` dispatch miss from the exact `$0E8238`
+  object-vector entry reached just after entering Mission 1. Rebuilding Metal
+  Slug now reports `game config functions: entry=0 extra=690 discovery_files=0
+  jump_tables=74 runtime_dispatch=60`, `function candidates: 52912`, and a
+  clean dispatch audit at `sites=9005 missing_direct=0 external_direct=24
+  computed=0 runtime_computed=60 jump_tables=1`. The dummy 5000-refresh attract
+  smoke, 18k automated coin/start/P1-A smoke, and a shorter early-start 9k stage
+  smoke complete without a dispatch miss. The 18k run still reports nonzero
+  game-driven audio after moving post-command service to the tight scheduling
+  window (`audio_nonzero=8549561`, `audio_peak=15923`, `sound_cmds=79`,
+  `cmd_read=79`, `cmd_clear=0`, `ym_writes=84043`).
 
 ## Next Steps
 
