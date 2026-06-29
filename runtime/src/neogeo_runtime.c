@@ -374,6 +374,15 @@ void ng_neogeo_seed_mslug_backup_ram(void) {
     }
 }
 
+void ng_neogeo_seed_mslug_cart_work_ram(void) {
+    /* Cart-entry mode deliberately skips the cold MVS BIOS path.  Metal Slug
+     * still reads this BIOS/work status byte before forwarding title and
+     * attract music commands through $002352.  In a fresh MAME MVS boot the
+     * byte is nonzero before the cart header is entered; without it, the title
+     * script consumes $10E2/$10E4 words while suppressing the queue write. */
+    g_ng_neogeo_work_ram[0xFD8Du] = 0x01u;
+}
+
 static uint8_t ng_neogeo_hi_or_lo(uint16_t value, uint32_t addr) {
     return (addr & 1u) ? (uint8_t)value : (uint8_t)(value >> 8);
 }

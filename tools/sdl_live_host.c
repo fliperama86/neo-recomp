@@ -919,10 +919,26 @@ static void live_audio_sync_to_runtime(NgLiveAudio *ctx) {
 
     uint64_t current_cycles = ng_neogeo_cpu_cycles();
     NgNeoSoundCommandEvent event;
+    static FILE *cmd_trace;
+    static int cmd_trace_init;
+    if (!cmd_trace_init) {
+        cmd_trace_init = 1;
+        const char *path = getenv("NG_MSLUG_SDL_CMD_TRACE");
+        if (path && *path) {
+            cmd_trace = fopen(path, "w");
+        }
+    }
     while (ng_neogeo_pop_sound_command_event(&event)) {
         uint64_t event_cycles = event.cpu_cycles;
         if (event_cycles > current_cycles) {
             event_cycles = current_cycles;
+        }
+        if (cmd_trace) {
+            /* 68000 sound command stream: emulated time + issuing PC, to compare
+               the attract/intro sequence against a MAME reference. */
+            fprintf(cmd_trace, "t=%.3f pc=%06X data=%02x\n",
+                    (double)event.cpu_cycles / (double)NG_NEO_MAIN_CPU_CLOCK_HZ,
+                    event.pc & 0x00FFFFFFu, event.command);
         }
         live_audio_advance_to_cpu_cycle(ctx, event_cycles);
         live_audio_send_command(ctx, event.command);
@@ -1929,8 +1945,12 @@ int main(int argc, char **argv) {
          * cold MVS BIOS save-RAM directory setup.  Seed the same minimal
          * Metal Slug directory that a fresh MAME/MVS boot creates so BIOS
          * backup-RAM load/save services address the game block at $D00320
-         * instead of scanning uninitialized directory data. */
+         * instead of scanning uninitialized directory data.  Also seed the
+         * small BIOS/work status block that Metal Slug's title and attract
+         * scripts consult before forwarding music commands to the sound
+         * queue. */
         ng_neogeo_seed_mslug_backup_ram();
+        ng_neogeo_seed_mslug_cart_work_ram();
     }
     ng_neogeo_set_program_rom(image.p.data, image.p.size);
     ng_neogeo_set_system_rom(bios_data, bios_size);
