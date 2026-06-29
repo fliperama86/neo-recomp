@@ -144,6 +144,31 @@ static int test_audio_nmi_command_path(void) {
     return 0;
 }
 
+static int test_audio_small_steps_do_not_accumulate_instruction_overshoot(void) {
+    uint8_t m_rom[0x8000u];
+    memset(m_rom, 0, sizeof(m_rom)); /* $00 is NOP, 4 Z80 cycles. */
+
+    NgNeoAudio *audio = ng_neogeo_audio_create();
+    CHECK(audio != NULL);
+    ng_neogeo_audio_set_roms(audio, m_rom, sizeof(m_rom), NULL, 0u, NULL, 0u);
+    ng_neogeo_audio_reset(audio);
+
+    for (uint32_t i = 0; i < 100u; ++i) {
+        ng_neogeo_audio_advance_z80_cycles(audio, 1u);
+    }
+
+    /* Live audio syncs in small slices.  Because the Z80 can only stop on an
+       instruction boundary, each slice may run a few cycles past its target.
+       The core must carry that overshoot into later calls; otherwise repeated
+       1-cycle slices execute one full NOP apiece and run the M1 about 4x fast
+       in this minimal case, or about 18 percent fast in Metal Slug's jingle. */
+    uint64_t cycles = ng_neogeo_audio_z80_cycles(audio);
+    CHECK(cycles >= 100u);
+    CHECK(cycles < 104u);
+
+    ng_neogeo_audio_destroy(audio);
+    return 0;
+}
 
 static int test_audio_timer_irq_is_level_sensitive(void) {
     /* The YM2610 timer IRQ into Z80 IRQ0 is level-sensitive: once the M1's IM1
@@ -433,6 +458,7 @@ int main(void) {
     if (test_audio_ram_window() != 0) return 1;
     if (test_audio_z80_polls_command_and_writes_ym() != 0) return 1;
     if (test_audio_nmi_command_path() != 0) return 1;
+    if (test_audio_small_steps_do_not_accumulate_instruction_overshoot() != 0) return 1;
     if (test_audio_timer_irq_is_level_sensitive() != 0) return 1;
     if (test_audio_pending_command_overwrites_before_nmi_service() != 0) return 1;
     if (test_audio_command_ack_counter_tracks_read_and_clear() != 0) return 1;

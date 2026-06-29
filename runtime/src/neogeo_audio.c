@@ -26,6 +26,7 @@ struct NgNeoAudio {
     uint8_t reply_latch;
     uint8_t nmi_enabled;
     uint8_t nmi_pending;
+    uint32_t z80_cycle_credit;
     uint32_t command_ack_count;
     uint32_t command_read_count;
     uint32_t command_clear_count;
@@ -520,6 +521,18 @@ void ng_neogeo_audio_advance_z80_cycles(NgNeoAudio *audio, uint32_t cycles) {
         return;
     }
 
+    /* z80_step() can only stop on an instruction boundary.  Live sync often
+       asks for very small slices, so a few cycles of per-slice overshoot would
+       accumulate into a faster M1 clock unless we carry that excess forward. */
+    if (audio->z80_cycle_credit != 0u) {
+        if (audio->z80_cycle_credit >= cycles) {
+            audio->z80_cycle_credit -= cycles;
+            return;
+        }
+        cycles -= audio->z80_cycle_credit;
+        audio->z80_cycle_credit = 0u;
+    }
+
     unsigned long start = audio->cpu.cyc;
     uint32_t instructions = 0;
     uint32_t max_instructions = cycles * 2u + 1024u;
@@ -527,6 +540,10 @@ void ng_neogeo_audio_advance_z80_cycles(NgNeoAudio *audio, uint32_t cycles) {
            instructions < max_instructions) {
         ng_audio_step_z80(audio);
         ++instructions;
+    }
+    uint32_t advanced = (uint32_t)(audio->cpu.cyc - start);
+    if (advanced > cycles) {
+        audio->z80_cycle_credit = advanced - cycles;
     }
 }
 
