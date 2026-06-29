@@ -17,6 +17,8 @@ typedef struct NgNeoAudio NgNeoAudio;
 
 typedef struct NgNeoAudioYmWrite {
     uint64_t z80_cycles;
+    uint16_t z80_pc;
+    uint16_t z80_caller;
     uint8_t port;
     uint8_t address;
     uint8_t data;

@@ -546,6 +546,83 @@ static int try_load_default_zoom_rom(const char *neo_path,
 static void live_audio_flush_output(NgLiveAudio *ctx);
 static NgLiveAudio *g_live_audio_cycle_context;
 
+/* Optional raw-capture WAV writer (diagnostics only): set NG_MSLUG_SDL_AUDIO_WAV
+   to a path to record exactly the int16 stereo samples handed to SDL, at the
+   host output rate, so the rendered audio can be analyzed offline. */
+static FILE *g_live_audio_wav_file;
+static uint32_t g_live_audio_wav_data_bytes;
+static uint32_t g_live_audio_wav_rate = NG_LIVE_AUDIO_SAMPLE_RATE;
+
+static void live_audio_wav_write_u32(FILE *f, uint32_t value) {
+    uint8_t bytes[4] = {(uint8_t)value, (uint8_t)(value >> 8),
+                        (uint8_t)(value >> 16), (uint8_t)(value >> 24)};
+    fwrite(bytes, 1, 4, f);
+}
+
+static void live_audio_wav_write_u16(FILE *f, uint16_t value) {
+    uint8_t bytes[2] = {(uint8_t)value, (uint8_t)(value >> 8)};
+    fwrite(bytes, 1, 2, f);
+}
+
+static void live_audio_wav_open(uint32_t sample_rate) {
+    const char *path = getenv("NG_MSLUG_SDL_AUDIO_WAV");
+    if (!path || !*path) {
+        return;
+    }
+    g_live_audio_wav_file = fopen(path, "wb");
+    if (!g_live_audio_wav_file) {
+        fprintf(stderr, "warning: failed to open audio WAV %s: %s\n",
+                path, strerror(errno));
+        return;
+    }
+    g_live_audio_wav_rate = sample_rate != 0u ? sample_rate :
+        NG_LIVE_AUDIO_SAMPLE_RATE;
+    g_live_audio_wav_data_bytes = 0u;
+    /* Placeholder 44-byte canonical PCM header; sizes patched on close. */
+    fwrite("RIFF", 1, 4, g_live_audio_wav_file);
+    live_audio_wav_write_u32(g_live_audio_wav_file, 0u);
+    fwrite("WAVEfmt ", 1, 8, g_live_audio_wav_file);
+    live_audio_wav_write_u32(g_live_audio_wav_file, 16u);
+    live_audio_wav_write_u16(g_live_audio_wav_file, 1u);  /* PCM */
+    live_audio_wav_write_u16(g_live_audio_wav_file, 2u);  /* stereo */
+    live_audio_wav_write_u32(g_live_audio_wav_file, g_live_audio_wav_rate);
+    live_audio_wav_write_u32(g_live_audio_wav_file, g_live_audio_wav_rate * 4u);
+    live_audio_wav_write_u16(g_live_audio_wav_file, 4u);   /* block align */
+    live_audio_wav_write_u16(g_live_audio_wav_file, 16u);  /* bits */
+    fwrite("data", 1, 4, g_live_audio_wav_file);
+    live_audio_wav_write_u32(g_live_audio_wav_file, 0u);
+    fprintf(stderr, "audio capture: writing %s at %u Hz\n", path,
+            g_live_audio_wav_rate);
+}
+
+static void live_audio_wav_append(const int16_t *samples, uint32_t frames) {
+    if (!g_live_audio_wav_file || !samples || frames == 0u) {
+        return;
+    }
+    uint32_t bytes = frames * 2u * (uint32_t)sizeof(int16_t);
+    fwrite(samples, 1, bytes, g_live_audio_wav_file);
+    g_live_audio_wav_data_bytes += bytes;
+}
+
+static void live_audio_wav_close(void) {
+    if (!g_live_audio_wav_file) {
+        return;
+    }
+    fseek(g_live_audio_wav_file, 4, SEEK_SET);
+    live_audio_wav_write_u32(g_live_audio_wav_file,
+                             36u + g_live_audio_wav_data_bytes);
+    fseek(g_live_audio_wav_file, 40, SEEK_SET);
+    live_audio_wav_write_u32(g_live_audio_wav_file, g_live_audio_wav_data_bytes);
+    fclose(g_live_audio_wav_file);
+    g_live_audio_wav_file = NULL;
+    fprintf(stderr, "audio capture: wrote %u PCM bytes (%.2fs)\n",
+            g_live_audio_wav_data_bytes,
+            g_live_audio_wav_rate != 0u ?
+                (double)g_live_audio_wav_data_bytes /
+                    (double)(g_live_audio_wav_rate * 4u) :
+                0.0);
+}
+
 static void live_audio_close(NgLiveAudio *ctx) {
     if (!ctx) {
         return;
@@ -555,6 +632,7 @@ static void live_audio_close(NgLiveAudio *ctx) {
         g_live_audio_cycle_context = NULL;
     }
     live_audio_flush_output(ctx);
+    live_audio_wav_close();
     if (ctx->device_open) {
         SDL_CloseAudioDevice(ctx->device);
         ctx->device_open = 0;
@@ -707,6 +785,7 @@ static void live_audio_record_and_buffer_samples(NgLiveAudio *ctx,
         return;
     }
 
+    live_audio_wav_append(samples, frames);
     ctx->generated_audio_frames += frames;
     for (uint32_t i = 0; i < frames * 2u; ++i) {
         int32_t sample = samples[i];
@@ -752,6 +831,11 @@ static void live_audio_generate_and_queue(NgLiveAudio *ctx, uint64_t m68k_cycles
 
     uint32_t sample_rate = ctx->device_open && ctx->spec.freq > 0 ?
         (uint32_t)ctx->spec.freq : NG_LIVE_AUDIO_SAMPLE_RATE;
+    static int wav_open_attempted;
+    if (!wav_open_attempted) {
+        wav_open_attempted = 1;
+        live_audio_wav_open(sample_rate);
+    }
     uint64_t numerator =
         ctx->sample_remainder + m68k_cycles * (uint64_t)sample_rate;
     uint64_t frames = numerator / NG_NEO_MAIN_CPU_CLOCK_HZ;
@@ -2125,6 +2209,61 @@ int main(int argc, char **argv) {
             title_due = 1;
         }
 
+        {
+            static FILE *ym_trace_file = NULL;
+            static int ym_trace_init = 0;
+            static uint32_t ym_trace_seen = 0;
+            if (!ym_trace_init) {
+                ym_trace_init = 1;
+                const char *path = getenv("NG_MSLUG_SDL_YM_TRACE");
+                if (path && *path) {
+                    ym_trace_file = fopen(path, "w");
+                }
+            }
+            if (ym_trace_file && live_audio.audio) {
+                uint32_t total = ng_neogeo_audio_ym_write_count(live_audio.audio);
+                uint32_t delta = total - ym_trace_seen;
+                if (delta > NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY) {
+                    delta = NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY;
+                }
+                NgNeoAudioYmWrite buf[NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY];
+                uint32_t got = ng_neogeo_audio_copy_recent_ym_writes(
+                    live_audio.audio, buf, delta);
+                for (uint32_t i = 0; i < got; ++i) {
+                    fprintf(ym_trace_file, "%llu p%u %02X %02X\n",
+                            (unsigned long long)buf[i].z80_cycles,
+                            buf[i].port, buf[i].address, buf[i].data);
+                }
+                ym_trace_seen = total;
+            }
+        }
+        {
+            static int audio_diag_interval = -1;
+            if (audio_diag_interval < 0) {
+                const char *env = getenv("NG_MSLUG_SDL_AUDIO_DIAG");
+                audio_diag_interval = env && *env ? atoi(env) : 0;
+            }
+            if (audio_diag_interval > 0 && refreshes != 0u &&
+                (refreshes % (uint64_t)audio_diag_interval) == 0u &&
+                live_audio.audio) {
+                fprintf(stderr,
+                        "audio-diag refresh=%llu z80_pc=$%04X z80_cyc=%llu "
+                        "ym_w=%u ym_r=%u nmi_en=%u nmi_pend=%u nmi_svc=%u "
+                        "irq=%u latch=$%02X cmds=%llu gen_frames=%llu\n",
+                        (unsigned long long)refreshes,
+                        ng_neogeo_audio_z80_pc(live_audio.audio),
+                        (unsigned long long)ng_neogeo_audio_z80_cycles(live_audio.audio),
+                        ng_neogeo_audio_ym_write_count(live_audio.audio),
+                        ng_neogeo_audio_ym_read_count(live_audio.audio),
+                        ng_neogeo_audio_nmi_enabled(live_audio.audio),
+                        ng_neogeo_audio_nmi_pending(live_audio.audio),
+                        ng_neogeo_audio_nmi_service_count(live_audio.audio),
+                        ng_neogeo_audio_ym2610_irq_pending(live_audio.audio),
+                        ng_neogeo_audio_command_latch(live_audio.audio),
+                        (unsigned long long)live_audio.sound_commands,
+                        (unsigned long long)live_audio.generated_audio_frames);
+            }
+        }
         if (status_interval != 0u && refreshes != 0u &&
             (refreshes % status_interval) == 0u) {
             print_live_status("live status", refreshes, dispatches_per_refresh);

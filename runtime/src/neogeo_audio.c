@@ -152,6 +152,9 @@ static void ng_audio_record_ym_write(NgNeoAudio *audio,
     }
     NgNeoAudioYmWrite entry;
     entry.z80_cycles = audio->cpu.cyc;
+    entry.z80_pc = audio->cpu.pc;
+    entry.z80_caller = (uint16_t)(ng_audio_debug_read_z80_impl(audio, audio->cpu.sp) |
+        ((uint16_t)ng_audio_debug_read_z80_impl(audio, (uint16_t)(audio->cpu.sp + 1u)) << 8));
     entry.port = port;
     entry.address = address;
     entry.data = data;
@@ -488,9 +491,20 @@ static void ng_audio_step_z80(NgNeoAudio *audio) {
         audio->nmi_pending = 0u;
         ++audio->nmi_service_count;
     }
-    if (audio->ym && ng_neogeo_ym2610_irq_pending(audio->ym) &&
-        !audio->cpu.int_pending) {
-        z80_gen_int(&audio->cpu, 0xFFu);
+    if (audio->ym && ng_neogeo_ym2610_irq_pending(audio->ym)) {
+        if (!audio->cpu.int_pending) {
+            z80_gen_int(&audio->cpu, 0xFFu);
+        }
+    } else if (audio->cpu.int_pending) {
+        /* The YM2610 IRQ line into Z80 IRQ0 is level-sensitive.  When the M1's
+           IRQ handler clears the timer overflow (writing $27) before it RETIs,
+           the line deasserts and the Z80 must withdraw the pending interrupt.
+           superzazu latches int_pending until taken, so without this an already-
+           asserted-but-not-yet-taken INT fires a spurious second time right after
+           RETI, double-running the music tick (timer $27 written ~2x/fire), which
+           makes the sequence race ahead and then stall.  Mirror MAME's level
+           behavior by deasserting when the YM IRQ is no longer pending. */
+        audio->cpu.int_pending = 0;
     }
     unsigned long before = audio->cpu.cyc;
     z80_step(&audio->cpu);

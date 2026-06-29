@@ -145,6 +145,65 @@ static int test_audio_nmi_command_path(void) {
 }
 
 
+static int test_audio_timer_irq_is_level_sensitive(void) {
+    /* The YM2610 timer IRQ into Z80 IRQ0 is level-sensitive: once the M1's IM1
+       handler clears the timer-A overflow (writing $27) and RETIs, the line is
+       deasserted and the interrupt must NOT fire a second time.  A latched-only
+       interrupt model double-runs the handler (timer re-armed ~2x/fire), which
+       races the music sequencer and was the real "sped up" bug.  Here Timer A is
+       programmed to a known period; the handler rewrites $27 exactly once per
+       service, so counting $27 writes counts handler invocations. */
+    uint8_t m_rom[0x8000u];
+    memset(m_rom, 0, sizeof(m_rom));
+
+    const uint8_t main_program[] = {
+        0xEDu, 0x56u,           /* im 1 */
+        0x3Eu, 0x24u, 0xD3u, 0x04u, /* ld a,$24; out($04),a  (Timer A high) */
+        0x3Eu, 0xF0u, 0xD3u, 0x05u, /* ld a,$F0; out($05),a  (NA hi: NA=0x3C0) */
+        0x3Eu, 0x25u, 0xD3u, 0x04u, /* ld a,$25; out($04),a  (Timer A low) */
+        0x3Eu, 0x00u, 0xD3u, 0x05u, /* ld a,$00; out($05),a  (NA lo=0) */
+        0x3Eu, 0x27u, 0xD3u, 0x04u, /* ld a,$27; out($04),a  (Timer control) */
+        0x3Eu, 0x15u, 0xD3u, 0x05u, /* ld a,$15; out($05),a  load+enable+resetA */
+        0xFBu,                  /* ei */
+        0x18u, 0xFEu,           /* jr $-2 (idle, interrupts on) */
+    };
+    const uint8_t irq_handler[] = {
+        0xDBu, 0x04u,           /* in a,($04): read status */
+        0x3Eu, 0x27u, 0xD3u, 0x04u, /* ld a,$27; out($04),a */
+        0x3Eu, 0x15u, 0xD3u, 0x05u, /* ld a,$15; out($05),a: reset+reload Timer A */
+        0xFBu,                  /* ei */
+        0xEDu, 0x4Du,           /* reti */
+    };
+    memcpy(m_rom, main_program, sizeof(main_program));
+    memcpy(m_rom + 0x0038u, irq_handler, sizeof(irq_handler));
+
+    NgNeoAudio *audio = ng_neogeo_audio_create();
+    CHECK(audio != NULL);
+    ng_neogeo_audio_set_roms(audio, m_rom, sizeof(m_rom), NULL, 0u, NULL, 0u);
+    ng_neogeo_audio_reset(audio);
+
+    ng_neogeo_audio_advance_z80_cycles(audio, 100000u);
+
+    /* Timer A period = (1024-0x3C0)*144 = 9216 YM clocks = 4608 Z80 cycles.
+       ~21 fires over 100000 cycles, plus one setup write.  Double-servicing
+       would roughly double the $27 writes. */
+    NgNeoAudioYmWrite writes[NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY];
+    uint32_t count = ng_neogeo_audio_copy_recent_ym_writes(
+        audio, writes, NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY);
+    uint32_t timer_ctrl_writes = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (writes[i].port == 1u && writes[i].address == 0x27u) {
+            ++timer_ctrl_writes;
+        }
+    }
+    /* One service per fire: expect ~22.  Reject the ~43 of double-servicing. */
+    CHECK(timer_ctrl_writes >= 12u);
+    CHECK(timer_ctrl_writes <= 30u);
+
+    ng_neogeo_audio_destroy(audio);
+    return 0;
+}
+
 static int test_audio_pending_command_overwrites_before_nmi_service(void) {
     uint8_t m_rom[0x20000u];
     memset(m_rom, 0, sizeof(m_rom));
@@ -374,6 +433,7 @@ int main(void) {
     if (test_audio_ram_window() != 0) return 1;
     if (test_audio_z80_polls_command_and_writes_ym() != 0) return 1;
     if (test_audio_nmi_command_path() != 0) return 1;
+    if (test_audio_timer_irq_is_level_sensitive() != 0) return 1;
     if (test_audio_pending_command_overwrites_before_nmi_service() != 0) return 1;
     if (test_audio_command_ack_counter_tracks_read_and_clear() != 0) return 1;
     if (test_audio_ym2610_generates_samples() != 0) return 1;

@@ -158,6 +158,105 @@ int main(int argc, char **argv) {
            last.address,
            last.data,
            (unsigned long long)last.z80_cycles);
+    /* Optional coupled capture: drive the M1 directly (no 68000) for a fixed
+       span of emulated time, generating audio in lockstep, and dump a WAV.
+       This isolates whether the M1 sound driver sustains/loops a track on its
+       own or whether the live-host stall is a 68000 progression issue. */
+    const char *wav_path = getenv("NG_PROBE_WAV");
+    if (wav_path && *wav_path) {
+        double seconds = 10.0;
+        const char *secs_env = getenv("NG_PROBE_SECONDS");
+        if (secs_env && *secs_env) {
+            seconds = atof(secs_env);
+        }
+        FILE *wf = fopen(wav_path, "wb");
+        if (wf) {
+            const uint32_t rate = 48000u;
+            uint32_t total_frames = (uint32_t)(seconds * rate);
+            uint8_t hdr[44];
+            memset(hdr, 0, sizeof(hdr));
+            memcpy(hdr, "RIFF", 4);
+            memcpy(hdr + 8, "WAVEfmt ", 8);
+            uint32_t fmt_len = 16, data_bytes = total_frames * 4u;
+            uint32_t riff = 36u + data_bytes, byte_rate = rate * 4u;
+            uint16_t pcm = 1, chn = 2, align = 4, bits = 16;
+            memcpy(hdr + 4, &riff, 4);
+            memcpy(hdr + 16, &fmt_len, 4);
+            memcpy(hdr + 20, &pcm, 2);
+            memcpy(hdr + 22, &chn, 2);
+            memcpy(hdr + 24, &rate, 4);
+            memcpy(hdr + 28, &byte_rate, 4);
+            memcpy(hdr + 32, &align, 2);
+            memcpy(hdr + 34, &bits, 2);
+            memcpy(hdr + 36, "data", 4);
+            memcpy(hdr + 40, &data_bytes, 4);
+            fwrite(hdr, 1, sizeof(hdr), wf);
+
+            /* Optional in-loop command injection at realistic spacing, so the
+               M1 NMI handler has time to process each command (the M1 needs
+               ~tens of ms between commands; 50us blasting drops them).  When
+               NG_PROBE_CMD_GAP_MS is set, the command list is (re)injected
+               during the capture loop instead of the pre-capture blast.  The
+               first command goes in at NG_PROBE_CMD_START_MS. */
+            const char *gap_env = getenv("NG_PROBE_CMD_GAP_MS");
+            uint32_t gap_ms = gap_env && *gap_env ? (uint32_t)atoi(gap_env) : 0u;
+            uint32_t start_ms = 200u;
+            const char *start_env = getenv("NG_PROBE_CMD_START_MS");
+            if (start_env && *start_env) {
+                start_ms = (uint32_t)atoi(start_env);
+            }
+            uint32_t next_cmd = 0u;
+
+            const char *ym_trace_path = getenv("NG_PROBE_YM_TRACE");
+            FILE *ym_trace = ym_trace_path && *ym_trace_path ?
+                fopen(ym_trace_path, "w") : NULL;
+            uint32_t ym_trace_seen = ng_neogeo_audio_ym_write_count(audio);
+
+            const uint32_t z80_per_step = 4000u; /* ~1ms of Z80 time */
+            const uint32_t frames_per_step =
+                (uint32_t)((uint64_t)z80_per_step * rate / NG_NEO_AUDIO_CPU_CLOCK_HZ);
+            int16_t buf[4096];
+            uint32_t emitted = 0;
+            while (emitted < total_frames) {
+                if (gap_ms != 0u && next_cmd < command_count) {
+                    double now_ms = 1000.0 * (double)emitted / (double)rate;
+                    double due_ms = (double)start_ms + (double)next_cmd * gap_ms;
+                    if (now_ms >= due_ms) {
+                        ng_neogeo_audio_write_command(audio, commands[next_cmd]);
+                        ++next_cmd;
+                    }
+                }
+                ng_neogeo_audio_advance_z80_cycles(audio, z80_per_step);
+                uint32_t f = frames_per_step;
+                if (f > 2048u) f = 2048u;
+                if (emitted + f > total_frames) f = total_frames - emitted;
+                ng_neogeo_audio_generate(audio, buf, f, rate);
+                fwrite(buf, sizeof(int16_t) * 2u, f, wf);
+                emitted += f;
+                if (ym_trace) {
+                    uint32_t total = ng_neogeo_audio_ym_write_count(audio);
+                    uint32_t delta = total - ym_trace_seen;
+                    if (delta > NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY) {
+                        delta = NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY;
+                    }
+                    NgNeoAudioYmWrite wbuf[NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY];
+                    uint32_t got = ng_neogeo_audio_copy_recent_ym_writes(audio, wbuf, delta);
+                    for (uint32_t k = 0; k < got; ++k) {
+                        fprintf(ym_trace, "%.4f cyc=%llu pc=%04x ret=%04x p%u %02x %02x\n",
+                                (double)emitted / (double)rate,
+                                (unsigned long long)wbuf[k].z80_cycles,
+                                wbuf[k].z80_pc, wbuf[k].z80_caller, wbuf[k].port,
+                                wbuf[k].address, wbuf[k].data);
+                    }
+                    ym_trace_seen = total;
+                }
+            }
+            if (ym_trace) fclose(ym_trace);
+            fclose(wf);
+            printf("probe WAV: wrote %.2fs to %s\n", seconds, wav_path);
+        }
+    }
+
     enum { probe_frames = 4096 };
     int16_t *samples =
         (int16_t *)calloc((size_t)probe_frames * 2u, sizeof(int16_t));
