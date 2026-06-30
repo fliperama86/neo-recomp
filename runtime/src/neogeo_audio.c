@@ -44,6 +44,173 @@ struct NgNeoAudio {
     NgNeoYm2610 *ym;
 };
 
+#define NG_NEO_AUDIO_STATE_MAGIC 0x4E474153u /* NGAS */
+#define NG_NEO_AUDIO_STATE_VERSION 1u
+
+typedef struct NgNeoAudioZ80State {
+    unsigned long cyc;
+    uint16_t pc;
+    uint16_t sp;
+    uint16_t ix;
+    uint16_t iy;
+    uint16_t mem_ptr;
+    uint8_t a;
+    uint8_t b;
+    uint8_t c;
+    uint8_t d;
+    uint8_t e;
+    uint8_t h;
+    uint8_t l;
+    uint8_t a_;
+    uint8_t b_;
+    uint8_t c_;
+    uint8_t d_;
+    uint8_t e_;
+    uint8_t h_;
+    uint8_t l_;
+    uint8_t f_;
+    uint8_t i;
+    uint8_t r;
+    uint8_t sf;
+    uint8_t zf;
+    uint8_t yf;
+    uint8_t hf;
+    uint8_t xf;
+    uint8_t pf;
+    uint8_t nf;
+    uint8_t cf;
+    uint8_t iff_delay;
+    uint8_t interrupt_mode;
+    uint8_t int_data;
+    uint8_t iff1;
+    uint8_t iff2;
+    uint8_t halted;
+    uint8_t int_pending;
+    uint8_t nmi_pending;
+} NgNeoAudioZ80State;
+
+typedef struct NgNeoAudioStatePrefix {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t size;
+    uint32_t ym_state_size;
+    NgNeoAudioZ80State cpu;
+    uint8_t ram[NG_NEO_AUDIO_WORK_RAM_BYTES];
+    uint8_t bank_a;
+    uint8_t bank_b;
+    uint8_t bank_c;
+    uint8_t bank_d;
+    uint8_t command_latch;
+    uint8_t reply_latch;
+    uint8_t nmi_enabled;
+    uint8_t nmi_pending;
+    uint32_t z80_cycle_credit;
+    uint32_t command_ack_count;
+    uint32_t command_read_count;
+    uint32_t command_clear_count;
+    uint32_t nmi_service_count;
+    uint8_t ym_address[2];
+    uint32_t ym_write_count;
+    uint32_t ym_read_count;
+    NgNeoAudioYmWrite ym_write_log[NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY];
+    uint32_t ym_write_log_head;
+    uint8_t adpcm_a_regs[0x30];
+    uint8_t adpcm_b_regs[0x11];
+    NgNeoAudioAdpcmAEvent last_adpcm_a;
+    NgNeoAudioAdpcmBEvent last_adpcm_b;
+} NgNeoAudioStatePrefix;
+
+static void ng_audio_capture_z80_state(const z80 *cpu, NgNeoAudioZ80State *out) {
+    if (!cpu || !out) {
+        return;
+    }
+    memset(out, 0, sizeof(*out));
+    out->cyc = cpu->cyc;
+    out->pc = cpu->pc;
+    out->sp = cpu->sp;
+    out->ix = cpu->ix;
+    out->iy = cpu->iy;
+    out->mem_ptr = cpu->mem_ptr;
+    out->a = cpu->a;
+    out->b = cpu->b;
+    out->c = cpu->c;
+    out->d = cpu->d;
+    out->e = cpu->e;
+    out->h = cpu->h;
+    out->l = cpu->l;
+    out->a_ = cpu->a_;
+    out->b_ = cpu->b_;
+    out->c_ = cpu->c_;
+    out->d_ = cpu->d_;
+    out->e_ = cpu->e_;
+    out->h_ = cpu->h_;
+    out->l_ = cpu->l_;
+    out->f_ = cpu->f_;
+    out->i = cpu->i;
+    out->r = cpu->r;
+    out->sf = cpu->sf;
+    out->zf = cpu->zf;
+    out->yf = cpu->yf;
+    out->hf = cpu->hf;
+    out->xf = cpu->xf;
+    out->pf = cpu->pf;
+    out->nf = cpu->nf;
+    out->cf = cpu->cf;
+    out->iff_delay = cpu->iff_delay;
+    out->interrupt_mode = cpu->interrupt_mode;
+    out->int_data = cpu->int_data;
+    out->iff1 = cpu->iff1;
+    out->iff2 = cpu->iff2;
+    out->halted = cpu->halted;
+    out->int_pending = cpu->int_pending;
+    out->nmi_pending = cpu->nmi_pending;
+}
+
+static void ng_audio_restore_z80_state(z80 *cpu, const NgNeoAudioZ80State *in) {
+    if (!cpu || !in) {
+        return;
+    }
+    cpu->cyc = in->cyc;
+    cpu->pc = in->pc;
+    cpu->sp = in->sp;
+    cpu->ix = in->ix;
+    cpu->iy = in->iy;
+    cpu->mem_ptr = in->mem_ptr;
+    cpu->a = in->a;
+    cpu->b = in->b;
+    cpu->c = in->c;
+    cpu->d = in->d;
+    cpu->e = in->e;
+    cpu->h = in->h;
+    cpu->l = in->l;
+    cpu->a_ = in->a_;
+    cpu->b_ = in->b_;
+    cpu->c_ = in->c_;
+    cpu->d_ = in->d_;
+    cpu->e_ = in->e_;
+    cpu->h_ = in->h_;
+    cpu->l_ = in->l_;
+    cpu->f_ = in->f_;
+    cpu->i = in->i;
+    cpu->r = in->r;
+    cpu->sf = in->sf != 0u;
+    cpu->zf = in->zf != 0u;
+    cpu->yf = in->yf != 0u;
+    cpu->hf = in->hf != 0u;
+    cpu->xf = in->xf != 0u;
+    cpu->pf = in->pf != 0u;
+    cpu->nf = in->nf != 0u;
+    cpu->cf = in->cf != 0u;
+    cpu->iff_delay = in->iff_delay;
+    cpu->interrupt_mode = in->interrupt_mode;
+    cpu->int_data = in->int_data;
+    cpu->iff1 = in->iff1 != 0u;
+    cpu->iff2 = in->iff2 != 0u;
+    cpu->halted = in->halted != 0u;
+    cpu->int_pending = in->int_pending != 0u;
+    cpu->nmi_pending = in->nmi_pending != 0u;
+}
+
 static uint32_t ng_audio_effective_m_rom_size(const NgNeoAudio *audio) {
     if (!audio) {
         return 0u;
@@ -670,6 +837,139 @@ int ng_neogeo_audio_copy_work_ram(const NgNeoAudio *audio,
         return 0;
     }
     memcpy(out, audio->ram, NG_NEO_AUDIO_WORK_RAM_BYTES);
+    return 1;
+}
+
+uint32_t ng_neogeo_audio_state_size(const NgNeoAudio *audio) {
+    if (!audio) {
+        return 0u;
+    }
+    uint32_t ym_size = ng_neogeo_ym2610_state_size(audio->ym);
+    if (UINT32_MAX - (uint32_t)sizeof(NgNeoAudioStatePrefix) < ym_size) {
+        return 0u;
+    }
+    return (uint32_t)sizeof(NgNeoAudioStatePrefix) + ym_size;
+}
+
+int ng_neogeo_audio_save_state(const NgNeoAudio *audio,
+                               uint8_t *out,
+                               uint32_t out_size,
+                               uint32_t *out_written) {
+    if (out_written) {
+        *out_written = 0u;
+    }
+    if (!audio || !out) {
+        return 0;
+    }
+
+    uint32_t total_size = ng_neogeo_audio_state_size(audio);
+    uint32_t ym_size = total_size >= (uint32_t)sizeof(NgNeoAudioStatePrefix) ?
+        total_size - (uint32_t)sizeof(NgNeoAudioStatePrefix) : 0u;
+    if (total_size == 0u || out_size < total_size) {
+        return 0;
+    }
+
+    NgNeoAudioStatePrefix state;
+    memset(&state, 0, sizeof(state));
+    state.magic = NG_NEO_AUDIO_STATE_MAGIC;
+    state.version = NG_NEO_AUDIO_STATE_VERSION;
+    state.size = total_size;
+    state.ym_state_size = ym_size;
+    ng_audio_capture_z80_state(&audio->cpu, &state.cpu);
+    memcpy(state.ram, audio->ram, sizeof(state.ram));
+    state.bank_a = audio->bank_a;
+    state.bank_b = audio->bank_b;
+    state.bank_c = audio->bank_c;
+    state.bank_d = audio->bank_d;
+    state.command_latch = audio->command_latch;
+    state.reply_latch = audio->reply_latch;
+    state.nmi_enabled = audio->nmi_enabled;
+    state.nmi_pending = audio->nmi_pending;
+    state.z80_cycle_credit = audio->z80_cycle_credit;
+    state.command_ack_count = audio->command_ack_count;
+    state.command_read_count = audio->command_read_count;
+    state.command_clear_count = audio->command_clear_count;
+    state.nmi_service_count = audio->nmi_service_count;
+    state.ym_address[0] = audio->ym_address[0];
+    state.ym_address[1] = audio->ym_address[1];
+    state.ym_write_count = audio->ym_write_count;
+    state.ym_read_count = audio->ym_read_count;
+    memcpy(state.ym_write_log, audio->ym_write_log, sizeof(state.ym_write_log));
+    state.ym_write_log_head = audio->ym_write_log_head;
+    memcpy(state.adpcm_a_regs, audio->adpcm_a_regs, sizeof(state.adpcm_a_regs));
+    memcpy(state.adpcm_b_regs, audio->adpcm_b_regs, sizeof(state.adpcm_b_regs));
+    state.last_adpcm_a = audio->last_adpcm_a;
+    state.last_adpcm_b = audio->last_adpcm_b;
+
+    memcpy(out, &state, sizeof(state));
+    if (ym_size != 0u) {
+        uint32_t written = 0u;
+        if (!ng_neogeo_ym2610_save_state(audio->ym,
+                                         out + sizeof(state),
+                                         out_size - (uint32_t)sizeof(state),
+                                         &written) ||
+            written != ym_size) {
+            return 0;
+        }
+    }
+    if (out_written) {
+        *out_written = total_size;
+    }
+    return 1;
+}
+
+int ng_neogeo_audio_load_state(NgNeoAudio *audio,
+                               const uint8_t *data,
+                               uint32_t size) {
+    if (!audio || !data || size < (uint32_t)sizeof(NgNeoAudioStatePrefix)) {
+        return 0;
+    }
+
+    NgNeoAudioStatePrefix state;
+    memcpy(&state, data, sizeof(state));
+    if (state.magic != NG_NEO_AUDIO_STATE_MAGIC ||
+        state.version != NG_NEO_AUDIO_STATE_VERSION ||
+        state.size != size ||
+        state.ym_state_size != size - (uint32_t)sizeof(state)) {
+        return 0;
+    }
+    if (state.ym_write_log_head >= NG_NEO_AUDIO_YM_WRITE_LOG_CAPACITY) {
+        return 0;
+    }
+
+    ng_audio_restore_z80_state(&audio->cpu, &state.cpu);
+    ng_audio_attach_cpu_callbacks(audio);
+    memcpy(audio->ram, state.ram, sizeof(audio->ram));
+    audio->bank_a = state.bank_a;
+    audio->bank_b = state.bank_b;
+    audio->bank_c = state.bank_c;
+    audio->bank_d = state.bank_d;
+    audio->command_latch = state.command_latch;
+    audio->reply_latch = state.reply_latch;
+    audio->nmi_enabled = state.nmi_enabled;
+    audio->nmi_pending = state.nmi_pending;
+    audio->z80_cycle_credit = state.z80_cycle_credit;
+    audio->command_ack_count = state.command_ack_count;
+    audio->command_read_count = state.command_read_count;
+    audio->command_clear_count = state.command_clear_count;
+    audio->nmi_service_count = state.nmi_service_count;
+    audio->ym_address[0] = state.ym_address[0];
+    audio->ym_address[1] = state.ym_address[1];
+    audio->ym_write_count = state.ym_write_count;
+    audio->ym_read_count = state.ym_read_count;
+    memcpy(audio->ym_write_log, state.ym_write_log, sizeof(audio->ym_write_log));
+    audio->ym_write_log_head = state.ym_write_log_head;
+    memcpy(audio->adpcm_a_regs, state.adpcm_a_regs, sizeof(audio->adpcm_a_regs));
+    memcpy(audio->adpcm_b_regs, state.adpcm_b_regs, sizeof(audio->adpcm_b_regs));
+    audio->last_adpcm_a = state.last_adpcm_a;
+    audio->last_adpcm_b = state.last_adpcm_b;
+
+    if (state.ym_state_size != 0u &&
+        !ng_neogeo_ym2610_load_state(audio->ym,
+                                     data + sizeof(state),
+                                     state.ym_state_size)) {
+        return 0;
+    }
     return 1;
 }
 

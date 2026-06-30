@@ -21,6 +21,10 @@ STATUS_INTERVAL="${NG_MSLUG_SDL_STATUS_INTERVAL:-}"
 DIAGNOSTICS_INTERVAL="${NG_MSLUG_SDL_DIAGNOSTICS_INTERVAL:-}"
 PERF_LOG="${NG_MSLUG_SDL_PERF_LOG:-0}"
 DUMP_STATE_DIR="${NG_MSLUG_SDL_DUMP_STATE_DIR:-}"
+STATE_FILE="${NG_MSLUG_SDL_STATE_FILE:-$BUILD_DIR/mslug_live.sav}"
+LOAD_STATE="${NG_MSLUG_SDL_LOAD_STATE:-}"
+AUTOSAVE_STATE="${NG_MSLUG_SDL_AUTOSAVE_STATE:-$BUILD_DIR/mslug_autosave.sav}"
+SAVE_STATE_ON_EXIT="${NG_MSLUG_SDL_SAVE_STATE_ON_EXIT:-0}"
 STALL_REFRESHES="${NG_MSLUG_SDL_STALL_REFRESHES:-}"
 NO_THROTTLE="${NG_MSLUG_SDL_NO_THROTTLE:-0}"
 AUDIO_OUTPUT="${NG_MSLUG_SDL_AUDIO:-1}"
@@ -92,6 +96,14 @@ log_note "video settle dispatches: $VIDEO_SETTLE_DISPATCHES"
 log_note "frame hold: $FRAME_HOLD"
 log_note "start mode: $START_MODE"
 log_note "audio output: $AUDIO_OUTPUT"
+log_note "savestate: $STATE_FILE (F5 save, F8 load)"
+log_note "autosave on miss: $AUTOSAVE_STATE"
+if [[ -n "$LOAD_STATE" ]]; then
+  log_note "load state: $LOAD_STATE"
+fi
+if [[ "$SAVE_STATE_ON_EXIT" != "0" ]]; then
+  log_note "save state on exit: yes"
+fi
 if [[ -n "$AUDIO_TEST_COMMAND" ]]; then
   log_note "audio test command: $AUDIO_TEST_COMMAND"
 fi
@@ -257,7 +269,15 @@ HOST_ARGS=(
   --video-settle-dispatches "$VIDEO_SETTLE_DISPATCHES"
   --frame-hold "$FRAME_HOLD"
   --scale "$SCALE"
+  --state-file "$STATE_FILE"
+  --autosave-state "$AUTOSAVE_STATE"
 )
+if [[ -n "$LOAD_STATE" ]]; then
+  HOST_ARGS+=(--load-state "$LOAD_STATE")
+fi
+if [[ "$SAVE_STATE_ON_EXIT" != "0" ]]; then
+  HOST_ARGS+=(--save-state-on-exit)
+fi
 if [[ -n "$MAX_REFRESHES" ]]; then
   HOST_ARGS+=(--max-refreshes "$MAX_REFRESHES")
 fi

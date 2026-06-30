@@ -17,9 +17,15 @@ typedef enum NgDispatchAuditKind {
 typedef struct NgDispatchAuditSite {
     NgDispatchAuditKind kind;
     uint32_t site_addr;
+    uint32_t site_bank;
     uint32_t target_addr;
+    uint32_t target_bank;
     uint32_t table_addr;
+    uint32_t table_bank;
     uint8_t mnemonic;
+    uint8_t site_banked;
+    uint8_t target_banked;
+    uint8_t table_banked;
     uint8_t target_known;
     uint8_t target_in_discovery;
     uint8_t target_external;
@@ -52,3 +58,5 @@ int ng_dispatch_audit_build_with_config(const NgProgramRom *rom,
                                         NgDispatchAudit *audit);
 int ng_dispatch_audit_has_gaps(const NgDispatchAudit *audit);
 int ng_dispatch_audit_write(FILE *out, const NgDispatchAudit *audit);
+int ng_dispatch_audit_write_suggestions(FILE *out,
+                                        const NgDispatchAudit *audit);

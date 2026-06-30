@@ -20,6 +20,20 @@ void ng_c_symbol_for_addr(uint32_t addr, char *out, unsigned out_size) {
     snprintf(out, out_size, "ng_func_%06X", addr & 0xFFFFFFu);
 }
 
+static void ng_c_symbol_for_discovery_index(
+    const NgFunctionDiscovery *discovery,
+    uint32_t index,
+    char *out,
+    unsigned out_size) {
+    uint32_t addr = discovery->addrs[index] & 0x00FFFFFFu;
+    uint32_t bank = ng_function_discovery_bank_at(discovery, index);
+    if (bank != NG_FUNCTION_DISCOVERY_BANK_NONE) {
+        snprintf(out, out_size, "ng_func_b%03X_%06X", bank, addr);
+        return;
+    }
+    ng_c_symbol_for_addr(addr, out, out_size);
+}
+
 void ng_emit_diagnostics_init(NgEmitDiagnostics *diagnostics) {
     if (diagnostics) {
         memset(diagnostics, 0, sizeof(*diagnostics));
@@ -173,9 +187,23 @@ static void emit_header(FILE *out) {
 static void emit_declarations(FILE *out, const NgFunctionDiscovery *discovery) {
     for (uint32_t i = 0; i < discovery->count; ++i) {
         char symbol[32];
-        ng_c_symbol_for_addr(discovery->addrs[i], symbol, (unsigned)sizeof(symbol));
+        ng_c_symbol_for_discovery_index(discovery,
+                                        i,
+                                        symbol,
+                                        (unsigned)sizeof(symbol));
         fprintf(out, "static void %s(void);\n", symbol);
     }
+}
+
+static int dispatch_case_emitted(const NgFunctionDiscovery *discovery,
+                                 uint32_t index) {
+    uint32_t addr = discovery->addrs[index] & 0x00FFFFFFu;
+    for (uint32_t i = 0; i < index; ++i) {
+        if ((discovery->addrs[i] & 0x00FFFFFFu) == addr) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static void emit_dispatch(FILE *out, const NgFunctionDiscovery *discovery) {
@@ -187,7 +215,13 @@ static void emit_dispatch(FILE *out, const NgFunctionDiscovery *discovery) {
     for (uint32_t i = 0; i < discovery->count; ++i) {
         char symbol[32];
         uint32_t addr = discovery->addrs[i] & 0xFFFFFFu;
-        ng_c_symbol_for_addr(addr, symbol, (unsigned)sizeof(symbol));
+        if (dispatch_case_emitted(discovery, i)) {
+            continue;
+        }
+        ng_c_symbol_for_discovery_index(discovery,
+                                        i,
+                                        symbol,
+                                        (unsigned)sizeof(symbol));
         fprintf(out, "    case 0x%08Xu: %s(); return;\n", addr, symbol);
     }
     fprintf(out, "    default: ng_call_by_address(addr); return;\n");
@@ -2778,10 +2812,21 @@ static int emit_functions(FILE *out,
     for (uint32_t i = 0; i < discovery->count; ++i) {
         char symbol[32];
         uint32_t addr = discovery->addrs[i] & 0xFFFFFFu;
-        ng_c_symbol_for_addr(addr, symbol, (unsigned)sizeof(symbol));
+        NgProgramRom view;
+        const NgProgramRom *active_rom = rom;
+        uint32_t bank = ng_function_discovery_bank_at(discovery, i);
+        if (rom && bank != NG_FUNCTION_DISCOVERY_BANK_NONE) {
+            view = *rom;
+            ng_program_rom_select_bank(&view, bank);
+            active_rom = &view;
+        }
+        ng_c_symbol_for_discovery_index(discovery,
+                                        i,
+                                        symbol,
+                                        (unsigned)sizeof(symbol));
         fprintf(out, "static void %s(void) {\n", symbol);
-        if (rom) {
-            emit_function_body(out, rom, addr, diagnostics);
+        if (active_rom) {
+            emit_function_body(out, active_rom, addr, diagnostics);
         } else {
             emit_stub_body(out, addr);
         }

@@ -122,7 +122,7 @@ int main(void) {
     CHECK(audit.sites[5].target_external);
 
     FILE *out = tmpfile();
-    char text[2048];
+    char text[4096];
     CHECK(out != NULL);
     CHECK(ng_dispatch_audit_write(out, &audit));
     CHECK(read_file(out, text, sizeof(text)));
@@ -134,6 +134,24 @@ int main(void) {
     CHECK(strstr(text, "$000068 COMPUTED JSR target=<runtime>") != NULL);
     CHECK(strstr(text, "$000070 DIRECT JSR target=$000300 discovered=no") != NULL);
     CHECK(strstr(text, "$000078 DIRECT JSR target=$C00444 discovered=no external=yes") != NULL);
+
+    out = tmpfile();
+    CHECK(out != NULL);
+    CHECK(ng_dispatch_audit_write_suggestions(out, &audit));
+    CHECK(read_file(out, text, sizeof(text)));
+    fclose(out);
+    CHECK(strstr(text, "suggestion_count = 4") != NULL);
+    CHECK(strstr(text, "kind = \"missing_direct\"") != NULL);
+    CHECK(strstr(text, "site = 0x000070") != NULL);
+    CHECK(strstr(text, "target = 0x000300") != NULL);
+    CHECK(strstr(text, "kind = \"computed_dispatch\"") != NULL);
+    CHECK(strstr(text, "site = 0x000060") != NULL);
+    CHECK(strstr(text, "site = 0x000068") != NULL);
+    CHECK(strstr(text, "kind = \"jump_table_missing\"") != NULL);
+    CHECK(strstr(text, "site = 0x00001A") != NULL);
+    CHECK(strstr(text, "table = 0x00001C") != NULL);
+    CHECK(strstr(text, "missing_entries = 1") != NULL);
+    CHECK(strstr(text, "site = 0x000078") == NULL);
 
     audit.missing_direct_count = 0u;
     audit.computed_count = 0u;
@@ -163,6 +181,418 @@ int main(void) {
     CHECK(strstr(text, "$000068 COMPUTED JSR target=<runtime>\n") != NULL);
 
     ng_program_rom_free(&rom);
+
+    {
+        NgProgramRom inline_rom = make_rom(0x40u);
+        CHECK(inline_rom.data != NULL);
+
+        write16(&inline_rom, 0x10u, 0xDC46u);       /* ADD.W D6,D6 */
+        write16(&inline_rom, 0x12u, 0x4EFBu);       /* JMP ($2,PC,D6.W) */
+        write16(&inline_rom, 0x14u, 0x6002u);
+        for (uint32_t addr = 0x16u; addr < 0x26u; addr += 4u) {
+            write16(&inline_rom, addr, 0x2887u);    /* MOVE.L D7,(A4) */
+            write16(&inline_rom, addr + 2u, 0xDE84u); /* ADD.L D4,D7 */
+        }
+        write16(&inline_rom, 0x26u, 0x4E75u);
+
+        static NgFunctionDiscovery inline_discovery;
+        CHECK(ng_function_discover_from_entry(&inline_rom,
+                                              0x10u,
+                                              &inline_discovery));
+        CHECK(ng_dispatch_audit_build(&inline_rom,
+                                      &inline_discovery,
+                                      &audit));
+        CHECK(audit.count == 1u);
+        CHECK(audit.jump_table_count == 1u);
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_JUMP_TABLE);
+        CHECK(audit.sites[0].site_addr == 0x12u);
+        CHECK(audit.sites[0].table_addr == 0x16u);
+        CHECK(audit.sites[0].resolved_entries == 4u);
+        CHECK(audit.sites[0].missing_entries == 0u);
+
+        ng_program_rom_free(&inline_rom);
+    }
+
+    {
+        NgProgramRom bank_rom = make_rom(0x180u);
+        CHECK(bank_rom.data != NULL);
+        ng_program_rom_set_address_map(&bank_rom,
+                                       0x000000u,
+                                       0x100u,
+                                       0x200000u,
+                                       0x40u);
+
+        write16(&bank_rom, 0x100u, 0x4EB9u); /* bank 0 JSR $200020 */
+        write32(&bank_rom, 0x102u, 0x00200020u);
+        write16(&bank_rom, 0x106u, 0x4E75u);
+        write16(&bank_rom, 0x120u, 0x4E75u);
+        write16(&bank_rom, 0x140u, 0x4EB9u); /* bank 1 JSR $200020 */
+        write32(&bank_rom, 0x142u, 0x00200020u);
+        write16(&bank_rom, 0x146u, 0x4E75u);
+        write16(&bank_rom, 0x160u, 0x4E75u);
+
+        static NgFunctionDiscovery bank_discovery;
+        ng_function_discovery_init(&bank_discovery);
+        NgProgramRom bank_view = bank_rom;
+        ng_program_rom_select_bank(&bank_view, 0u);
+        CHECK(ng_function_discovery_add(&bank_discovery,
+                                        &bank_view,
+                                        0x200000u));
+        CHECK(ng_function_discovery_add(&bank_discovery,
+                                        &bank_view,
+                                        0x200020u));
+        bank_view = bank_rom;
+        ng_program_rom_select_bank(&bank_view, 1u);
+        CHECK(ng_function_discovery_add(&bank_discovery,
+                                        &bank_view,
+                                        0x200000u));
+        CHECK(ng_function_discovery_add(&bank_discovery,
+                                        &bank_view,
+                                        0x200020u));
+
+        CHECK(ng_dispatch_audit_build(&bank_rom, &bank_discovery, &audit));
+        CHECK(audit.count == 2u);
+        CHECK(audit.direct_count == 2u);
+        CHECK(audit.missing_direct_count == 0u);
+        CHECK(audit.sites[0].site_banked);
+        CHECK(audit.sites[0].site_bank == 0u);
+        CHECK(audit.sites[0].target_banked);
+        CHECK(audit.sites[0].target_bank == 0u);
+        CHECK(audit.sites[1].site_banked);
+        CHECK(audit.sites[1].site_bank == 1u);
+        CHECK(audit.sites[1].target_banked);
+        CHECK(audit.sites[1].target_bank == 1u);
+
+        ng_program_rom_free(&bank_rom);
+    }
+
+    {
+        NgProgramRom dispatcher_rom = make_rom(0x80u);
+        CHECK(dispatcher_rom.data != NULL);
+
+        write16(&dispatcher_rom, 0x20u, 0x2056u); /* MOVEA.L (A6),A0 */
+        write16(&dispatcher_rom, 0x22u, 0x4E90u); /* JSR (A0), object dispatch */
+        write16(&dispatcher_rom, 0x24u, 0x4E75u);
+
+        write16(&dispatcher_rom, 0x30u, 0x4E91u); /* JSR (A1), not derived */
+        write16(&dispatcher_rom, 0x32u, 0x4E75u);
+
+        write16(&dispatcher_rom, 0x40u, 0x206Eu); /* MOVEA.L ($70,A6),A0 */
+        write16(&dispatcher_rom, 0x42u, 0x0070u);
+        write16(&dispatcher_rom, 0x44u, 0x2050u); /* MOVEA.L (A0),A0 */
+        write16(&dispatcher_rom, 0x46u, 0x4ED0u); /* JMP (A0), state dispatch */
+
+        const uint32_t dispatcher_seeds[] = {0x20u, 0x30u, 0x40u};
+        static NgFunctionDiscovery dispatcher_discovery;
+        CHECK(ng_function_discover_from_seeds(&dispatcher_rom,
+                                              dispatcher_seeds,
+                                              3u,
+                                              &dispatcher_discovery));
+
+        ng_game_config_init(&config);
+        config.dispatcher_count = 1u;
+        config.dispatchers[0].kind = NG_GAME_CONFIG_DISPATCHER_OBJECT_STATE;
+        config.dispatchers[0].has_state_slot = 1;
+        config.dispatchers[0].state_slot = 0x70u;
+        config.dispatchers[0].install_slot_count = 1u;
+        config.dispatchers[0].install_slots[0] = 0x00u;
+
+        CHECK(ng_dispatch_audit_build_with_config(&dispatcher_rom,
+                                                  &dispatcher_discovery,
+                                                  &config,
+                                                  &audit));
+        CHECK(audit.computed_count == 1u);
+        CHECK(audit.runtime_computed_count == 2u);
+
+        int saw_direct_slot = 0;
+        int saw_plain_computed = 0;
+        int saw_state_slot = 0;
+        for (uint32_t i = 0; i < audit.count; ++i) {
+            if (audit.sites[i].site_addr == 0x22u &&
+                audit.sites[i].runtime_allowed) {
+                saw_direct_slot = 1;
+            } else if (audit.sites[i].site_addr == 0x30u &&
+                       !audit.sites[i].runtime_allowed) {
+                saw_plain_computed = 1;
+            } else if (audit.sites[i].site_addr == 0x46u &&
+                       audit.sites[i].runtime_allowed) {
+                saw_state_slot = 1;
+            }
+        }
+        CHECK(saw_direct_slot);
+        CHECK(saw_plain_computed);
+        CHECK(saw_state_slot);
+
+        ng_program_rom_free(&dispatcher_rom);
+    }
+
+    {
+        NgProgramRom idx_rom = make_rom(0xC0u);
+        CHECK(idx_rom.data != NULL);
+
+        write16(&idx_rom, 0x00u, 0x207Cu);       /* MOVEA.L #$40,A0 */
+        write32(&idx_rom, 0x02u, 0x00000040u);
+        write16(&idx_rom, 0x06u, 0xE548u);       /* LSL.W #2,D0 */
+        write16(&idx_rom, 0x08u, 0x2270u);       /* MOVEA.L ($0,A0,D0.W),A1 */
+        write16(&idx_rom, 0x0Au, 0x0000u);
+        write16(&idx_rom, 0x0Cu, 0x4ED1u);       /* JMP (A1) */
+        write32(&idx_rom, 0x40u, 0x00000070u);
+        write32(&idx_rom, 0x44u, 0x00000080u);
+        write32(&idx_rom, 0x48u, 0x00000090u);
+        write32(&idx_rom, 0x4Cu, 0x000000A0u);
+        write16(&idx_rom, 0x70u, 0x4E75u);
+        write16(&idx_rom, 0x80u, 0x4E75u);
+        write16(&idx_rom, 0x90u, 0x4E75u);
+        write16(&idx_rom, 0xA0u, 0x4E75u);
+
+        const uint32_t idx_seeds[] = {0x00u};
+        static NgFunctionDiscovery idx_discovery;
+        CHECK(ng_function_discover_from_seeds(&idx_rom,
+                                              idx_seeds,
+                                              1u,
+                                              &idx_discovery));
+        CHECK(ng_dispatch_audit_build(&idx_rom, &idx_discovery, &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.jump_table_count == 1u);
+        CHECK(audit.jump_table_resolved_entries == 4u);
+        CHECK(audit.jump_table_missing_entries == 0u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_JUMP_TABLE);
+        CHECK(audit.sites[0].site_addr == 0x0Cu);
+        CHECK(audit.sites[0].table_addr == 0x40u);
+
+        ng_program_rom_free(&idx_rom);
+    }
+
+    {
+        NgProgramRom self_idx_rom = make_rom(0xC0u);
+        CHECK(self_idx_rom.data != NULL);
+
+        write16(&self_idx_rom, 0x00u, 0x207Cu);       /* MOVEA.L #$40,A0 */
+        write32(&self_idx_rom, 0x02u, 0x00000040u);
+        write16(&self_idx_rom, 0x06u, 0xE548u);       /* LSL.W #2,D0 */
+        write16(&self_idx_rom, 0x08u, 0x2070u);       /* MOVEA.L ($0,A0,D0.W),A0 */
+        write16(&self_idx_rom, 0x0Au, 0x0000u);
+        write16(&self_idx_rom, 0x0Cu, 0x4E90u);       /* JSR (A0) */
+        write16(&self_idx_rom, 0x0Eu, 0x4E75u);
+        write32(&self_idx_rom, 0x40u, 0x00000070u);
+        write32(&self_idx_rom, 0x44u, 0x00000080u);
+        write32(&self_idx_rom, 0x48u, 0x00000090u);
+        write32(&self_idx_rom, 0x4Cu, 0x000000A0u);
+        write16(&self_idx_rom, 0x70u, 0x4E75u);
+        write16(&self_idx_rom, 0x80u, 0x4E75u);
+        write16(&self_idx_rom, 0x90u, 0x4E75u);
+        write16(&self_idx_rom, 0xA0u, 0x4E75u);
+
+        const uint32_t self_idx_seeds[] = {0x00u};
+        static NgFunctionDiscovery self_idx_discovery;
+        CHECK(ng_function_discover_from_seeds(&self_idx_rom,
+                                              self_idx_seeds,
+                                              1u,
+                                              &self_idx_discovery));
+        CHECK(ng_dispatch_audit_build(&self_idx_rom,
+                                      &self_idx_discovery,
+                                      &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.jump_table_count == 1u);
+        CHECK(audit.jump_table_resolved_entries == 4u);
+        CHECK(audit.jump_table_missing_entries == 0u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_JUMP_TABLE);
+        CHECK(audit.sites[0].site_addr == 0x0Cu);
+        CHECK(audit.sites[0].table_addr == 0x40u);
+
+        ng_program_rom_free(&self_idx_rom);
+    }
+
+    {
+        NgProgramRom branch_rom = make_rom(0xA0u);
+        CHECK(branch_rom.data != NULL);
+
+        write16(&branch_rom, 0x00u, 0x45FAu);       /* LEA $000040(PC),A2 */
+        write16(&branch_rom, 0x02u, 0x003Eu);
+        write16(&branch_rom, 0x04u, 0x4EF2u);       /* JMP ($0,A2,D0.W) */
+        write16(&branch_rom, 0x06u, 0x0000u);
+        write16(&branch_rom, 0x40u, 0x6000u);       /* inline BRA table */
+        write16(&branch_rom, 0x42u, 0x003Eu);
+        write16(&branch_rom, 0x44u, 0x6000u);
+        write16(&branch_rom, 0x46u, 0x003Eu);
+        write16(&branch_rom, 0x48u, 0x6000u);
+        write16(&branch_rom, 0x4Au, 0x003Eu);
+        write16(&branch_rom, 0x4Cu, 0x6000u);
+        write16(&branch_rom, 0x4Eu, 0x003Eu);
+        write16(&branch_rom, 0x50u, 0x4E75u);
+        write16(&branch_rom, 0x80u, 0x4E75u);
+        write16(&branch_rom, 0x84u, 0x4E75u);
+        write16(&branch_rom, 0x88u, 0x4E75u);
+        write16(&branch_rom, 0x8Cu, 0x4E75u);
+
+        const uint32_t branch_seeds[] = {0x00u};
+        static NgFunctionDiscovery branch_discovery;
+        CHECK(ng_function_discover_from_seeds(&branch_rom,
+                                              branch_seeds,
+                                              1u,
+                                              &branch_discovery));
+        CHECK(ng_dispatch_audit_build(&branch_rom,
+                                      &branch_discovery,
+                                      &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.jump_table_count == 1u);
+        CHECK(audit.jump_table_resolved_entries == 4u);
+        CHECK(audit.jump_table_missing_entries == 0u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_JUMP_TABLE);
+        CHECK(audit.sites[0].site_addr == 0x04u);
+        CHECK(audit.sites[0].table_addr == 0x40u);
+
+        ng_program_rom_free(&branch_rom);
+    }
+
+    {
+        NgProgramRom direct_dispatch_rom = make_rom(0xC0u);
+        CHECK(direct_dispatch_rom.data != NULL);
+
+        write16(&direct_dispatch_rom, 0x20u, 0x4EF9u); /* JMP $000080 */
+        write32(&direct_dispatch_rom, 0x22u, 0x00000080u);
+        write16(&direct_dispatch_rom, 0x26u, 0x4EF9u); /* JMP $000090 */
+        write32(&direct_dispatch_rom, 0x28u, 0x00000090u);
+        write16(&direct_dispatch_rom, 0x2Cu, 0x4EF9u); /* JMP $0000A0 */
+        write32(&direct_dispatch_rom, 0x2Eu, 0x000000A0u);
+        write16(&direct_dispatch_rom, 0x32u, 0x4E75u);
+        write16(&direct_dispatch_rom, 0x80u, 0x4E75u);
+        write16(&direct_dispatch_rom, 0x90u, 0x4E75u);
+        write16(&direct_dispatch_rom, 0xA0u, 0x4E75u);
+
+        const uint32_t direct_dispatch_seeds[] = {0x20u};
+        static NgFunctionDiscovery direct_dispatch_discovery;
+        CHECK(ng_function_discover_from_seeds(&direct_dispatch_rom,
+                                              direct_dispatch_seeds,
+                                              1u,
+                                              &direct_dispatch_discovery));
+        CHECK(ng_dispatch_audit_build(&direct_dispatch_rom,
+                                      &direct_dispatch_discovery,
+                                      &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.jump_table_count == 1u);
+        CHECK(audit.jump_table_resolved_entries == 3u);
+        CHECK(audit.jump_table_missing_entries == 0u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_JUMP_TABLE);
+        CHECK(audit.sites[0].site_addr == 0x20u);
+        CHECK(audit.sites[0].table_addr == 0x20u);
+
+        ng_program_rom_free(&direct_dispatch_rom);
+    }
+
+    {
+        NgProgramRom pc_branch_rom = make_rom(0x80u);
+        CHECK(pc_branch_rom.data != NULL);
+
+        write16(&pc_branch_rom, 0x00u, 0x4EFBu); /* JMP (2,PC,D0.W) */
+        write16(&pc_branch_rom, 0x02u, 0x0002u);
+        write16(&pc_branch_rom, 0x04u, 0x6000u); /* BRA $40 */
+        write16(&pc_branch_rom, 0x06u, 0x003Au);
+        write16(&pc_branch_rom, 0x08u, 0x6000u); /* BRA $50 */
+        write16(&pc_branch_rom, 0x0Au, 0x0046u);
+        write16(&pc_branch_rom, 0x0Cu, 0x6000u); /* BRA $60 */
+        write16(&pc_branch_rom, 0x0Eu, 0x0052u);
+        write16(&pc_branch_rom, 0x10u, 0x4E75u);
+        write16(&pc_branch_rom, 0x40u, 0x4E75u);
+        write16(&pc_branch_rom, 0x50u, 0x4E75u);
+        write16(&pc_branch_rom, 0x60u, 0x4E75u);
+
+        const uint32_t pc_branch_seeds[] = {0x00u};
+        static NgFunctionDiscovery pc_branch_discovery;
+        CHECK(ng_function_discover_from_seeds(&pc_branch_rom,
+                                              pc_branch_seeds,
+                                              1u,
+                                              &pc_branch_discovery));
+        CHECK(ng_dispatch_audit_build(&pc_branch_rom,
+                                      &pc_branch_discovery,
+                                      &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.jump_table_count == 1u);
+        CHECK(audit.jump_table_resolved_entries == 3u);
+        CHECK(audit.jump_table_missing_entries == 0u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_JUMP_TABLE);
+        CHECK(audit.sites[0].site_addr == 0x00u);
+        CHECK(audit.sites[0].table_addr == 0x04u);
+
+        ng_program_rom_free(&pc_branch_rom);
+    }
+
+    {
+        NgProgramRom terminal_branch_rom = make_rom(0xA0u);
+        CHECK(terminal_branch_rom.data != NULL);
+
+        write16(&terminal_branch_rom, 0x00u, 0x4EFBu); /* JMP (2,PC,D0.W) */
+        write16(&terminal_branch_rom, 0x02u, 0x0002u);
+        for (uint32_t i = 0; i < 9u; ++i) {
+            uint32_t entry = 0x04u + i * 4u;
+            uint32_t target = 0x82u - i * 0x0Au;
+            write16(&terminal_branch_rom, entry, 0x6000u);
+            write16(&terminal_branch_rom, entry + 2u,
+                    (uint16_t)(target - (entry + 2u)));
+            write16(&terminal_branch_rom, target, 0x4E75u);
+        }
+        write16(&terminal_branch_rom, 0x28u, 0x3EDEu);
+        write16(&terminal_branch_rom, 0x2Au, 0x2887u);
+        write16(&terminal_branch_rom, 0x2Cu, 0xDE84u);
+        write16(&terminal_branch_rom, 0x2Eu, 0x4E75u);
+
+        const uint32_t terminal_branch_seeds[] = {0x00u};
+        static NgFunctionDiscovery terminal_branch_discovery;
+        CHECK(ng_function_discover_from_seeds(&terminal_branch_rom,
+                                              terminal_branch_seeds,
+                                              1u,
+                                              &terminal_branch_discovery));
+        CHECK(ng_dispatch_audit_build(&terminal_branch_rom,
+                                      &terminal_branch_discovery,
+                                      &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.jump_table_count == 1u);
+        CHECK(audit.jump_table_resolved_entries == 10u);
+        CHECK(audit.jump_table_missing_entries == 0u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_JUMP_TABLE);
+        CHECK(audit.sites[0].site_addr == 0x00u);
+        CHECK(audit.sites[0].table_addr == 0x04u);
+
+        ng_program_rom_free(&terminal_branch_rom);
+    }
+
+    {
+        NgProgramRom pc_call_branch_rom = make_rom(0x80u);
+        CHECK(pc_call_branch_rom.data != NULL);
+
+        write16(&pc_call_branch_rom, 0x00u, 0x4EBBu); /* JSR (2,PC,D0.W) */
+        write16(&pc_call_branch_rom, 0x02u, 0x0002u);
+        write16(&pc_call_branch_rom, 0x04u, 0x6000u); /* BRA $40 */
+        write16(&pc_call_branch_rom, 0x06u, 0x003Au);
+        write16(&pc_call_branch_rom, 0x08u, 0x6000u); /* BRA $50 */
+        write16(&pc_call_branch_rom, 0x0Au, 0x0046u);
+        write16(&pc_call_branch_rom, 0x0Cu, 0x6000u); /* BRA $60 */
+        write16(&pc_call_branch_rom, 0x0Eu, 0x0052u);
+        write16(&pc_call_branch_rom, 0x10u, 0x4E75u);
+        write16(&pc_call_branch_rom, 0x40u, 0x4E75u);
+        write16(&pc_call_branch_rom, 0x50u, 0x4E75u);
+        write16(&pc_call_branch_rom, 0x60u, 0x4E75u);
+
+        const uint32_t pc_call_branch_seeds[] = {0x00u};
+        static NgFunctionDiscovery pc_call_branch_discovery;
+        CHECK(ng_function_discover_from_seeds(&pc_call_branch_rom,
+                                              pc_call_branch_seeds,
+                                              1u,
+                                              &pc_call_branch_discovery));
+        CHECK(ng_dispatch_audit_build(&pc_call_branch_rom,
+                                      &pc_call_branch_discovery,
+                                      &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.jump_table_count == 1u);
+        CHECK(audit.jump_table_resolved_entries == 3u);
+        CHECK(audit.jump_table_missing_entries == 0u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_JUMP_TABLE);
+        CHECK(audit.sites[0].site_addr == 0x00u);
+        CHECK(audit.sites[0].table_addr == 0x04u);
+
+        ng_program_rom_free(&pc_call_branch_rom);
+    }
 
     NgProgramRom stop_rom = make_rom(0x80u);
     CHECK(stop_rom.data != NULL);
@@ -194,7 +624,7 @@ int main(void) {
 
     static NgFunctionDiscovery stop_discovery;
     ng_function_discovery_init(&stop_discovery);
-    CHECK(ng_function_discovery_add(&stop_discovery, &stop_rom, 0x10u));
+    CHECK(!ng_function_discovery_add(&stop_discovery, &stop_rom, 0x10u));
     CHECK(ng_function_discovery_add(&stop_discovery, &stop_rom, 0x20u));
     CHECK(ng_function_discovery_add(&stop_discovery, &stop_rom, 0x30u));
     CHECK(ng_function_discovery_add(&stop_discovery, &stop_rom, 0x40u));

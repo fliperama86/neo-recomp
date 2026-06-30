@@ -92,6 +92,14 @@ NgNeoAudioAdpcmBEvent ng_neogeo_audio_last_adpcm_b_event(const NgNeoAudio *audio
 int ng_neogeo_audio_copy_work_ram(const NgNeoAudio *audio,
                                   uint8_t *out,
                                   uint32_t out_size);
+uint32_t ng_neogeo_audio_state_size(const NgNeoAudio *audio);
+int ng_neogeo_audio_save_state(const NgNeoAudio *audio,
+                               uint8_t *out,
+                               uint32_t out_size,
+                               uint32_t *out_written);
+int ng_neogeo_audio_load_state(NgNeoAudio *audio,
+                               const uint8_t *data,
+                               uint32_t size);
 
 /* Test/diagnostic helpers for the Neo Geo Z80-side bus. */
 uint8_t ng_neogeo_audio_debug_read_z80(const NgNeoAudio *audio, uint16_t addr);

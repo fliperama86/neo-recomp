@@ -9,6 +9,7 @@
 #include "p_rom.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define CLI_MAX_FUNCTION_PREVIEWS 4u
@@ -16,7 +17,7 @@
 
 static void print_usage(const char *argv0) {
     fprintf(stderr,
-            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>) [--emit-c <out.c>] [--emit-dispatch-audit <out.txt>] [--fail-on-dispatch-gaps]\n",
+            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>) [--emit-c <out.c>] [--emit-discovery-set <out.txt>] [--emit-dispatch-audit <out.txt>] [--emit-dispatch-suggestions <out.toml>] [--fail-on-dispatch-gaps]\n",
             argv0);
 }
 
@@ -132,6 +133,91 @@ static int emit_c_file(const char *path,
     return 1;
 }
 
+typedef struct DiscoverySetRow {
+    uint32_t addr;
+    uint32_t bank;
+} DiscoverySetRow;
+
+static int compare_discovery_set_row(const void *a, const void *b) {
+    const DiscoverySetRow *av = (const DiscoverySetRow *)a;
+    const DiscoverySetRow *bv = (const DiscoverySetRow *)b;
+    if (av->bank != bv->bank) {
+        return (av->bank > bv->bank) - (av->bank < bv->bank);
+    }
+    return (av->addr > bv->addr) - (av->addr < bv->addr);
+}
+
+static int emit_discovery_set_file(const char *path,
+                                   const NgFunctionDiscovery *discovery) {
+    if (!path || !discovery) {
+        return 0;
+    }
+
+    DiscoverySetRow *sorted = NULL;
+    if (discovery->count != 0u) {
+        sorted = (DiscoverySetRow *)malloc((size_t)discovery->count *
+                                           sizeof(*sorted));
+        if (!sorted) {
+            fprintf(stderr, "cannot allocate discovery set buffer\n");
+            return 0;
+        }
+        for (uint32_t i = 0; i < discovery->count; ++i) {
+            sorted[i].addr = discovery->addrs[i] & 0x00FFFFFFu;
+            sorted[i].bank = ng_function_discovery_bank_at(discovery, i);
+        }
+        qsort(sorted,
+              discovery->count,
+              sizeof(*sorted),
+              compare_discovery_set_row);
+    }
+
+    FILE *out = fopen(path, "w");
+    if (!out) {
+        fprintf(stderr, "cannot open %s for writing\n", path);
+        free(sorted);
+        return 0;
+    }
+
+    uint32_t written = 0u;
+    uint32_t previous = 0u;
+    uint32_t previous_bank = NG_FUNCTION_DISCOVERY_BANK_NONE;
+    int have_previous = 0;
+    int ok = 1;
+    for (uint32_t i = 0; i < discovery->count; ++i) {
+        uint32_t addr = sorted[i].addr;
+        uint32_t bank = sorted[i].bank;
+        if (have_previous && addr == previous && bank == previous_bank) {
+            continue;
+        }
+        int wrote = 0;
+        if (bank != NG_FUNCTION_DISCOVERY_BANK_NONE) {
+            wrote = fprintf(out, "bank:%u 0x%06X\n", (unsigned)bank, addr);
+        } else {
+            wrote = fprintf(out, "0x%06X\n", addr);
+        }
+        if (wrote < 0) {
+            ok = 0;
+            break;
+        }
+        previous = addr;
+        previous_bank = bank;
+        have_previous = 1;
+        ++written;
+    }
+
+    if (fclose(out) != 0) {
+        ok = 0;
+    }
+    free(sorted);
+    if (!ok) {
+        fprintf(stderr, "failed to write discovery set %s\n", path);
+        return 0;
+    }
+
+    printf("discovery set: %s (addrs=%u)\n", path, written);
+    return 1;
+}
+
 static int emit_dispatch_audit_file(const char *path,
                                     const NgProgramRom *rom,
                                     const NgFunctionDiscovery *discovery,
@@ -168,6 +254,35 @@ static int emit_dispatch_audit_file(const char *path,
     return 1;
 }
 
+static int emit_dispatch_suggestions_file(const char *path,
+                                          const NgProgramRom *rom,
+                                          const NgFunctionDiscovery *discovery,
+                                          const NgGameConfig *config) {
+    NgDispatchAudit audit;
+    if (!ng_dispatch_audit_build_with_config(rom, discovery, config, &audit)) {
+        fprintf(stderr, "failed to build dispatch audit suggestions\n");
+        return 0;
+    }
+
+    FILE *out = fopen(path, "w");
+    if (!out) {
+        fprintf(stderr, "cannot open %s for writing\n", path);
+        return 0;
+    }
+
+    int ok = ng_dispatch_audit_write_suggestions(out, &audit);
+    if (fclose(out) != 0) {
+        ok = 0;
+    }
+    if (!ok) {
+        fprintf(stderr, "failed to write dispatch suggestions %s\n", path);
+        return 0;
+    }
+
+    printf("dispatch suggestions: %s\n", path);
+    return 1;
+}
+
 static void add_discovery_seed(uint32_t *seeds,
                                uint32_t *seed_count,
                                uint32_t seed) {
@@ -183,7 +298,9 @@ int main(int argc, char **argv) {
     const char *p2_path = NULL;
     const char *neo_path = NULL;
     const char *emit_c_path = NULL;
+    const char *emit_discovery_set_path = NULL;
     const char *emit_dispatch_audit_path = NULL;
+    const char *emit_dispatch_suggestions_path = NULL;
     int fail_on_dispatch_gaps = 0;
 
     for (int i = 1; i < argc; ++i) {
@@ -197,8 +314,13 @@ int main(int argc, char **argv) {
             neo_path = argv[++i];
         } else if (strcmp(argv[i], "--emit-c") == 0 && i + 1 < argc) {
             emit_c_path = argv[++i];
+        } else if (strcmp(argv[i], "--emit-discovery-set") == 0 && i + 1 < argc) {
+            emit_discovery_set_path = argv[++i];
         } else if (strcmp(argv[i], "--emit-dispatch-audit") == 0 && i + 1 < argc) {
             emit_dispatch_audit_path = argv[++i];
+        } else if (strcmp(argv[i], "--emit-dispatch-suggestions") == 0 &&
+                   i + 1 < argc) {
+            emit_dispatch_suggestions_path = argv[++i];
         } else if (strcmp(argv[i], "--fail-on-dispatch-gaps") == 0) {
             fail_on_dispatch_gaps = 1;
         } else {
@@ -231,14 +353,40 @@ int main(int argc, char **argv) {
                                        game_config.program_fixed_size,
                                        game_config.program_bank_window_base,
                                        game_config.program_bank_window_size);
+    } else if (game_config.bank_count != 0u) {
+        fprintf(stderr, "[[bank]] entries require a [program] address map\n");
+        ng_program_rom_free(&rom);
+        return 1;
+    }
+    for (uint32_t i = 0; i < game_config.bank_count; ++i) {
+        const NgGameConfigBank *bank = &game_config.banks[i];
+        if (!bank->has_offset || !bank->has_size ||
+            !ng_program_rom_configure_bank(&rom,
+                                           bank->id,
+                                           bank->offset,
+                                           bank->size)) {
+            fprintf(stderr,
+                    "invalid bank config id=%u offset=0x%X size=0x%X\n",
+                    (unsigned)bank->id,
+                    (unsigned)bank->offset,
+                    (unsigned)bank->size);
+            ng_program_rom_free(&rom);
+            return 1;
+        }
     }
 
     printf("game config: %s\n", game_path);
-    printf("game config functions: entry=%u extra=%u discovery_files=%u jump_tables=%u runtime_dispatch=%u%s\n",
+    printf("game config functions: entry=%u extra=%u discovery_files=%u jump_tables=%u table_calls=%u state_tables=%u record_formats=%u routine_tables=%u dispatchers=%u banks=%u runtime_dispatch=%u%s\n",
            game_config.entry_count,
            game_config.extra_count,
            game_config.discovery_file_count,
            game_config.jump_table_count,
+           game_config.table_call_count,
+           game_config.state_table_count,
+           game_config.record_format_count,
+           game_config.routine_table_count,
+           game_config.dispatcher_count,
+           game_config.bank_count,
            game_config.runtime_dispatch_count,
            game_config.truncated ? " (truncated)" : "");
     if (game_config.truncated) {
@@ -283,7 +431,21 @@ int main(int argc, char **argv) {
                                                           seed_count,
                                                           &game_config,
                                                           &discovery)) {
+                    if (discovery.truncated) {
+                        fprintf(stderr,
+                                "function discovery exceeded compiled-in "
+                                "candidate limits; refusing to continue with "
+                                "a truncated discovery set\n");
+                        ng_program_rom_free(&rom);
+                        return 1;
+                    }
                     print_function_candidates(&rom, &discovery);
+                    if (emit_discovery_set_path &&
+                        !emit_discovery_set_file(emit_discovery_set_path,
+                                                 &discovery)) {
+                        ng_program_rom_free(&rom);
+                        return 1;
+                    }
                     if (emit_c_path && !emit_c_file(emit_c_path, &rom, &discovery)) {
                         ng_program_rom_free(&rom);
                         return 1;
@@ -293,6 +455,15 @@ int main(int argc, char **argv) {
                                                   &rom,
                                                   &discovery,
                                                   &game_config)) {
+                        ng_program_rom_free(&rom);
+                        return 1;
+                    }
+                    if (emit_dispatch_suggestions_path &&
+                        !emit_dispatch_suggestions_file(
+                            emit_dispatch_suggestions_path,
+                            &rom,
+                            &discovery,
+                            &game_config)) {
                         ng_program_rom_free(&rom);
                         return 1;
                     }

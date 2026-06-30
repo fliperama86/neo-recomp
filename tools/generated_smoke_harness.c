@@ -249,6 +249,34 @@ static int g_ng_generated_smoke_hot_overflow;
 static uint32_t g_ng_generated_smoke_budget_stop_addr;
 static int g_ng_generated_smoke_budget_hit;
 
+#define NG_GENERATED_SMOKE_STATE_MAGIC 0x4E475353u /* NGSS */
+#define NG_GENERATED_SMOKE_STATE_VERSION 1u
+
+typedef struct NgGeneratedSmokeStateBlob {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t size;
+    int dispatch_active;
+    int dispatch_pending;
+    uint32_t dispatch_addr;
+    uint64_t dispatch_budget;
+    uint64_t dispatch_count;
+    uint64_t cart_dispatch_count;
+    uint64_t bios_dispatch_count;
+    uint32_t last_dispatch_addr;
+    uint32_t last_cart_dispatch_addr;
+    uint32_t last_bios_dispatch_addr;
+    uint32_t recent_dispatches[NG_GENERATED_SMOKE_RECENT_DISPATCHES];
+    uint32_t hot_addr[NG_GENERATED_SMOKE_HOT_SLOTS];
+    uint64_t hot_count[NG_GENERATED_SMOKE_HOT_SLOTS];
+    uint64_t dispatch_watch_count[NG_GENERATED_SMOKE_WATCH_COUNT];
+    uint64_t instruction_watch_count[NG_GENERATED_SMOKE_WATCH_COUNT];
+    uint32_t unique_dispatch_count;
+    int hot_overflow;
+    uint32_t budget_stop_addr;
+    int budget_hit;
+} NgGeneratedSmokeStateBlob;
+
 void ng_generated_smoke_reset_dispatch_stats(void) {
     g_ng_generated_smoke_dispatch_count = 0;
     g_ng_generated_smoke_cart_dispatch_count = 0;
@@ -276,6 +304,103 @@ void ng_generated_smoke_reset_dispatch_stats(void) {
     g_ng_generated_smoke_hot_overflow = 0;
     g_ng_generated_smoke_budget_stop_addr = 0;
     g_ng_generated_smoke_budget_hit = 0;
+}
+
+uint32_t ng_generated_smoke_state_size(void) {
+    return (uint32_t)sizeof(NgGeneratedSmokeStateBlob);
+}
+
+int ng_generated_smoke_save_state(uint8_t *out,
+                                  uint32_t out_size,
+                                  uint32_t *out_written) {
+    if (out_written) {
+        *out_written = 0u;
+    }
+    if (!out || out_size < (uint32_t)sizeof(NgGeneratedSmokeStateBlob)) {
+        return 0;
+    }
+
+    NgGeneratedSmokeStateBlob state;
+    memset(&state, 0, sizeof(state));
+    state.magic = NG_GENERATED_SMOKE_STATE_MAGIC;
+    state.version = NG_GENERATED_SMOKE_STATE_VERSION;
+    state.size = (uint32_t)sizeof(state);
+    state.dispatch_active = 0;
+    state.dispatch_pending = 0;
+    state.dispatch_addr = g_ng_generated_smoke_dispatch_addr;
+    state.dispatch_budget = 0u;
+    state.dispatch_count = g_ng_generated_smoke_dispatch_count;
+    state.cart_dispatch_count = g_ng_generated_smoke_cart_dispatch_count;
+    state.bios_dispatch_count = g_ng_generated_smoke_bios_dispatch_count;
+    state.last_dispatch_addr = g_ng_generated_smoke_last_dispatch_addr;
+    state.last_cart_dispatch_addr = g_ng_generated_smoke_last_cart_dispatch_addr;
+    state.last_bios_dispatch_addr = g_ng_generated_smoke_last_bios_dispatch_addr;
+    memcpy(state.recent_dispatches,
+           g_ng_generated_smoke_recent_dispatches,
+           sizeof(state.recent_dispatches));
+    memcpy(state.hot_addr, g_ng_generated_smoke_hot_addr, sizeof(state.hot_addr));
+    memcpy(state.hot_count, g_ng_generated_smoke_hot_count, sizeof(state.hot_count));
+    memcpy(state.dispatch_watch_count,
+           g_ng_generated_smoke_dispatch_watch_count,
+           sizeof(state.dispatch_watch_count));
+    memcpy(state.instruction_watch_count,
+           g_ng_generated_smoke_instruction_watch_count,
+           sizeof(state.instruction_watch_count));
+    state.unique_dispatch_count = g_ng_generated_smoke_unique_dispatch_count;
+    state.hot_overflow = g_ng_generated_smoke_hot_overflow;
+    state.budget_stop_addr = g_ng_generated_smoke_budget_stop_addr;
+    state.budget_hit = 0;
+    memcpy(out, &state, sizeof(state));
+    if (out_written) {
+        *out_written = (uint32_t)sizeof(state);
+    }
+    return 1;
+}
+
+int ng_generated_smoke_load_state(const uint8_t *data, uint32_t size) {
+    if (!data || size < (uint32_t)sizeof(NgGeneratedSmokeStateBlob)) {
+        return 0;
+    }
+
+    NgGeneratedSmokeStateBlob state;
+    memcpy(&state, data, sizeof(state));
+    if (state.magic != NG_GENERATED_SMOKE_STATE_MAGIC ||
+        state.version != NG_GENERATED_SMOKE_STATE_VERSION ||
+        state.size != (uint32_t)sizeof(state)) {
+        return 0;
+    }
+
+    g_ng_generated_smoke_dispatch_active = 0;
+    g_ng_generated_smoke_dispatch_pending = 0;
+    g_ng_generated_smoke_dispatch_addr = state.dispatch_addr;
+    g_ng_generated_smoke_dispatch_budget = 0u;
+    g_ng_generated_smoke_dispatch_count = state.dispatch_count;
+    g_ng_generated_smoke_cart_dispatch_count = state.cart_dispatch_count;
+    g_ng_generated_smoke_bios_dispatch_count = state.bios_dispatch_count;
+    g_ng_generated_smoke_last_dispatch_addr = state.last_dispatch_addr;
+    g_ng_generated_smoke_last_cart_dispatch_addr = state.last_cart_dispatch_addr;
+    g_ng_generated_smoke_last_bios_dispatch_addr = state.last_bios_dispatch_addr;
+    memcpy(g_ng_generated_smoke_recent_dispatches,
+           state.recent_dispatches,
+           sizeof(g_ng_generated_smoke_recent_dispatches));
+    memcpy(g_ng_generated_smoke_hot_addr,
+           state.hot_addr,
+           sizeof(g_ng_generated_smoke_hot_addr));
+    memcpy(g_ng_generated_smoke_hot_count,
+           state.hot_count,
+           sizeof(g_ng_generated_smoke_hot_count));
+    memcpy(g_ng_generated_smoke_dispatch_watch_count,
+           state.dispatch_watch_count,
+           sizeof(g_ng_generated_smoke_dispatch_watch_count));
+    memcpy(g_ng_generated_smoke_instruction_watch_count,
+           state.instruction_watch_count,
+           sizeof(g_ng_generated_smoke_instruction_watch_count));
+    g_ng_generated_smoke_unique_dispatch_count = state.unique_dispatch_count;
+    g_ng_generated_smoke_hot_overflow = state.hot_overflow;
+    g_ng_generated_smoke_budget_stop_addr = state.budget_stop_addr;
+    g_ng_generated_smoke_budget_hit = 0;
+    ng_generated_smoke_clear_instruction_yield();
+    return 1;
 }
 
 void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches) {
@@ -475,6 +600,28 @@ void ng_generated_smoke_reset_dispatch_stats(void) {
            0,
            sizeof(g_ng_generated_smoke_instruction_watch_count));
     ng_generated_smoke_clear_instruction_yield();
+}
+
+uint32_t ng_generated_smoke_state_size(void) {
+    return 0u;
+}
+
+int ng_generated_smoke_save_state(uint8_t *out,
+                                  uint32_t out_size,
+                                  uint32_t *out_written) {
+    (void)out;
+    (void)out_size;
+    if (out_written) {
+        *out_written = 0u;
+    }
+    return 1;
+}
+
+int ng_generated_smoke_load_state(const uint8_t *data, uint32_t size) {
+    (void)data;
+    (void)size;
+    ng_generated_smoke_clear_instruction_yield();
+    return 1;
 }
 
 void ng_generated_smoke_set_dispatch_budget(uint64_t max_dispatches) {

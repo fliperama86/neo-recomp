@@ -111,6 +111,11 @@ uint64_t ng_generated_smoke_dispatch_count(void);
 uint64_t ng_generated_smoke_cart_dispatch_count(void);
 uint64_t ng_generated_smoke_bios_dispatch_count(void);
 uint32_t ng_generated_smoke_unique_dispatch_count(void);
+uint32_t ng_generated_smoke_state_size(void);
+int ng_generated_smoke_save_state(uint8_t *out,
+                                  uint32_t out_size,
+                                  uint32_t *out_written);
+int ng_generated_smoke_load_state(const uint8_t *data, uint32_t size);
 int ng_generated_smoke_dispatch_hot_overflow(void);
 int ng_generated_smoke_dispatch_budget_hit(void);
 uint32_t ng_generated_smoke_dispatch_budget_stop_addr(void);
@@ -356,6 +361,434 @@ static int write_file_bytes(const char *path,
     if (!ok) {
         fprintf(stderr, "failed to write %s\n", path);
     }
+    return ok;
+}
+
+#define NG_LIVE_STATE_MAGIC 0x4E475356u /* NGSV */
+#define NG_LIVE_STATE_VERSION 1u
+#define NG_LIVE_STATE_CHUNK_RUNTIME 0x52544E47u /* GNTR */
+#define NG_LIVE_STATE_CHUNK_AUDIO   0x41544E47u /* GNTA */
+#define NG_LIVE_STATE_CHUNK_SMOKE   0x53544E47u /* GNTS */
+#define NG_LIVE_STATE_CHUNK_HOST    0x48544E47u /* GNTH */
+#define NG_LIVE_HOST_STATE_MAGIC    0x484C4E47u /* GNLH */
+#define NG_LIVE_HOST_STATE_VERSION  1u
+
+typedef struct NgLiveStateFileHeader {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t header_size;
+    uint32_t chunk_count;
+    uint64_t dispatches;
+    uint64_t cpu_cycles;
+    uint32_t frame;
+    uint32_t scanline;
+    uint32_t pc;
+    uint32_t reserved;
+} NgLiveStateFileHeader;
+
+typedef struct NgLiveStateChunkHeader {
+    uint32_t id;
+    uint32_t size;
+} NgLiveStateChunkHeader;
+
+typedef struct NgLiveHostState {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t size;
+    NgLiveInput input;
+    uint64_t refreshes;
+    uint64_t audio_last_cpu_cycles;
+    uint64_t z80_cycle_remainder;
+    uint64_t z80_preadvance_cpu_credit;
+    uint64_t sample_remainder;
+    uint64_t generated_audio_frames;
+    uint64_t nonzero_audio_samples;
+    uint64_t sound_commands;
+    uint64_t queue_wait_ms;
+    uint32_t queue_clears;
+    uint32_t max_queued_audio_bytes;
+    int32_t peak_audio_sample;
+    uint8_t last_sound_command;
+    uint8_t recent_sound_commands[16];
+    uint32_t recent_sound_command_head;
+    int output_enabled;
+    int realtime_pacing;
+} NgLiveHostState;
+
+static int live_write_all(FILE *f, const void *data, size_t size) {
+    return size == 0u || fwrite(data, 1, size, f) == size;
+}
+
+static int live_write_state_chunk(FILE *f,
+                                  uint32_t id,
+                                  const uint8_t *data,
+                                  uint32_t size) {
+    NgLiveStateChunkHeader chunk;
+    chunk.id = id;
+    chunk.size = size;
+    return live_write_all(f, &chunk, sizeof(chunk)) &&
+           live_write_all(f, data, size);
+}
+
+static void live_capture_host_state(NgLiveHostState *state,
+                                    const NgLiveAudio *audio,
+                                    const NgLiveInput *input,
+                                    uint64_t refreshes) {
+    if (!state) {
+        return;
+    }
+    memset(state, 0, sizeof(*state));
+    state->magic = NG_LIVE_HOST_STATE_MAGIC;
+    state->version = NG_LIVE_HOST_STATE_VERSION;
+    state->size = (uint32_t)sizeof(*state);
+    if (input) {
+        state->input = *input;
+    }
+    state->refreshes = refreshes;
+    if (audio) {
+        state->audio_last_cpu_cycles = audio->last_cpu_cycles;
+        state->z80_cycle_remainder = audio->z80_cycle_remainder;
+        state->z80_preadvance_cpu_credit = audio->z80_preadvance_cpu_credit;
+        state->sample_remainder = audio->sample_remainder;
+        state->generated_audio_frames = audio->generated_audio_frames;
+        state->nonzero_audio_samples = audio->nonzero_audio_samples;
+        state->sound_commands = audio->sound_commands;
+        state->queue_wait_ms = audio->queue_wait_ms;
+        state->queue_clears = audio->queue_clears;
+        state->max_queued_audio_bytes = audio->max_queued_audio_bytes;
+        state->peak_audio_sample = audio->peak_audio_sample;
+        state->last_sound_command = audio->last_sound_command;
+        memcpy(state->recent_sound_commands,
+               audio->recent_sound_commands,
+               sizeof(state->recent_sound_commands));
+        state->recent_sound_command_head = audio->recent_sound_command_head;
+        state->output_enabled = audio->output_enabled;
+        state->realtime_pacing = audio->realtime_pacing;
+    }
+}
+
+static int live_restore_host_state(const NgLiveHostState *state,
+                                   NgLiveAudio *audio,
+                                   NgLiveInput *input,
+                                   uint64_t *refreshes) {
+    if (!state ||
+        state->magic != NG_LIVE_HOST_STATE_MAGIC ||
+        state->version != NG_LIVE_HOST_STATE_VERSION ||
+        state->size != (uint32_t)sizeof(*state)) {
+        return 0;
+    }
+    if (input) {
+        *input = state->input;
+        live_input_apply(input);
+    }
+    if (refreshes) {
+        *refreshes = state->refreshes;
+    }
+    if (audio) {
+        audio->last_cpu_cycles = state->audio_last_cpu_cycles;
+        audio->z80_cycle_remainder = state->z80_cycle_remainder;
+        audio->z80_preadvance_cpu_credit = state->z80_preadvance_cpu_credit;
+        audio->sample_remainder = state->sample_remainder;
+        audio->generated_audio_frames = state->generated_audio_frames;
+        audio->nonzero_audio_samples = state->nonzero_audio_samples;
+        audio->sound_commands = state->sound_commands;
+        audio->queue_wait_ms = state->queue_wait_ms;
+        audio->queue_clears = state->queue_clears;
+        audio->max_queued_audio_bytes = state->max_queued_audio_bytes;
+        audio->peak_audio_sample = state->peak_audio_sample;
+        audio->last_sound_command = state->last_sound_command;
+        memcpy(audio->recent_sound_commands,
+               state->recent_sound_commands,
+               sizeof(audio->recent_sound_commands));
+        audio->recent_sound_command_head = state->recent_sound_command_head;
+        audio->output_buffer_frames = 0u;
+        audio->output_enabled = state->output_enabled;
+        audio->realtime_pacing = state->realtime_pacing;
+        if (audio->device_open) {
+            SDL_ClearQueuedAudio(audio->device);
+        }
+    }
+    return 1;
+}
+
+static int live_save_savestate(const char *path,
+                               NgLiveAudio *audio,
+                               const NgLiveInput *input,
+                               uint64_t refreshes) {
+    if (!path || !*path) {
+        return 0;
+    }
+
+    uint32_t runtime_size = ng_neogeo_runtime_state_size();
+    uint32_t audio_size = audio && audio->audio ?
+        ng_neogeo_audio_state_size(audio->audio) : 0u;
+    uint32_t smoke_size = ng_generated_smoke_state_size();
+    uint32_t host_size = (uint32_t)sizeof(NgLiveHostState);
+    uint8_t *runtime_state = runtime_size ? (uint8_t *)malloc(runtime_size) : NULL;
+    uint8_t *audio_state = audio_size ? (uint8_t *)malloc(audio_size) : NULL;
+    uint8_t *smoke_state = smoke_size ? (uint8_t *)malloc(smoke_size) : NULL;
+    NgLiveHostState host_state;
+    uint32_t written = 0u;
+    int ok = 1;
+
+    if ((runtime_size && !runtime_state) ||
+        (audio_size && !audio_state) ||
+        (smoke_size && !smoke_state)) {
+        fprintf(stderr, "savestate: failed to allocate state buffers\n");
+        ok = 0;
+    }
+    if (ok && runtime_size &&
+        (!ng_neogeo_runtime_save_state(runtime_state, runtime_size, &written) ||
+         written != runtime_size)) {
+        fprintf(stderr, "savestate: failed to capture runtime state\n");
+        ok = 0;
+    }
+    if (ok && audio_size &&
+        (!ng_neogeo_audio_save_state(audio->audio, audio_state, audio_size, &written) ||
+         written != audio_size)) {
+        fprintf(stderr, "savestate: failed to capture audio state\n");
+        ok = 0;
+    }
+    if (ok && smoke_size &&
+        (!ng_generated_smoke_save_state(smoke_state, smoke_size, &written) ||
+         written != smoke_size)) {
+        fprintf(stderr, "savestate: failed to capture dispatch state\n");
+        ok = 0;
+    }
+    live_capture_host_state(&host_state, audio, input, refreshes);
+
+    FILE *f = NULL;
+    if (ok) {
+        f = fopen(path, "wb");
+        if (!f) {
+            fprintf(stderr, "savestate: failed to open %s: %s\n",
+                    path, strerror(errno));
+            ok = 0;
+        }
+    }
+    if (ok) {
+        NgLiveStateFileHeader header;
+        memset(&header, 0, sizeof(header));
+        header.magic = NG_LIVE_STATE_MAGIC;
+        header.version = NG_LIVE_STATE_VERSION;
+        header.header_size = (uint32_t)sizeof(header);
+        header.chunk_count = 1u +
+            (runtime_size ? 1u : 0u) +
+            (audio_size ? 1u : 0u) +
+            (smoke_size ? 1u : 0u);
+        header.dispatches = ng_generated_smoke_dispatch_count();
+        header.cpu_cycles = ng_neogeo_cpu_cycles();
+        header.frame = ng_neogeo_frame_count();
+        header.scanline = ng_neogeo_current_scanline();
+        header.pc = g_ng_m68k.pc & 0x00FFFFFFu;
+        ok = live_write_all(f, &header, sizeof(header));
+        if (ok && runtime_size) {
+            ok = live_write_state_chunk(f,
+                                        NG_LIVE_STATE_CHUNK_RUNTIME,
+                                        runtime_state,
+                                        runtime_size);
+        }
+        if (ok && audio_size) {
+            ok = live_write_state_chunk(f,
+                                        NG_LIVE_STATE_CHUNK_AUDIO,
+                                        audio_state,
+                                        audio_size);
+        }
+        if (ok && smoke_size) {
+            ok = live_write_state_chunk(f,
+                                        NG_LIVE_STATE_CHUNK_SMOKE,
+                                        smoke_state,
+                                        smoke_size);
+        }
+        if (ok) {
+            ok = live_write_state_chunk(f,
+                                        NG_LIVE_STATE_CHUNK_HOST,
+                                        (const uint8_t *)&host_state,
+                                        host_size);
+        }
+    }
+    if (f && fclose(f) != 0) {
+        ok = 0;
+    }
+    if (!ok) {
+        fprintf(stderr, "savestate: failed to write %s\n", path);
+    } else {
+        fprintf(stderr,
+                "savestate: saved %s at dispatches=%llu frame=%u pc=$%06X\n",
+                path,
+                (unsigned long long)ng_generated_smoke_dispatch_count(),
+                ng_neogeo_frame_count(),
+                g_ng_m68k.pc & 0x00FFFFFFu);
+    }
+
+    free(runtime_state);
+    free(audio_state);
+    free(smoke_state);
+    return ok;
+}
+
+static int live_find_state_chunk(const uint8_t *data,
+                                 uint32_t size,
+                                 uint32_t id,
+                                 const uint8_t **out_data,
+                                 uint32_t *out_size) {
+    if (out_data) {
+        *out_data = NULL;
+    }
+    if (out_size) {
+        *out_size = 0u;
+    }
+    if (!data || size < (uint32_t)sizeof(NgLiveStateFileHeader)) {
+        return 0;
+    }
+
+    NgLiveStateFileHeader header;
+    memcpy(&header, data, sizeof(header));
+    if (header.magic != NG_LIVE_STATE_MAGIC ||
+        header.version != NG_LIVE_STATE_VERSION ||
+        header.header_size < (uint32_t)sizeof(header) ||
+        header.header_size > size) {
+        return 0;
+    }
+
+    uint32_t offset = header.header_size;
+    for (uint32_t i = 0; i < header.chunk_count; ++i) {
+        if (offset > size ||
+            size - offset < (uint32_t)sizeof(NgLiveStateChunkHeader)) {
+            return 0;
+        }
+        NgLiveStateChunkHeader chunk;
+        memcpy(&chunk, data + offset, sizeof(chunk));
+        offset += (uint32_t)sizeof(chunk);
+        if (chunk.size > size - offset) {
+            return 0;
+        }
+        if (chunk.id == id) {
+            if (out_data) {
+                *out_data = data + offset;
+            }
+            if (out_size) {
+                *out_size = chunk.size;
+            }
+            return 1;
+        }
+        offset += chunk.size;
+    }
+    return 0;
+}
+
+static int live_load_savestate(const char *path,
+                               NgLiveAudio *audio,
+                               NgLiveInput *input,
+                               uint64_t *refreshes) {
+    if (!path || !*path) {
+        return 0;
+    }
+
+    uint8_t *data = NULL;
+    uint32_t size = 0u;
+    if (!read_file(path, &data, &size)) {
+        return 0;
+    }
+
+    NgLiveStateFileHeader header;
+    int ok = 1;
+    if (size < (uint32_t)sizeof(header)) {
+        ok = 0;
+    } else {
+        memcpy(&header, data, sizeof(header));
+        if (header.magic != NG_LIVE_STATE_MAGIC ||
+            header.version != NG_LIVE_STATE_VERSION ||
+            header.header_size != (uint32_t)sizeof(header)) {
+            ok = 0;
+        }
+    }
+
+    const uint8_t *chunk_data = NULL;
+    uint32_t chunk_size = 0u;
+    if (ok &&
+        live_find_state_chunk(data,
+                              size,
+                              NG_LIVE_STATE_CHUNK_RUNTIME,
+                              &chunk_data,
+                              &chunk_size)) {
+        if (!ng_neogeo_runtime_load_state(chunk_data, chunk_size)) {
+            fprintf(stderr, "savestate: runtime chunk rejected\n");
+            ok = 0;
+        }
+    } else if (ok) {
+        fprintf(stderr, "savestate: missing runtime chunk\n");
+        ok = 0;
+    }
+
+    if (ok &&
+        live_find_state_chunk(data,
+                              size,
+                              NG_LIVE_STATE_CHUNK_AUDIO,
+                              &chunk_data,
+                              &chunk_size) &&
+        audio && audio->audio) {
+        if (!ng_neogeo_audio_load_state(audio->audio, chunk_data, chunk_size)) {
+            fprintf(stderr, "savestate: audio chunk rejected\n");
+            ok = 0;
+        }
+    }
+
+    if (ok &&
+        live_find_state_chunk(data,
+                              size,
+                              NG_LIVE_STATE_CHUNK_SMOKE,
+                              &chunk_data,
+                              &chunk_size)) {
+        if (!ng_generated_smoke_load_state(chunk_data, chunk_size)) {
+            fprintf(stderr, "savestate: dispatch chunk rejected\n");
+            ok = 0;
+        }
+    } else if (ok) {
+        fprintf(stderr, "savestate: missing dispatch chunk\n");
+        ok = 0;
+    }
+
+    if (ok &&
+        live_find_state_chunk(data,
+                              size,
+                              NG_LIVE_STATE_CHUNK_HOST,
+                              &chunk_data,
+                              &chunk_size)) {
+        if (chunk_size != (uint32_t)sizeof(NgLiveHostState) ||
+            !live_restore_host_state((const NgLiveHostState *)chunk_data,
+                                     audio,
+                                     input,
+                                     refreshes)) {
+            fprintf(stderr, "savestate: host chunk rejected\n");
+            ok = 0;
+        }
+    }
+
+    if (ok && audio) {
+        if (audio->last_cpu_cycles > ng_neogeo_cpu_cycles()) {
+            audio->last_cpu_cycles = ng_neogeo_cpu_cycles();
+        }
+        audio->output_buffer_frames = 0u;
+        if (audio->device_open) {
+            SDL_ClearQueuedAudio(audio->device);
+        }
+        if (audio->audio) {
+            ng_neogeo_set_sound_reply(ng_neogeo_audio_reply_latch(audio->audio));
+        }
+    }
+
+    if (ok) {
+        fprintf(stderr,
+                "savestate: loaded %s at dispatches=%llu frame=%u pc=$%06X\n",
+                path,
+                (unsigned long long)ng_generated_smoke_dispatch_count(),
+                ng_neogeo_frame_count(),
+                g_ng_m68k.pc & 0x00FFFFFFu);
+    } else {
+        fprintf(stderr, "savestate: failed to load %s\n", path);
+    }
+    free(data);
     return ok;
 }
 
@@ -1728,6 +2161,10 @@ static void usage(const char *argv0) {
             "  --diagnostics-interval <n>     log detailed diagnostics every n frames\n"
             "  --perf-log                     log rolling CPU/render/SDL frame costs\n"
             "  --dump-state-dir <dir>         write work/backup/palette/VRAM dumps on exit\n"
+            "  --state-file <path>            F5/F8 savestate path (default: mslug_live.sav)\n"
+            "  --load-state <path>            load savestate at startup and skip fast-forward\n"
+            "  --autosave-state <path>        save savestate if generated dispatch misses\n"
+            "  --save-state-on-exit           save to --state-file before exiting\n"
             "  --stall-refreshes <n>          log if scanline/frame stalls for n refreshes (default: 180, 0 disables)\n"
             "  --no-audio                     run the Z80/YM2610 core but do not open SDL audio output\n"
             "  --audio-test-command <n>       inject one M1 command at launch for audio diagnostics (for mslug, 0xD5 is audible)\n"
@@ -1765,7 +2202,14 @@ int main(int argc, char **argv) {
     int start_bios = 0;
     int perf_log = 0;
     int audio_output_enabled = 1;
+    const char *save_state_on_exit_env = getenv("NG_MSLUG_SDL_SAVE_STATE_ON_EXIT");
+    int save_state_on_exit = save_state_on_exit_env &&
+        *save_state_on_exit_env &&
+        strcmp(save_state_on_exit_env, "0") != 0;
     const char *dump_state_dir = NULL;
+    const char *state_file_path = getenv("NG_MSLUG_SDL_STATE_FILE");
+    const char *load_state_path = getenv("NG_MSLUG_SDL_LOAD_STATE");
+    const char *autosave_state_path = getenv("NG_MSLUG_SDL_AUTOSAVE_STATE");
     NgLivePresentMode present_mode = NG_LIVE_PRESENT_FRAME;
     uint32_t palette_bank_mode = NG_LIVE_PALETTE_BANK_ACTIVE;
 
@@ -1838,6 +2282,36 @@ int main(int argc, char **argv) {
             }
             dump_state_dir = argv[argi++];
             continue;
+        } else if (strcmp(option, "--state-file") == 0 ||
+                   strcmp(option, "--savestate") == 0) {
+            if (argi >= argc) {
+                fprintf(stderr, "%s requires a file path\n", option);
+                usage(argv[0]);
+                return 2;
+            }
+            state_file_path = argv[argi++];
+            continue;
+        } else if (strcmp(option, "--load-state") == 0 ||
+                   strcmp(option, "--load-savestate") == 0) {
+            if (argi >= argc) {
+                fprintf(stderr, "%s requires a file path\n", option);
+                usage(argv[0]);
+                return 2;
+            }
+            load_state_path = argv[argi++];
+            continue;
+        } else if (strcmp(option, "--autosave-state") == 0 ||
+                   strcmp(option, "--autosave-savestate") == 0) {
+            if (argi >= argc) {
+                fprintf(stderr, "%s requires a file path\n", option);
+                usage(argv[0]);
+                return 2;
+            }
+            autosave_state_path = argv[argi++];
+            continue;
+        } else if (strcmp(option, "--save-state-on-exit") == 0) {
+            save_state_on_exit = 1;
+            continue;
         } else if (strcmp(option, "--stall-refreshes") == 0) {
             target = &stall_refreshes;
         } else if (strcmp(option, "--scale") == 0) {
@@ -1889,6 +2363,12 @@ int main(int argc, char **argv) {
     const char *neo_path = argv[argi];
     const char *bios_path = argv[argi + 1];
     const char *lo_rom_path = argc - argi == 3 ? argv[argi + 2] : NULL;
+    if (!state_file_path || !*state_file_path) {
+        state_file_path = "mslug_live.sav";
+    }
+    if (!autosave_state_path || !*autosave_state_path) {
+        autosave_state_path = state_file_path;
+    }
 
     NgNeoRomImage image;
     memset(&image, 0, sizeof(image));
@@ -1904,6 +2384,8 @@ int main(int argc, char **argv) {
     NgLiveInput live_input;
     memset(&live_audio, 0, sizeof(live_audio));
     live_input_reset(&live_input);
+    uint64_t loaded_refreshes = 0u;
+    int loaded_savestate = 0;
 
     if (!ng_neo_rom_image_load(&image, neo_path) ||
         !read_file(bios_path, &bios_data, &bios_size)) {
@@ -1972,6 +2454,21 @@ int main(int argc, char **argv) {
         ng_generated_smoke_set_cycle_observer(live_audio_cycle_observer);
     }
 
+    if (load_state_path && *load_state_path) {
+        if (!live_load_savestate(load_state_path,
+                                 &live_audio,
+                                 &live_input,
+                                 &loaded_refreshes)) {
+            live_audio_close(&live_audio);
+            ng_neo_rom_image_free(&image);
+            free(bios_data);
+            free(zoom_rom);
+            return 1;
+        }
+        loaded_savestate = 1;
+        fast_forward = 0u;
+    }
+
     if (!run_fast_forward(fast_forward, initial_entry, &live_audio)) {
         live_audio_close(&live_audio);
         ng_neo_rom_image_free(&image);
@@ -2038,7 +2535,7 @@ int main(int argc, char **argv) {
     fprintf(stderr,
             "live host started: entry=$%06X cart_entry=$%06X dispatches=%llu "
             "frame=%u scanline=%u present=%s palette=%s watchdog_cycles=%llu "
-            "video_settle=%llu frame_hold=%llu audio=%s/%uHz ym=%uHz\n",
+            "video_settle=%llu frame_hold=%llu audio=%s/%uHz ym=%uHz state=%s%s\n",
             initial_entry & 0x00FFFFFFu,
             cart_entry & 0x00FFFFFFu,
             (unsigned long long)ng_generated_smoke_dispatch_count(),
@@ -2053,9 +2550,11 @@ int main(int argc, char **argv) {
                 (live_audio.output_enabled ? "silent" : "off"),
             live_audio.device_open && live_audio.spec.freq > 0 ?
                 (uint32_t)live_audio.spec.freq : NG_LIVE_AUDIO_SAMPLE_RATE,
-            ng_neogeo_audio_ym2610_native_sample_rate(live_audio.audio));
+            ng_neogeo_audio_ym2610_native_sample_rate(live_audio.audio),
+            state_file_path,
+            loaded_savestate ? " loaded" : "");
     fprintf(stderr,
-            "keys: q/Escape quit, Space pause/resume, n/. step one frame, m audio test, +/- cap; P1 WASD+U/J/I/K, Enter start, 5 coin\n");
+            "keys: q/Escape quit, Space pause/resume, n/. step one frame, F5 save, F8 load, m audio test, +/- cap; P1 WASD+U/J/I/K, Enter start, 5 coin\n");
 
     int quit = 0;
     int paused = 0;
@@ -2079,7 +2578,7 @@ int main(int argc, char **argv) {
     live_perf_reset(&perf_window);
     uint32_t last_progress_frame = ng_neogeo_frame_count();
     uint16_t last_progress_scanline = ng_neogeo_current_scanline();
-    uint64_t refreshes = 0;
+    uint64_t refreshes = loaded_savestate ? loaded_refreshes : 0u;
     while (!quit) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -2094,6 +2593,26 @@ int main(int argc, char **argv) {
                 } else if (key == SDLK_n || key == SDLK_PERIOD) {
                     step_requested = 1;
                     hold_phase = 0;
+                } else if (key == SDLK_F5) {
+                    if (!event.key.repeat) {
+                        (void)live_save_savestate(state_file_path,
+                                                  &live_audio,
+                                                  &live_input,
+                                                  refreshes);
+                    }
+                } else if (key == SDLK_F8) {
+                    if (!event.key.repeat &&
+                        live_load_savestate(state_file_path,
+                                            &live_audio,
+                                            &live_input,
+                                            &refreshes)) {
+                        hold_phase = 0;
+                        step_requested = 0;
+                        last_progress_frame = ng_neogeo_frame_count();
+                        last_progress_scanline = ng_neogeo_current_scanline();
+                        stagnant_refreshes = 0;
+                        stall_reported = 0;
+                    }
                 } else if (key == SDLK_m) {
                     live_audio_send_command(&live_audio,
                                             NG_LIVE_AUDIO_DIAGNOSTIC_COMMAND);
@@ -2155,6 +2674,12 @@ int main(int argc, char **argv) {
                 ok = run_dispatch_slice(dispatches_per_refresh, initial_entry);
             }
             if (!ok) {
+                if (autosave_state_path && *autosave_state_path) {
+                    (void)live_save_savestate(autosave_state_path,
+                                              &live_audio,
+                                              &live_input,
+                                              refreshes);
+                }
                 quit = 1;
             }
             live_audio_sync_to_runtime(&live_audio);
@@ -2359,6 +2884,13 @@ int main(int argc, char **argv) {
         uint64_t perf_after_throttle = SDL_GetPerformanceCounter();
         perf_window.throttle_ticks += live_perf_delta(perf_before_throttle,
                                                       perf_after_throttle);
+    }
+
+    if (save_state_on_exit) {
+        (void)live_save_savestate(state_file_path,
+                                  &live_audio,
+                                  &live_input,
+                                  refreshes);
     }
 
     uint32_t audio_report_sample_rate = live_audio.device_open && live_audio.spec.freq > 0 ?

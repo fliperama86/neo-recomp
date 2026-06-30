@@ -70,6 +70,7 @@ typedef struct NgNeoSoundCommandEvent {
     (NG_NEO_WATCHDOG_TIMEOUT_MASTER_TICKS / 2u)
 
 void ng_neogeo_set_external_dispatch(NgExternalDispatchHandler handler);
+void ng_neogeo_set_dispatch_miss_log_path(const char *path);
 void ng_m68k_set_interrupt_level(uint8_t level, uint8_t vector);
 void ng_m68k_clear_interrupt_level(void);
 
@@ -183,6 +184,11 @@ uint32_t ng_neogeo_backup_ram_nonzero_bytes(void);
 uint32_t ng_neogeo_backup_ram_checksum(void);
 uint32_t ng_neogeo_vram_nonzero_words(void);
 uint32_t ng_neogeo_vram_checksum(void);
+uint32_t ng_neogeo_runtime_state_size(void);
+int ng_neogeo_runtime_save_state(uint8_t *out,
+                                 uint32_t out_size,
+                                 uint32_t *out_written);
+int ng_neogeo_runtime_load_state(const uint8_t *data, uint32_t size);
 int ng_neogeo_copy_work_ram(uint8_t *out, uint32_t out_size);
 int ng_neogeo_copy_palette_ram(uint8_t *out, uint32_t out_size);
 int ng_neogeo_copy_backup_ram(uint8_t *out, uint32_t out_size);

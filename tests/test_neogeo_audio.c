@@ -453,6 +453,46 @@ static int test_audio_tracks_adpcm_b_keyon_diagnostics(void) {
     return 0;
 }
 
+static int test_audio_state_round_trip(void) {
+    uint8_t m_rom[0x8000u];
+    memset(m_rom, 0, sizeof(m_rom));
+
+    NgNeoAudio *audio = ng_neogeo_audio_create();
+    CHECK(audio != NULL);
+    ng_neogeo_audio_set_roms(audio, m_rom, sizeof(m_rom), NULL, 0u, NULL, 0u);
+    ng_neogeo_audio_reset(audio);
+    ng_neogeo_audio_debug_write_z80(audio, 0xF812u, 0xA5u);
+    ng_neogeo_audio_debug_port_write(audio, 0x000Bu, 0x00u);
+    ng_neogeo_audio_write_command(audio, 0x44u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0004u, 0x22u);
+    ng_neogeo_audio_debug_port_write(audio, 0x0005u, 0x33u);
+    ng_neogeo_audio_advance_z80_cycles(audio, 32u);
+
+    uint32_t state_size = ng_neogeo_audio_state_size(audio);
+    uint8_t *state = (uint8_t *)malloc(state_size);
+    uint32_t written = 0u;
+    CHECK(state != NULL);
+    CHECK(ng_neogeo_audio_save_state(audio, state, state_size, &written));
+    CHECK(written == state_size);
+
+    ng_neogeo_audio_reset(audio);
+    CHECK(ng_neogeo_audio_debug_read_z80(audio, 0xF812u) == 0x00u);
+    CHECK(ng_neogeo_audio_command_latch(audio) == 0x00u);
+    CHECK(ng_neogeo_audio_load_state(audio, state, written));
+    CHECK(ng_neogeo_audio_debug_read_z80(audio, 0xF812u) == 0xA5u);
+    CHECK(ng_neogeo_audio_command_latch(audio) == 0x44u);
+    CHECK(ng_neogeo_audio_ym_write_count(audio) == 1u);
+    NgNeoAudioYmWrite last = ng_neogeo_audio_last_ym_write(audio);
+    CHECK(last.port == 1u);
+    CHECK(last.address == 0x22u);
+    CHECK(last.data == 0x33u);
+    CHECK(ng_neogeo_audio_z80_cycles(audio) >= 32u);
+
+    free(state);
+    ng_neogeo_audio_destroy(audio);
+    return 0;
+}
+
 int main(void) {
     if (test_audio_initial_banks() != 0) return 1;
     if (test_audio_ram_window() != 0) return 1;
@@ -465,5 +505,6 @@ int main(void) {
     if (test_audio_ym2610_generates_samples() != 0) return 1;
     if (test_audio_ym2610_combines_v_rom_chunks_for_adpcm() != 0) return 1;
     if (test_audio_tracks_adpcm_b_keyon_diagnostics() != 0) return 1;
+    if (test_audio_state_round_trip() != 0) return 1;
     return 0;
 }

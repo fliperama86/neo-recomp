@@ -184,6 +184,25 @@ int main(void) {
     CHECK(ng_program_rom_addr_is_mapped(&rom, 0x200237u));
     CHECK(!ng_program_rom_addr_is_mapped(&rom, 0x200238u));
     CHECK(ng_program_rom_read8(&rom, 0x200000u) == rom.data[0x1000u]);
+    CHECK(ng_program_rom_bank_count(&rom) == 1u);
+    CHECK(ng_program_rom_bank_is_configured(&rom, 0u));
+    CHECK(!ng_program_rom_bank_is_configured(&rom, 1u));
+    CHECK(ng_program_rom_addr_is_banked(&rom, 0x200000u));
+    ng_program_rom_select_bank(&rom, 1u);
+    CHECK(!ng_program_rom_addr_is_mapped(&rom, 0x200000u));
+    ng_program_rom_select_bank(&rom, 0u);
+    CHECK(ng_program_rom_addr_is_mapped(&rom, 0x200000u));
+    CHECK(!ng_program_rom_configure_bank(&rom, 2u, 0x1100u, 0u));
+    CHECK(!ng_program_rom_configure_bank(&rom, 2u, 0x1100u, 0x239u));
+    CHECK(!ng_program_rom_configure_bank(&rom, 2u, rom.size, 0x100u));
+    CHECK(ng_program_rom_configure_bank(&rom, 2u, 0x1100u, 0x100u));
+    CHECK(ng_program_rom_bank_count(&rom) == 3u);
+    CHECK(!ng_program_rom_bank_is_configured(&rom, 1u));
+    CHECK(ng_program_rom_bank_is_configured(&rom, 2u));
+    ng_program_rom_select_bank(&rom, 2u);
+    CHECK(ng_program_rom_addr_is_mapped(&rom, 0x200000u));
+    CHECK(ng_program_rom_read8(&rom, 0x200000u) == rom.data[0x1100u]);
+    CHECK(!ng_program_rom_addr_is_mapped(&rom, 0x200100u));
 
     ng_program_rom_free(&rom);
 

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 #include <new>
+#include <vector>
 
 namespace {
 
@@ -184,6 +185,67 @@ struct NgNeoYm2610 {
     YmBackend backend;
 };
 
+static constexpr uint32_t kYm2610StateMagic = 0x4E475953; /* NGYS */
+static constexpr uint32_t kYm2610StateVersion = 1;
+
+struct Ym2610StatePrefix {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t size;
+    int32_t busy_cycles;
+    int32_t timer_cycles[2];
+    uint8_t irq_pending;
+    uint8_t reserved[7];
+    uint32_t native_rate;
+    uint64_t native_phase_bits;
+    int32_t last_output_data[ymfm::ym2610::OUTPUTS];
+    uint32_t ymfm_size;
+};
+
+static void append_bytes(std::vector<uint8_t> &buffer,
+                         const void *data,
+                         size_t size) {
+    const uint8_t *bytes = static_cast<const uint8_t *>(data);
+    buffer.insert(buffer.end(), bytes, bytes + size);
+}
+
+static std::vector<uint8_t> save_ym2610_state_vector(NgNeoYm2610 *ym) {
+    std::vector<uint8_t> out;
+    if (!ym) {
+        return out;
+    }
+
+    std::vector<uint8_t> ymfm_data;
+    ymfm::ymfm_saved_state ymfm_state(ymfm_data, true);
+    ym->backend.chip.save_restore(ymfm_state);
+
+    Ym2610StatePrefix prefix;
+    std::memset(&prefix, 0, sizeof(prefix));
+    prefix.magic = kYm2610StateMagic;
+    prefix.version = kYm2610StateVersion;
+    prefix.size = static_cast<uint32_t>(sizeof(prefix) + ymfm_data.size());
+    prefix.busy_cycles = ym->backend.busy_cycles;
+    prefix.timer_cycles[0] = ym->backend.timer_cycles[0];
+    prefix.timer_cycles[1] = ym->backend.timer_cycles[1];
+    prefix.irq_pending = ym->backend.irq_pending ? 1u : 0u;
+    prefix.native_rate = ym->backend.native_rate;
+    static_assert(sizeof(prefix.native_phase_bits) == sizeof(ym->backend.native_phase),
+                  "unexpected double size");
+    std::memcpy(&prefix.native_phase_bits,
+                &ym->backend.native_phase,
+                sizeof(prefix.native_phase_bits));
+    for (uint32_t i = 0; i < ymfm::ym2610::OUTPUTS; ++i) {
+        prefix.last_output_data[i] = ym->backend.last_output.data[i];
+    }
+    prefix.ymfm_size = static_cast<uint32_t>(ymfm_data.size());
+
+    append_bytes(out, &prefix, sizeof(prefix));
+    if (!ymfm_data.empty()) {
+        append_bytes(out, ymfm_data.data(), ymfm_data.size());
+    }
+    return out;
+}
+
 NgNeoYm2610 *ng_neogeo_ym2610_create(void) {
     try {
         return new NgNeoYm2610();
@@ -310,6 +372,72 @@ uint32_t ng_neogeo_ym2610_native_sample_rate(NgNeoYm2610 *ym) {
 
 uint8_t ng_neogeo_ym2610_irq_pending(NgNeoYm2610 *ym) {
     return ym && ym->backend.irq_pending ? 1u : 0u;
+}
+
+uint32_t ng_neogeo_ym2610_state_size(NgNeoYm2610 *ym) {
+    std::vector<uint8_t> state = save_ym2610_state_vector(ym);
+    return static_cast<uint32_t>(state.size());
+}
+
+int ng_neogeo_ym2610_save_state(NgNeoYm2610 *ym,
+                                uint8_t *out,
+                                uint32_t out_size,
+                                uint32_t *out_written) {
+    if (out_written) {
+        *out_written = 0;
+    }
+    if (!ym || !out) {
+        return 0;
+    }
+
+    std::vector<uint8_t> state = save_ym2610_state_vector(ym);
+    if (state.empty() || out_size < state.size()) {
+        return 0;
+    }
+    std::memcpy(out, state.data(), state.size());
+    if (out_written) {
+        *out_written = static_cast<uint32_t>(state.size());
+    }
+    return 1;
+}
+
+int ng_neogeo_ym2610_load_state(NgNeoYm2610 *ym,
+                                const uint8_t *data,
+                                uint32_t size) {
+    if (!ym || !data || size < sizeof(Ym2610StatePrefix)) {
+        return 0;
+    }
+
+    Ym2610StatePrefix prefix;
+    std::memcpy(&prefix, data, sizeof(prefix));
+    if (prefix.magic != kYm2610StateMagic ||
+        prefix.version != kYm2610StateVersion ||
+        prefix.size != size ||
+        prefix.ymfm_size != size - sizeof(prefix)) {
+        return 0;
+    }
+
+    ym->backend.busy_cycles = prefix.busy_cycles;
+    ym->backend.timer_cycles[0] = prefix.timer_cycles[0];
+    ym->backend.timer_cycles[1] = prefix.timer_cycles[1];
+    ym->backend.irq_pending = prefix.irq_pending != 0;
+    ym->backend.native_rate = prefix.native_rate;
+    std::memcpy(&ym->backend.native_phase,
+                &prefix.native_phase_bits,
+                sizeof(ym->backend.native_phase));
+    for (uint32_t i = 0; i < ymfm::ym2610::OUTPUTS; ++i) {
+        ym->backend.last_output.data[i] = prefix.last_output_data[i];
+    }
+
+    std::vector<uint8_t> ymfm_data;
+    ymfm_data.resize(prefix.ymfm_size);
+    if (prefix.ymfm_size != 0) {
+        std::memcpy(ymfm_data.data(), data + sizeof(prefix), prefix.ymfm_size);
+    }
+    ymfm::ymfm_saved_state ymfm_state(ymfm_data, false);
+    ym->backend.chip.save_restore(ymfm_state);
+    ym->backend.chip.invalidate_caches();
+    return 1;
 }
 
 } // extern "C"

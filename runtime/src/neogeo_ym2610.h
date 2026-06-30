@@ -25,6 +25,14 @@ void ng_neogeo_ym2610_generate(NgNeoYm2610 *ym,
                                uint32_t sample_rate);
 uint32_t ng_neogeo_ym2610_native_sample_rate(NgNeoYm2610 *ym);
 uint8_t ng_neogeo_ym2610_irq_pending(NgNeoYm2610 *ym);
+uint32_t ng_neogeo_ym2610_state_size(NgNeoYm2610 *ym);
+int ng_neogeo_ym2610_save_state(NgNeoYm2610 *ym,
+                                uint8_t *out,
+                                uint32_t out_size,
+                                uint32_t *out_written);
+int ng_neogeo_ym2610_load_state(NgNeoYm2610 *ym,
+                                const uint8_t *data,
+                                uint32_t size);
 
 #ifdef __cplusplus
 }

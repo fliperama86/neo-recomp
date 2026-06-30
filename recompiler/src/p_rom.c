@@ -257,7 +257,36 @@ void ng_program_rom_free(NgProgramRom *rom) {
     rom->fixed_size = 0;
     rom->bank_window_base = 0;
     rom->bank_window_size = 0;
+    rom->active_bank = 0;
+    rom->bank_count = 0;
+    memset(rom->bank_offsets, 0, sizeof(rom->bank_offsets));
+    memset(rom->bank_sizes, 0, sizeof(rom->bank_sizes));
+    memset(rom->bank_configured, 0, sizeof(rom->bank_configured));
     rom->address_map_enabled = 0;
+}
+
+static uint32_t ng_program_rom_derived_bank_count(const NgProgramRom *rom,
+                                                  uint32_t fixed_size,
+                                                  uint32_t bank_window_size) {
+    if (!rom || bank_window_size == 0u || rom->size <= fixed_size) {
+        return 0u;
+    }
+    uint32_t bank_bytes = rom->size - fixed_size;
+    return (bank_bytes + bank_window_size - 1u) / bank_window_size;
+}
+
+static void ng_program_rom_clear_banks(NgProgramRom *rom) {
+    if (!rom) {
+        return;
+    }
+    rom->bank_count = 0u;
+    memset(rom->bank_offsets, 0, sizeof(rom->bank_offsets));
+    memset(rom->bank_sizes, 0, sizeof(rom->bank_sizes));
+    memset(rom->bank_configured, 0, sizeof(rom->bank_configured));
+}
+
+static uint32_t min_u32(uint32_t a, uint32_t b) {
+    return a < b ? a : b;
 }
 
 void ng_program_rom_set_address_map(NgProgramRom *rom,
@@ -272,7 +301,83 @@ void ng_program_rom_set_address_map(NgProgramRom *rom,
     rom->fixed_size = fixed_size;
     rom->bank_window_base = bank_window_base;
     rom->bank_window_size = bank_window_size;
+    rom->active_bank = 0u;
+    ng_program_rom_clear_banks(rom);
+    uint32_t derived_count =
+        ng_program_rom_derived_bank_count(rom, fixed_size, bank_window_size);
+    if (derived_count > NG_PROGRAM_ROM_MAX_BANKS) {
+        derived_count = NG_PROGRAM_ROM_MAX_BANKS;
+    }
+    rom->bank_count = derived_count;
+    for (uint32_t i = 0; i < derived_count; ++i) {
+        uint64_t offset64 =
+            (uint64_t)fixed_size + (uint64_t)i * bank_window_size;
+        if (offset64 >= rom->size) {
+            break;
+        }
+        uint32_t offset = (uint32_t)offset64;
+        uint32_t remaining = rom->size - offset;
+        rom->bank_offsets[i] = offset;
+        rom->bank_sizes[i] = min_u32(bank_window_size, remaining);
+        rom->bank_configured[i] = 1u;
+    }
     rom->address_map_enabled = fixed_size != 0u || bank_window_size != 0u;
+}
+
+int ng_program_rom_configure_bank(NgProgramRom *rom,
+                                  uint32_t bank_id,
+                                  uint32_t physical_offset,
+                                  uint32_t size) {
+    if (!rom ||
+        !rom->address_map_enabled ||
+        rom->bank_window_size == 0u ||
+        bank_id >= NG_PROGRAM_ROM_MAX_BANKS ||
+        size == 0u ||
+        size > rom->bank_window_size ||
+        physical_offset >= rom->size ||
+        (uint64_t)physical_offset + size > rom->size) {
+        return 0;
+    }
+    rom->bank_offsets[bank_id] = physical_offset;
+    rom->bank_sizes[bank_id] = size;
+    rom->bank_configured[bank_id] = 1u;
+    if (rom->bank_count <= bank_id) {
+        rom->bank_count = bank_id + 1u;
+    }
+    return 1;
+}
+
+void ng_program_rom_select_bank(NgProgramRom *rom, uint32_t bank_id) {
+    if (!rom) {
+        return;
+    }
+    rom->active_bank = bank_id;
+}
+
+uint32_t ng_program_rom_bank_count(const NgProgramRom *rom) {
+    if (!rom || !rom->address_map_enabled || rom->bank_window_size == 0u) {
+        return 0u;
+    }
+    return rom->bank_count;
+}
+
+int ng_program_rom_bank_is_configured(const NgProgramRom *rom,
+                                      uint32_t bank_id) {
+    return rom &&
+           rom->address_map_enabled &&
+           rom->bank_window_size != 0u &&
+           bank_id < rom->bank_count &&
+           bank_id < NG_PROGRAM_ROM_MAX_BANKS &&
+           rom->bank_configured[bank_id] != 0u;
+}
+
+int ng_program_rom_addr_is_banked(const NgProgramRom *rom, uint32_t addr) {
+    if (!rom || !rom->address_map_enabled || rom->bank_window_size == 0u ||
+        addr < rom->bank_window_base) {
+        return 0;
+    }
+    uint32_t rel = addr - rom->bank_window_base;
+    return rel < rom->bank_window_size;
 }
 
 static int ng_program_rom_translate_addr(const NgProgramRom *rom,
@@ -305,10 +410,18 @@ static int ng_program_rom_translate_addr(const NgProgramRom *rom,
     if (rom->bank_window_size != 0u && addr >= rom->bank_window_base) {
         uint32_t rel = addr - rom->bank_window_base;
         if (rel < rom->bank_window_size) {
-            uint32_t offset = rom->fixed_size + rel;
-            if (offset >= rom->fixed_size && offset < rom->size) {
+            if (rom->active_bank >= rom->bank_count ||
+                rom->active_bank >= NG_PROGRAM_ROM_MAX_BANKS ||
+                !rom->bank_configured[rom->active_bank] ||
+                rel >= rom->bank_sizes[rom->active_bank]) {
+                return 0;
+            }
+            uint64_t offset64 =
+                (uint64_t)rom->bank_offsets[rom->active_bank] +
+                rel;
+            if (offset64 < rom->size) {
                 if (out_offset) {
-                    *out_offset = offset;
+                    *out_offset = (uint32_t)offset64;
                 }
                 return 1;
             }

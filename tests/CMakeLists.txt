@@ -166,4 +166,11 @@ if(Python3_Interpreter_FOUND)
                 "$<TARGET_FILE:neo-render-snapshot>"
                 "${CMAKE_CURRENT_BINARY_DIR}"
     )
+    add_test(
+        NAME test_trace_tools
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/test_trace_tools.py"
+                "${CMAKE_SOURCE_DIR}"
+                "${CMAKE_CURRENT_BINARY_DIR}"
+    )
 endif()

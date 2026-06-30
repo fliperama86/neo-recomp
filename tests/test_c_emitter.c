@@ -105,6 +105,38 @@ int main(void) {
     CHECK(strstr(text, "ng_log_dispatch_miss(0x00024E38u);") != NULL);
 
     {
+        NgProgramRom bank_rom = make_rom(0x180u);
+        CHECK(bank_rom.data != NULL);
+        ng_program_rom_set_address_map(&bank_rom,
+                                       0x000000u,
+                                       0x100u,
+                                       0x200000u,
+                                       0x40u);
+        write16(&bank_rom, 0x120u, 0x4E75u);
+        write16(&bank_rom, 0x160u, 0x4E75u);
+
+        ng_function_discovery_init(&discovery);
+        NgProgramRom bank_view = bank_rom;
+        ng_program_rom_select_bank(&bank_view, 0u);
+        CHECK(ng_function_discovery_add(&discovery, &bank_view, 0x200020u));
+        bank_view = bank_rom;
+        ng_program_rom_select_bank(&bank_view, 1u);
+        CHECK(ng_function_discovery_add(&discovery, &bank_view, 0x200020u));
+
+        out = tmpfile();
+        CHECK(out != NULL);
+        CHECK(ng_emit_c_skeleton(out, &discovery));
+        CHECK(read_file(out, text, sizeof(text)));
+        fclose(out);
+
+        CHECK(strstr(text, "static void ng_func_b000_200020(void);") != NULL);
+        CHECK(strstr(text, "static void ng_func_b001_200020(void);") != NULL);
+        CHECK(strstr(text, "case 0x00200020u: ng_func_b000_200020(); return;") != NULL);
+
+        ng_program_rom_free(&bank_rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x60u);
         CHECK(rom.data != NULL);
         write16(&rom, 0x00u, 0x7005u); /* MOVEQ #5,D0 */

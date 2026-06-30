@@ -1,0 +1,1 @@
+dispatch audit: sites=11278 direct=11207 missing_direct=0 external_direct=33 computed=0 runtime_computed=55 jump_tables=16 table_resolved=86 table_missing=0

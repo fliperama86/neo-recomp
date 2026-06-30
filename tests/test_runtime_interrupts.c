@@ -20,6 +20,18 @@ static int record_external_dispatch(uint32_t addr) {
     return 1;
 }
 
+static int file_contains(const char *path, const char *needle) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        return 0;
+    }
+    char buf[4096];
+    size_t nread = fread(buf, 1u, sizeof(buf) - 1u, f);
+    fclose(f);
+    buf[nread] = '\0';
+    return strstr(buf, needle) != NULL;
+}
+
 int main(void) {
     uint8_t level = 0;
     uint8_t vector = 0;
@@ -74,6 +86,30 @@ int main(void) {
     CHECK(g_external_dispatch_count == 2u);
     CHECK(g_external_dispatch_addr == 0x00C004C2u);
     ng_neogeo_set_external_dispatch(NULL);
+
+    {
+        const char *miss_log = "test_runtime_dispatch_miss_log.jsonl";
+        remove(miss_log);
+        ng_neogeo_reset_runtime();
+        memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+        g_ng_m68k.pc = 0x00123456u;
+        g_ng_m68k.sr = 0x2700u;
+        g_ng_m68k.d[0] = 0x11111111u;
+        g_ng_m68k.a[6] = 0x00101000u;
+        ng68k_write32(0x00101000u, 0x0000AAAAu);
+        ng68k_write32(0x0010100Cu, 0x0000BBBBu);
+        ng68k_write32(0x0010103Cu, 0x0000CCCCu);
+        ng68k_write32(0x00101070u, 0x0000DDDDu);
+        ng_neogeo_set_dispatch_miss_log_path(miss_log);
+        ng_call_by_address(0x00DEADu);
+        ng_neogeo_set_dispatch_miss_log_path(NULL);
+        CHECK(file_contains(miss_log, "\"kind\":\"dispatch_miss\""));
+        CHECK(file_contains(miss_log, "\"addr\":\"0x00DEAD\""));
+        CHECK(file_contains(miss_log, "\"pc\":\"0x123456\""));
+        CHECK(file_contains(miss_log, "\"object\""));
+        CHECK(file_contains(miss_log, "\"aux70\":\"0x00DDDD\""));
+        remove(miss_log);
+    }
 
     CHECK(ng68k_read8(NG_NEO_REG_DIPSW) == 0xFFu);
     CHECK(ng68k_read8(0x00310001u) == 0xFFu);
@@ -727,6 +763,53 @@ int main(void) {
     CHECK(ng_m68k_take_interrupt(0, &level, &vector));
     CHECK(level == 1);
     CHECK(vector == 25);
+
+    {
+        uint32_t state_size = ng_neogeo_runtime_state_size();
+        uint8_t *state = (uint8_t *)malloc(state_size);
+        uint32_t written = 0u;
+        CHECK(state != NULL);
+
+        ng_neogeo_reset_runtime();
+        memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+        g_ng_m68k.pc = 0x00012346u;
+        g_ng_m68k.d[0] = 0x89ABCDEFu;
+        g_ng_m68k.a[6] = 0x00101234u;
+        g_ng_m68k.sr = 0x2000u;
+        ng_neogeo_set_p1_input(0xEFu);
+        ng_neogeo_set_sound_reply(0x5Au);
+        ng68k_write8(0x00101234u, 0xA5u);
+        ng68k_write16(0x00400020u, 0x1234u);
+        ng68k_write16(NG_NEO_REG_VRAMADDR, 0x8123u);
+        ng68k_write16(NG_NEO_REG_VRAMMOD, 0x0002u);
+        ng68k_write16(NG_NEO_REG_VRAMRW, 0xCAFEu);
+        ng_neogeo_begin_vblank();
+        ng68k_write8(NG_NEO_REG_SOUND, 0x77u);
+        CHECK(ng_neogeo_runtime_save_state(state, state_size, &written));
+        CHECK(written == state_size);
+
+        ng_neogeo_reset_runtime();
+        memset(&g_ng_m68k, 0, sizeof(g_ng_m68k));
+        CHECK(ng_neogeo_p1_input() == 0xFFu);
+        CHECK(ng68k_read8(0x00101234u) == 0x00u);
+        CHECK(ng_neogeo_runtime_load_state(state, written));
+        CHECK(g_ng_m68k.pc == 0x00012346u);
+        CHECK(g_ng_m68k.d[0] == 0x89ABCDEFu);
+        CHECK(g_ng_m68k.a[6] == 0x00101234u);
+        CHECK(g_ng_m68k.sr == 0x2000u);
+        CHECK(ng_neogeo_p1_input() == 0xEFu);
+        CHECK(ng_neogeo_sound_reply() == 0x5Au);
+        CHECK(ng68k_read8(0x00101234u) == 0xA5u);
+        CHECK(ng_neogeo_palette_ram_checksum() == 0x46u);
+        CHECK(ng_neogeo_vram_addr() == 0x8125u);
+        CHECK(ng_neogeo_vram_mod() == 0x0002u);
+        CHECK(ng_neogeo_vram_checksum() == 0xCAFEu);
+        CHECK(ng_neogeo_frame_count() == 1u);
+        CHECK(ng_neogeo_sound_command_events_available() == 1u);
+        CHECK(ng_neogeo_pop_sound_command_event(&sound_event));
+        CHECK(sound_event.command == 0x77u);
+        free(state);
+    }
 
     return 0;
 }
