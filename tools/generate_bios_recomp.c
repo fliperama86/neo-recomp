@@ -8,6 +8,7 @@
 #include <string.h>
 
 #define NG_BIOS_BASE 0x00C00000u
+#define NG_BIOS_DISCOVERY_MAX_CANDIDATES 65536u
 
 static int read_file(const char *path, uint8_t **out_data, uint32_t *out_size) {
     FILE *f = fopen(path, "rb");
@@ -163,7 +164,13 @@ int main(int argc, char **argv) {
     free(bios);
 
     NgFunctionDiscovery discovery;
-    if (!ng_function_discover_from_seeds(&rom, seeds, seed_count, &discovery)) {
+    if (!ng_function_discover_from_game_config_limited(
+            &rom,
+            seeds,
+            seed_count,
+            NULL,
+            NG_BIOS_DISCOVERY_MAX_CANDIDATES,
+            &discovery)) {
         fprintf(stderr, "BIOS discovery failed for %u seed(s)\n", seed_count);
         free(seeds);
         free(rom.data);

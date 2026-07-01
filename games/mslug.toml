@@ -74,7 +74,25 @@ name = "object_vector_0e8xxx_callback_slots"
 stride = 4
 callback_offsets = [0]
 sentinel = 0xFFFFFFFF
-scan = ["0x0E8000-0x0E805C", "0x0E806C-0x0E8090", "0x0E80A0-0x0E80C8", "0x0E80C8-0x0E80D4", "0x0E8180-0x0E81A0", "0x0E8260-0x0E82A0", "0x0E82D0-0x0E8300", "0x0E8324-0x0E833C", "0x0E8390-0x0E83D0", "0x0E83E4-0x0E83F0", "0x0E840C-0x0E843C", "0x0E843C-0x0E8524"]
+scan = ["0x0E8000-0x0E805C", "0x0E806C-0x0E8090", "0x0E80A0-0x0E80C8", "0x0E8180-0x0E81A0", "0x0E8260-0x0E82A0", "0x0E82D0-0x0E8300", "0x0E8324-0x0E833C", "0x0E8390-0x0E83D0", "0x0E83E4-0x0E83F0", "0x0E840C-0x0E843C", "0x0E843C-0x0E8524"]
+[[record_format]]
+name = "object_vector_0e8xxx_cluster_scan_061xxx"
+stride = 4
+callback_offsets = [0]
+sentinel = 0xFFFFFFFF
+cluster_min_entries = 3
+cluster_max_entries = 16
+target = "0x061000-0x062000"
+scan = ["0x0E8000-0x0E8524"]
+[[record_format]]
+name = "object_vector_0e8xxx_cluster_scan_07dxxx"
+stride = 4
+callback_offsets = [0]
+sentinel = 0xFFFFFFFF
+cluster_min_entries = 3
+cluster_max_entries = 16
+target = "0x07D000-0x07F000"
+scan = ["0x0E8000-0x0E8524"]
 [[record_format]]
 name = "object_vector_0e8158_filtered_slots"
 stride = 4

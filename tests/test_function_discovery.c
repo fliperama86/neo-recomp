@@ -65,6 +65,74 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x140u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x10u, 0x4E75u);       /* base seed */
+        write32(&rom, 0x40u, 0x000000A0u);   /* valid singleton */
+        write32(&rom, 0x44u, 0xDEAD0000u);   /* invalid break */
+        write32(&rom, 0x48u, 0x000000B0u);   /* valid cluster */
+        write32(&rom, 0x4Cu, 0x000000C0u);   /* valid cluster */
+        write32(&rom, 0x50u, 0xFFFFFFFFu);   /* sentinel break */
+        write32(&rom, 0x54u, 0x000000D0u);   /* valid cluster */
+        write32(&rom, 0x58u, 0x000000E0u);   /* valid cluster */
+        write32(&rom, 0x5Cu, 0x000000F0u);   /* valid cluster */
+        write32(&rom, 0x60u, 0xFFFFFFFFu);   /* sentinel break */
+        write32(&rom, 0x64u, 0x00000100u);   /* overlarge cluster */
+        write32(&rom, 0x68u, 0x00000104u);   /* overlarge cluster */
+        write32(&rom, 0x6Cu, 0x00000108u);   /* overlarge cluster */
+        write32(&rom, 0x70u, 0x0000010Cu);   /* overlarge cluster */
+        write16(&rom, 0xA0u, 0x4E75u);
+        write16(&rom, 0xB0u, 0x4E75u);
+        write16(&rom, 0xC0u, 0x4E75u);
+        write16(&rom, 0xD0u, 0x4E75u);
+        write16(&rom, 0xE0u, 0x4E75u);
+        write16(&rom, 0xF0u, 0x4E75u);
+        write16(&rom, 0x100u, 0x4E75u);
+        write16(&rom, 0x104u, 0x4E75u);
+        write16(&rom, 0x108u, 0x4E75u);
+        write16(&rom, 0x10Cu, 0x4E75u);
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.record_format_count = 1u;
+        config.record_formats[0].stride = 4u;
+        config.record_formats[0].callback_offset_count = 1u;
+        config.record_formats[0].callback_offsets[0] = 0u;
+        config.record_formats[0].sentinel = 0xFFFFFFFFu;
+        config.record_formats[0].has_sentinel = 1;
+        config.record_formats[0].cluster_min_entries = 2u;
+        config.record_formats[0].cluster_max_entries = 3u;
+        config.record_formats[0].target_start = 0xA0u;
+        config.record_formats[0].target_end = 0x120u;
+        config.record_formats[0].scan_count = 1u;
+        config.record_formats[0].scans[0].kind =
+            NG_GAME_CONFIG_RECORD_SCAN_RANGE;
+        config.record_formats[0].scans[0].start = 0x40u;
+        config.record_formats[0].scans[0].end = 0x74u;
+
+        const uint32_t seeds[] = {0x00000010u};
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    seeds,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x10u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0xA0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xB0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xC0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xD0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xE0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xF0u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x100u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x104u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x108u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x10Cu));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x200u);
         CHECK(rom.data != NULL);
         ng_program_rom_set_address_map(&rom, 0x000000u, 0x100u, 0x200000u, 0x100u);
@@ -1570,6 +1638,28 @@ int main(void) {
         CHECK(!discovery.truncated);
         CHECK(ng_function_discovery_contains(&discovery, 0u));
         CHECK(ng_function_discovery_contains(&discovery, (seed_count - 1u) * 2u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x20u);
+        const uint32_t seeds[] = {0x00u, 0x02u, 0x04u, 0x06u};
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x4E75u);
+        write16(&rom, 0x02u, 0x4E75u);
+        write16(&rom, 0x04u, 0x4E75u);
+        write16(&rom, 0x06u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_game_config_limited(&rom,
+                                                            seeds,
+                                                            4u,
+                                                            NULL,
+                                                            3u,
+                                                            &discovery));
+        CHECK(discovery.count == 3u);
+        CHECK(discovery.truncated);
 
         ng_program_rom_free(&rom);
     }

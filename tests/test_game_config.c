@@ -271,6 +271,8 @@ int main(void) {
             "callback_offsets = [\n"
             "  2,\n"
             "]\n"
+            "cluster_min_entries = 3\n"
+            "cluster_max_entries = 9\n"
             "target_start = 0x000800\n"
             "target_end = 0x000900\n"
             "scan = [\n"
@@ -402,6 +404,8 @@ int main(void) {
     CHECK(config.record_formats[0].callback_offset_count == 1u);
     CHECK(config.record_formats[0].callback_offsets[0] == 2u);
     CHECK(!config.record_formats[0].has_sentinel);
+    CHECK(config.record_formats[0].cluster_min_entries == 3u);
+    CHECK(config.record_formats[0].cluster_max_entries == 9u);
     CHECK(config.record_formats[0].target_start == 0x000800u);
     CHECK(config.record_formats[0].target_end == 0x000900u);
     CHECK(config.record_formats[0].scan_count == 3u);

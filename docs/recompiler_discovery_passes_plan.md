@@ -6,7 +6,7 @@ Last updated: 2026-07-01
 > "(review)": the discovery model emits instruction labels (not just function
 > entries), `[dispatch].runtime` sites are heterogeneous, `bank:*` needs bank
 > identity in the address model, `is_probable_function_target` is a weak filter,
-> candidate truncation is not yet a hard failure, and the `[[state_table]]` /
+> candidate truncation is a hard failure, the discovery candidate cap is now 131,072, and the `[[state_table]]` /
 > `[[record_format]]` schemas needed explicit bounds/stride keys.
 
 ## Live status
@@ -19,7 +19,7 @@ coverage checkpoint changes.
 | Phase 0, safety net | **Done** | `--emit-discovery-set`, golden snapshots, superset checker, and hard discovery-truncation failure are in place. |
 | Phase 0.5, oracle ROM | **Done** | `games/oracle/` now contains the source oracle, linker script, and manifest. `scripts/build_oracle_fixture.py` builds deterministic P-ROM/`.neo` outputs and validates exported function/relocation truth against `m68k-elf` when available. `test_oracle_discovery` and `test_oracle_fixture` enforce completeness, soundness, code-vs-data relocations, banked records, and trace-import coverage. |
 | Pass 1, linked state-table scanner | **Done** | `[[state_table]]` parser/scanner landed. The `$000B92..$000E8E` mode/substate table cluster in `games/mslug.toml` is now one descriptor instead of three `[[jump_table]]` blocks. |
-| Pass 2, tagged / fixed record scanner | **Done** | `[[record_format]]` parser/scanner landed. Tagged streams, fixed callback fields, object-vector slices, and exact single-longword representatives are collapsed into 12 descriptors. Remaining jump tables are branch/inline/script dispatch shapes. |
+| Pass 2, tagged / fixed record scanner | **Done** | `[[record_format]]` parser/scanner landed. Tagged streams, fixed callback fields, object-vector slices, clustered object-vector table scans, and exact single-longword representatives are collapsed into structural descriptors. Remaining jump tables are branch/inline/script dispatch shapes. |
 | Pass 3, object dispatcher recognizer | **Done** | `[[dispatcher]]` parser/config landed for object-state install/spawn constants, and the audit derives `$0006C8`/`$000FDE`. Direct PC-index branch tables, PC-index JSR branch tables, self-overwriting static-index JSR tables, repeated inline-code PC-index tables, mixed branch/body PC-index tables, spawn-helper wrappers, repeated direct-dispatch stubs, and fixed-stride `[[routine_table]]` code slots with optional shared-tail fallthrough are now classified structurally, removing 252 table-slot `extra` seeds, 26 manual `[dispatch].runtime` entries, 4 exact callback-slot ranges, and 18 redundant `[[jump_table]]` declarations while keeping the golden set as a strict superset. |
 | Pass 4, bank-aware pointer discovery | **Done** | `scan = ["bank:*"]` iterates derived physical banks or explicit `[[bank]]` mappings, and `scan = ["bank:N"]` targets one bank for `[[record_format]]` and `[[state_table]]`. Bank identity is threaded through discovery de-duplication, worklist scanning, `--emit-discovery-set` (`bank:N 0xADDR` rows), dispatch audit checks, and generated symbol names (`ng_func_bNNN_ADDR`) for banked duplicates. Fixed-region behavior is unchanged. Runtime bank-register dispatch is future work outside this static discovery plan. |
 | Pass 5, diagnostics / residual split | **Done** | Manual residual seeds moved from `games/mslug.toml` into `games/mslug.residual.toml` via `[game].discovery_files`; golden discovery is unchanged. `--emit-dispatch-suggestions` emits generic TOML suggestions for audit gaps. `scripts/generate_residual_toml.py` regenerates residual TOML from set differences. Runtime dispatch misses can now be logged as JSONL via `ng_neogeo_set_dispatch_miss_log_path()` or `NG_NEO_DISPATCH_MISS_LOG` and converted to TOML suggestions with `scripts/runtime_miss_suggestions.py`. Execution PC traces can be captured with `scripts/mame_trace_capture.py`, diffed against discovery sets with `scripts/trace_pc_residual.py`, and covered by `test_trace_tools`; Phase 0.5 now supplies a reproducible oracle source fixture plus exported function/relocation truth and trace-import validation. |
@@ -35,13 +35,14 @@ Latest checkpoint, 2026-07-01:
   stubs, routine tables, stage 2 object-vector callback expansion, and trace
   diagnostic tools are covered by tests.
 - Golden discovery set: 63,854 addresses.
-- Current discovery set: 64,412 addresses.
-- Current discovery additions over golden: 558 addresses.
+- Current discovery set: 66,451 addresses.
+- Current discovery additions over golden: 2,597 addresses.
 - Dispatch audit gaps: not worse (`missing_direct=0`, `computed=0`,
   `table_missing=0`).
-- `games/mslug.toml`: 148 lines.
+- Discovery candidate cap: 131,072 addresses.
+- `games/mslug.toml`: 166 lines.
 - `games/mslug.residual.toml`: 541 lines.
-- Current structural descriptors: 1 `[[state_table]]`, 12
+- Current structural descriptors: 1 `[[state_table]]`, 14
   `[[record_format]]`, 2 `[[routine_table]]`, 1 `[[dispatcher]]`.
 - Current `[[jump_table]]` blocks: 2.
 - Current `[functions].extra` entries in the manifest: 0.
@@ -54,9 +55,9 @@ Latest checkpoint, 2026-07-01:
   tables, 4 mixed branch/body PC-index tables no longer needing explicit
   `[[jump_table]]` blocks, 1 repeated direct-dispatch stub table no longer
   needing an explicit `[[jump_table]]` block, 2 fixed-code routine regions
-  no longer abusing `[[jump_table]] format = "bra16"`, and the
-  `$0E80C8..$0E80D4` object-vector callback group covering the stage 2
-  `$0619E4` runtime miss.
+  no longer abusing `[[jump_table]] format = "bra16"`, and clustered `$0E8xxx`
+  object-vector scans covering the stage 2 `$0619E4` and `$07E000` runtime
+  misses without adding those crash addresses as residual seeds.
 
 Optional follow-up: use trace capture plus `trace_pc_residual.py` to mine the
 remaining residual families. The oracle track is now available as the
@@ -654,11 +655,11 @@ check.
 
 | Metric | Original baseline | Current | Target |
 | --- | --- | --- | --- |
-| `mslug.toml` lines | 1614 | 148 | < ~150 (descriptors only) |
+| `mslug.toml` lines | 1614 | 166 | < ~150 (descriptors only) |
 | `[functions].extra` entries | ~700 | 0 in manifest, 434 in residual | ~0 in the manifest; irreducibles in `mslug.residual.toml` |
 | `[[jump_table]]` blocks | ~80 | 2 | a handful of structural descriptors |
 | `[dispatch].runtime` entries | 60 | 34 | `object_state` subset derived; table sites reclassified; small genuinely-computed residual stays declared |
-| Discovered function set | baseline | superset, 64,412 addresses (+558 over golden) | **superset** (0 regressions on golden diff) |
+| Discovered function set | baseline | superset, 66,451 addresses (+2,597 over golden) | **superset** (0 regressions on golden diff) |
 | Dispatch-audit gaps | baseline | not worse, all tracked gaps at 0 | <= baseline |
 | New unit tests | - | synthetic tests for landed passes, routine tables, diagnostics, and Phase 0.5 oracle discovery/fixture validation | one synthetic-ROM suite per pass |
 | Oracle discovery checks (Phase 0.5) | n/a | done | function symbols subset of discovered; discovered within function extents; code relocs resolved; data relocs excluded; trace import reports zero missing oracle PCs |

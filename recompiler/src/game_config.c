@@ -1095,6 +1095,29 @@ static void parse_record_format_scalar(char *line,
         record->has_sentinel = 1;
         return;
     }
+    value = key_value_start(line, "cluster_min_entries");
+    if (!value) {
+        value = key_value_start(line, "min_cluster_entries");
+    }
+    if (value) {
+        record->cluster_min_entries = (uint32_t)strtoul(value, NULL, 0);
+        return;
+    }
+    value = key_value_start(line, "cluster_max_entries");
+    if (!value) {
+        value = key_value_start(line, "max_cluster_entries");
+    }
+    if (value) {
+        record->cluster_max_entries = (uint32_t)strtoul(value, NULL, 0);
+        return;
+    }
+    value = key_value_start(line, "cluster");
+    if (value) {
+        if (parse_bool_value(value) && record->cluster_min_entries == 0u) {
+            record->cluster_min_entries = 2u;
+        }
+        return;
+    }
     value = key_value_start(line, "target");
     if (value) {
         parse_range_value(value, &record->target_start, &record->target_end);

@@ -222,35 +222,43 @@ static int emit_dispatch_audit_file(const char *path,
                                     const NgProgramRom *rom,
                                     const NgFunctionDiscovery *discovery,
                                     const NgGameConfig *config) {
-    NgDispatchAudit audit;
-    if (!ng_dispatch_audit_build_with_config(rom, discovery, config, &audit)) {
+    NgDispatchAudit *audit = (NgDispatchAudit *)calloc(1u, sizeof(*audit));
+    if (!audit) {
+        fprintf(stderr, "cannot allocate dispatch audit\n");
+        return 0;
+    }
+    if (!ng_dispatch_audit_build_with_config(rom, discovery, config, audit)) {
         fprintf(stderr, "failed to build dispatch audit\n");
+        free(audit);
         return 0;
     }
 
     FILE *out = fopen(path, "w");
     if (!out) {
         fprintf(stderr, "cannot open %s for writing\n", path);
+        free(audit);
         return 0;
     }
 
-    int ok = ng_dispatch_audit_write(out, &audit);
+    int ok = ng_dispatch_audit_write(out, audit);
     if (fclose(out) != 0) {
         ok = 0;
     }
     if (!ok) {
         fprintf(stderr, "failed to write dispatch audit %s\n", path);
+        free(audit);
         return 0;
     }
 
     printf("dispatch audit: %s (sites=%u missing_direct=%u external_direct=%u computed=%u runtime_computed=%u jump_tables=%u)\n",
            path,
-           audit.count,
-           audit.missing_direct_count,
-           audit.external_direct_count,
-           audit.computed_count,
-           audit.runtime_computed_count,
-           audit.jump_table_count);
+           audit->count,
+           audit->missing_direct_count,
+           audit->external_direct_count,
+           audit->computed_count,
+           audit->runtime_computed_count,
+           audit->jump_table_count);
+    free(audit);
     return 1;
 }
 
@@ -258,28 +266,36 @@ static int emit_dispatch_suggestions_file(const char *path,
                                           const NgProgramRom *rom,
                                           const NgFunctionDiscovery *discovery,
                                           const NgGameConfig *config) {
-    NgDispatchAudit audit;
-    if (!ng_dispatch_audit_build_with_config(rom, discovery, config, &audit)) {
+    NgDispatchAudit *audit = (NgDispatchAudit *)calloc(1u, sizeof(*audit));
+    if (!audit) {
+        fprintf(stderr, "cannot allocate dispatch audit suggestions\n");
+        return 0;
+    }
+    if (!ng_dispatch_audit_build_with_config(rom, discovery, config, audit)) {
         fprintf(stderr, "failed to build dispatch audit suggestions\n");
+        free(audit);
         return 0;
     }
 
     FILE *out = fopen(path, "w");
     if (!out) {
         fprintf(stderr, "cannot open %s for writing\n", path);
+        free(audit);
         return 0;
     }
 
-    int ok = ng_dispatch_audit_write_suggestions(out, &audit);
+    int ok = ng_dispatch_audit_write_suggestions(out, audit);
     if (fclose(out) != 0) {
         ok = 0;
     }
     if (!ok) {
         fprintf(stderr, "failed to write dispatch suggestions %s\n", path);
+        free(audit);
         return 0;
     }
 
     printf("dispatch suggestions: %s\n", path);
+    free(audit);
     return 1;
 }
 
@@ -468,25 +484,34 @@ int main(int argc, char **argv) {
                         return 1;
                     }
                     if (fail_on_dispatch_gaps) {
-                        NgDispatchAudit audit;
+                        NgDispatchAudit *audit =
+                            (NgDispatchAudit *)calloc(1u, sizeof(*audit));
+                        if (!audit) {
+                            fprintf(stderr, "cannot allocate dispatch audit\n");
+                            ng_program_rom_free(&rom);
+                            return 1;
+                        }
                         if (!ng_dispatch_audit_build_with_config(&rom,
                                                                  &discovery,
                                                                  &game_config,
-                                                                 &audit)) {
+                                                                 audit)) {
                             fprintf(stderr, "failed to build dispatch audit\n");
+                            free(audit);
                             ng_program_rom_free(&rom);
                             return 1;
                         }
-                        if (ng_dispatch_audit_has_gaps(&audit)) {
+                        if (ng_dispatch_audit_has_gaps(audit)) {
                             fprintf(stderr,
                                     "dispatch audit gaps: missing_direct=%u computed=%u table_missing=%u%s\n",
-                                    audit.missing_direct_count,
-                                    audit.computed_count,
-                                    audit.jump_table_missing_entries,
-                                    audit.truncated ? " truncated" : "");
+                                    audit->missing_direct_count,
+                                    audit->computed_count,
+                                    audit->jump_table_missing_entries,
+                                    audit->truncated ? " truncated" : "");
+                            free(audit);
                             ng_program_rom_free(&rom);
                             return 1;
                         }
+                        free(audit);
                     }
                 }
             } else {

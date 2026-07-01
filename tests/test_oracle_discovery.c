@@ -256,6 +256,7 @@ static void configure_oracle(NgGameConfig *config) {
     config->record_formats[2].callback_offsets[0] = 0u;
     config->record_formats[2].sentinel = 0xFFFFFFFFu;
     config->record_formats[2].has_sentinel = 1;
+    config->record_formats[2].cluster_min_entries = 2u;
     config->record_formats[2].target_start = ORACLE_OBJECT_VECTOR_CALLBACK_A;
     config->record_formats[2].target_end = ORACLE_ROUTINE_ENTRY_A;
     config->record_formats[2].scan_count = 1u;

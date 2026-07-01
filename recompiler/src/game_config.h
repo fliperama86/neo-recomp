@@ -101,6 +101,8 @@ typedef struct NgGameConfigRecordFormat {
     uint32_t callback_offset_count;
     uint32_t sentinel;
     int has_sentinel;
+    uint32_t cluster_min_entries;
+    uint32_t cluster_max_entries;
     uint32_t target_start;
     uint32_t target_end;
     NgGameConfigRecordScan scans[NG_GAME_CONFIG_MAX_RECORD_SCANS];

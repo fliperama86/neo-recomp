@@ -61,6 +61,7 @@ name = "oracle_object_vector"
 stride = 4
 callback_offsets = [0]
 sentinel = 0xFFFFFFFF
+cluster_min_entries = 2
 target = "0x0003A0-0x000400"
 scan = ["0x000440-0x000450"]
 

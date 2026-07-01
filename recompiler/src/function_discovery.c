@@ -16,10 +16,23 @@ static int is_direct_function_target(const NgM68kInstr *instr);
 void ng_function_discovery_init(NgFunctionDiscovery *discovery) {
     if (discovery) {
         memset(discovery, 0, sizeof(*discovery));
+        discovery->max_candidates = NG_FUNCTION_DISCOVERY_MAX_CANDIDATES;
         for (uint32_t i = 0; i < NG_FUNCTION_DISCOVERY_MAX_CANDIDATES; ++i) {
             discovery->banks[i] = NG_FUNCTION_DISCOVERY_BANK_NONE;
         }
     }
+}
+
+void ng_function_discovery_set_max_candidates(NgFunctionDiscovery *discovery,
+                                              uint32_t max_candidates) {
+    if (!discovery) {
+        return;
+    }
+    if (max_candidates == 0u ||
+        max_candidates > NG_FUNCTION_DISCOVERY_MAX_CANDIDATES) {
+        max_candidates = NG_FUNCTION_DISCOVERY_MAX_CANDIDATES;
+    }
+    discovery->max_candidates = max_candidates;
 }
 
 static uint32_t discovery_bank_for_addr(const NgProgramRom *rom,
@@ -89,7 +102,12 @@ int ng_function_discovery_add(NgFunctionDiscovery *discovery,
     if (ng_function_discovery_contains_bank(discovery, addr, bank)) {
         return 1;
     }
-    if (discovery->count >= NG_FUNCTION_DISCOVERY_MAX_CANDIDATES) {
+    uint32_t max_candidates = discovery->max_candidates != 0u ?
+        discovery->max_candidates : NG_FUNCTION_DISCOVERY_MAX_CANDIDATES;
+    if (max_candidates > NG_FUNCTION_DISCOVERY_MAX_CANDIDATES) {
+        max_candidates = NG_FUNCTION_DISCOVERY_MAX_CANDIDATES;
+    }
+    if (discovery->count >= max_candidates) {
         discovery->truncated = 1;
         return 0;
     }
@@ -995,6 +1013,121 @@ static int record_scan_bounds(const NgProgramRom *rom,
     }
 }
 
+static int record_format_entry_matches(const NgProgramRom *rom,
+                                       const NgGameConfigRecordFormat *record,
+                                       uint32_t addr) {
+    if (!rom || !record) {
+        return 0;
+    }
+    if (!record->has_tag) {
+        return 1;
+    }
+
+    uint32_t tag_addr = addr + record->tag_offset;
+    return tag_addr >= addr &&
+           UINT32_MAX - tag_addr >= 1u &&
+           ng_program_rom_addr_is_mapped(rom, tag_addr) &&
+           ng_program_rom_addr_is_mapped(rom, tag_addr + 1u) &&
+           ng_program_rom_read16(rom, tag_addr) == (uint16_t)record->tag;
+}
+
+static int record_format_entry_has_valid_target(
+    const NgProgramRom *rom,
+    const NgGameConfigRecordFormat *record,
+    uint32_t addr) {
+    if (!rom || !record || !record_format_entry_matches(rom, record, addr)) {
+        return 0;
+    }
+
+    for (uint32_t i = 0; i < record->callback_offset_count; ++i) {
+        uint32_t target_addr = addr + record->callback_offsets[i];
+        if (target_addr < addr ||
+            UINT32_MAX - target_addr < 3u ||
+            !ng_program_rom_addr_is_mapped(rom, target_addr) ||
+            !ng_program_rom_addr_is_mapped(rom, target_addr + 3u)) {
+            continue;
+        }
+
+        uint32_t target = ng_program_rom_read32(rom, target_addr);
+        if (record->has_sentinel && target == record->sentinel) {
+            continue;
+        }
+        if (record_format_target_allowed(rom, record, target)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void add_record_format_entry_targets(
+    const NgProgramRom *rom,
+    const NgGameConfigRecordFormat *record,
+    uint32_t addr,
+    NgFunctionDiscovery *out) {
+    if (!rom || !record || !out ||
+        !record_format_entry_matches(rom, record, addr)) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < record->callback_offset_count; ++i) {
+        uint32_t target_addr = addr + record->callback_offsets[i];
+        if (target_addr < addr ||
+            UINT32_MAX - target_addr < 3u ||
+            !ng_program_rom_addr_is_mapped(rom, target_addr) ||
+            !ng_program_rom_addr_is_mapped(rom, target_addr + 3u)) {
+            continue;
+        }
+
+        uint32_t target = ng_program_rom_read32(rom, target_addr);
+        if (record->has_sentinel && target == record->sentinel) {
+            continue;
+        }
+        if (record_format_target_allowed(rom, record, target)) {
+            ng_function_discovery_add(out, rom, target);
+        }
+    }
+}
+
+static void add_record_format_run_targets(
+    const NgProgramRom *rom,
+    const NgGameConfigRecordFormat *record,
+    uint32_t run_start,
+    uint32_t run_entries,
+    uint32_t stride,
+    NgFunctionDiscovery *out) {
+    if (!rom || !record || !out || run_entries == 0u || stride == 0u) {
+        return;
+    }
+
+    uint32_t addr = run_start;
+    for (uint32_t i = 0; i < run_entries; ++i) {
+        add_record_format_entry_targets(rom, record, addr, out);
+        if (UINT32_MAX - addr < stride) {
+            break;
+        }
+        addr += stride;
+    }
+}
+
+static void flush_record_format_cluster(
+    const NgProgramRom *rom,
+    const NgGameConfigRecordFormat *record,
+    uint32_t run_start,
+    uint32_t run_entries,
+    uint32_t stride,
+    NgFunctionDiscovery *out) {
+    if (run_entries >= record->cluster_min_entries &&
+        (record->cluster_max_entries == 0u ||
+         run_entries <= record->cluster_max_entries)) {
+        add_record_format_run_targets(rom,
+                                      record,
+                                      run_start,
+                                      run_entries,
+                                      stride,
+                                      out);
+    }
+}
+
 static void add_record_format_region_targets(
     const NgProgramRom *rom,
     const NgGameConfigRecordFormat *record,
@@ -1012,6 +1145,13 @@ static void add_record_format_region_targets(
         return;
     }
 
+    uint32_t cluster_min_entries = record->cluster_min_entries;
+    if (cluster_min_entries <= 1u) {
+        cluster_min_entries = 0u;
+    }
+    uint32_t run_start = 0u;
+    uint32_t run_entries = 0u;
+
     for (uint32_t addr = start; addr < end;) {
         if (record->width != 0u &&
             (UINT32_MAX - addr < record->width - 1u ||
@@ -1019,43 +1159,38 @@ static void add_record_format_region_targets(
             break;
         }
 
-        int matched = 1;
-        if (record->has_tag) {
-            uint32_t tag_addr = addr + record->tag_offset;
-            if (tag_addr < addr ||
-                UINT32_MAX - tag_addr < 1u ||
-                !ng_program_rom_addr_is_mapped(rom, tag_addr) ||
-                !ng_program_rom_addr_is_mapped(rom, tag_addr + 1u) ||
-                ng_program_rom_read16(rom, tag_addr) !=
-                    (uint16_t)record->tag) {
-                matched = 0;
+        if (cluster_min_entries != 0u) {
+            if (record_format_entry_has_valid_target(rom, record, addr)) {
+                if (run_entries == 0u) {
+                    run_start = addr;
+                }
+                ++run_entries;
+            } else if (run_entries != 0u) {
+                flush_record_format_cluster(rom,
+                                            record,
+                                            run_start,
+                                            run_entries,
+                                            stride,
+                                            out);
+                run_entries = 0u;
             }
-        }
-
-        if (matched) {
-            for (uint32_t i = 0; i < record->callback_offset_count; ++i) {
-                uint32_t target_addr = addr + record->callback_offsets[i];
-                if (target_addr < addr ||
-                    UINT32_MAX - target_addr < 3u ||
-                    !ng_program_rom_addr_is_mapped(rom, target_addr) ||
-                    !ng_program_rom_addr_is_mapped(rom, target_addr + 3u)) {
-                    continue;
-                }
-
-                uint32_t target = ng_program_rom_read32(rom, target_addr);
-                if (record->has_sentinel && target == record->sentinel) {
-                    continue;
-                }
-                if (record_format_target_allowed(rom, record, target)) {
-                    ng_function_discovery_add(out, rom, target);
-                }
-            }
+        } else {
+            add_record_format_entry_targets(rom, record, addr, out);
         }
 
         if (UINT32_MAX - addr < stride) {
             break;
         }
         addr += stride;
+    }
+
+    if (cluster_min_entries != 0u && run_entries != 0u) {
+        flush_record_format_cluster(rom,
+                                    record,
+                                    run_start,
+                                    run_entries,
+                                    stride,
+                                    out);
     }
 }
 
@@ -1406,11 +1541,28 @@ int ng_function_discover_from_game_config(const NgProgramRom *rom,
                                           uint32_t seed_count,
                                           const NgGameConfig *config,
                                           NgFunctionDiscovery *out) {
+    return ng_function_discover_from_game_config_limited(
+        rom,
+        seeds,
+        seed_count,
+        config,
+        NG_FUNCTION_DISCOVERY_MAX_CANDIDATES,
+        out);
+}
+
+int ng_function_discover_from_game_config_limited(
+    const NgProgramRom *rom,
+    const uint32_t *seeds,
+    uint32_t seed_count,
+    const NgGameConfig *config,
+    uint32_t max_candidates,
+    NgFunctionDiscovery *out) {
     if (!rom || !out) {
         return 0;
     }
 
     ng_function_discovery_init(out);
+    ng_function_discovery_set_max_candidates(out, max_candidates);
 
     if (seeds) {
         for (uint32_t i = 0; i < seed_count; ++i) {
