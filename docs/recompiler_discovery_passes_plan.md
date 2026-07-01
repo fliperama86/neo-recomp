@@ -35,8 +35,8 @@ Latest checkpoint, 2026-07-01:
   stubs, routine tables, stage 2 object-vector callback expansion, and trace
   diagnostic tools are covered by tests.
 - Golden discovery set: 63,854 addresses.
-- Current discovery set: 67,145 addresses.
-- Current discovery additions over golden: 3,291 addresses.
+- Current discovery set: 67,338 addresses.
+- Current discovery additions over golden: 3,484 addresses.
 - Dispatch audit gaps: not worse (`missing_direct=0`, `computed=0`,
   `table_missing=0`).
 - Discovery candidate cap: 131,072 addresses.
@@ -58,7 +58,8 @@ Latest checkpoint, 2026-07-01:
   no longer abusing `[[jump_table]] format = "bra16"`, and clustered `$0E8xxx`
   object-vector scans covering the stage 2 `$0619E4` and `$07E000` runtime
   misses, plus widened helper-discovered tagged script stream bounds covering
-  `$29CB32`, without adding those crash addresses as residual seeds.
+  `$29CB32`, and a widened `$0E83E4..$0E840C` object-vector slice
+  covering `$083BE2`, without adding those crash addresses as residual seeds.
 
 Optional follow-up: use trace capture plus `trace_pc_residual.py` to mine the
 remaining residual families. The oracle track is now available as the
@@ -660,7 +661,7 @@ check.
 | `[functions].extra` entries | ~700 | 0 in manifest, 434 in residual | ~0 in the manifest; irreducibles in `mslug.residual.toml` |
 | `[[jump_table]]` blocks | ~80 | 2 | a handful of structural descriptors |
 | `[dispatch].runtime` entries | 60 | 34 | `object_state` subset derived; table sites reclassified; small genuinely-computed residual stays declared |
-| Discovered function set | baseline | superset, 67,145 addresses (+3,291 over golden) | **superset** (0 regressions on golden diff) |
+| Discovered function set | baseline | superset, 67,338 addresses (+3,484 over golden) | **superset** (0 regressions on golden diff) |
 | Dispatch-audit gaps | baseline | not worse, all tracked gaps at 0 | <= baseline |
 | New unit tests | - | synthetic tests for landed passes, routine tables, diagnostics, and Phase 0.5 oracle discovery/fixture validation | one synthetic-ROM suite per pass |
 | Oracle discovery checks (Phase 0.5) | n/a | done | function symbols subset of discovered; discovered within function extents; code relocs resolved; data relocs excluded; trace import reports zero missing oracle PCs |
