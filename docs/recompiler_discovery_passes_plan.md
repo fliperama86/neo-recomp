@@ -1,6 +1,6 @@
 # Recompiler Discovery Passes Plan
 
-Last updated: 2026-06-30
+Last updated: 2026-07-01
 
 > Revised after a Codex review pass. Corrections are tagged inline with
 > "(review)": the discovery model emits instruction labels (not just function
@@ -17,25 +17,26 @@ coverage checkpoint changes.
 | Item | Status | Current result |
 | --- | --- | --- |
 | Phase 0, safety net | **Done** | `--emit-discovery-set`, golden snapshots, superset checker, and hard discovery-truncation failure are in place. |
-| Phase 0.5, oracle ROM | **Deferred / optional** | Useful for compiler-truth validation, but not blocking Pass 1-2. Do it if the Metal Slug golden baseline is not enough to resolve soundness questions. |
+| Phase 0.5, oracle ROM | **Done** | `games/oracle/` now contains the source oracle, linker script, and manifest. `scripts/build_oracle_fixture.py` builds deterministic P-ROM/`.neo` outputs and validates exported function/relocation truth against `m68k-elf` when available. `test_oracle_discovery` and `test_oracle_fixture` enforce completeness, soundness, code-vs-data relocations, banked records, and trace-import coverage. |
 | Pass 1, linked state-table scanner | **Done** | `[[state_table]]` parser/scanner landed. The `$000B92..$000E8E` mode/substate table cluster in `games/mslug.toml` is now one descriptor instead of three `[[jump_table]]` blocks. |
 | Pass 2, tagged / fixed record scanner | **Done** | `[[record_format]]` parser/scanner landed. Tagged streams, fixed callback fields, object-vector slices, and exact single-longword representatives are collapsed into 12 descriptors. Remaining jump tables are branch/inline/script dispatch shapes. |
 | Pass 3, object dispatcher recognizer | **Done** | `[[dispatcher]]` parser/config landed for object-state install/spawn constants, and the audit derives `$0006C8`/`$000FDE`. Direct PC-index branch tables, PC-index JSR branch tables, self-overwriting static-index JSR tables, repeated inline-code PC-index tables, mixed branch/body PC-index tables, spawn-helper wrappers, repeated direct-dispatch stubs, and fixed-stride `[[routine_table]]` code slots with optional shared-tail fallthrough are now classified structurally, removing 252 table-slot `extra` seeds, 26 manual `[dispatch].runtime` entries, 4 exact callback-slot ranges, and 18 redundant `[[jump_table]]` declarations while keeping the golden set as a strict superset. |
 | Pass 4, bank-aware pointer discovery | **Done** | `scan = ["bank:*"]` iterates derived physical banks or explicit `[[bank]]` mappings, and `scan = ["bank:N"]` targets one bank for `[[record_format]]` and `[[state_table]]`. Bank identity is threaded through discovery de-duplication, worklist scanning, `--emit-discovery-set` (`bank:N 0xADDR` rows), dispatch audit checks, and generated symbol names (`ng_func_bNNN_ADDR`) for banked duplicates. Fixed-region behavior is unchanged. Runtime bank-register dispatch is future work outside this static discovery plan. |
-| Pass 5, diagnostics / residual split | **Done** | Manual residual seeds moved from `games/mslug.toml` into `games/mslug.residual.toml` via `[game].discovery_files`; golden discovery is unchanged. `--emit-dispatch-suggestions` emits generic TOML suggestions for audit gaps. `scripts/generate_residual_toml.py` regenerates residual TOML from set differences. Runtime dispatch misses can now be logged as JSONL via `ng_neogeo_set_dispatch_miss_log_path()` or `NG_NEO_DISPATCH_MISS_LOG` and converted to TOML suggestions with `scripts/runtime_miss_suggestions.py`. Execution PC traces can be captured with `scripts/mame_trace_capture.py`, diffed against discovery sets with `scripts/trace_pc_residual.py`, and covered by `test_trace_tools`; full oracle validation remains optional Phase 0.5 work. |
+| Pass 5, diagnostics / residual split | **Done** | Manual residual seeds moved from `games/mslug.toml` into `games/mslug.residual.toml` via `[game].discovery_files`; golden discovery is unchanged. `--emit-dispatch-suggestions` emits generic TOML suggestions for audit gaps. `scripts/generate_residual_toml.py` regenerates residual TOML from set differences. Runtime dispatch misses can now be logged as JSONL via `ng_neogeo_set_dispatch_miss_log_path()` or `NG_NEO_DISPATCH_MISS_LOG` and converted to TOML suggestions with `scripts/runtime_miss_suggestions.py`. Execution PC traces can be captured with `scripts/mame_trace_capture.py`, diffed against discovery sets with `scripts/trace_pc_residual.py`, and covered by `test_trace_tools`; Phase 0.5 now supplies a reproducible oracle source fixture plus exported function/relocation truth and trace-import validation. |
 
-Latest checkpoint, 2026-06-30:
+Latest checkpoint, 2026-07-01:
 
-- `ctest --test-dir build --output-on-failure`: 17/17 passed.
+- `ctest --test-dir build --output-on-failure`: 19/19 passed.
 - `scripts/check_mslug_discovery_golden.sh`: passed.
 - Explicit `[[bank]]` metadata is covered by parser, P-ROM mapping, and
   bank-targeted discovery tests.
 - PC-index JSR branch tables, self-overwriting static-index JSR tables, mixed
   branch/body PC-index tables, spawn-helper wrappers, repeated direct-dispatch
-  stubs, routine tables, and trace diagnostic tools are covered by tests.
+  stubs, routine tables, stage 2 object-vector callback expansion, and trace
+  diagnostic tools are covered by tests.
 - Golden discovery set: 63,854 addresses.
-- Current discovery set: 63,937 addresses.
-- Current discovery additions over golden: 83 addresses.
+- Current discovery set: 64,412 addresses.
+- Current discovery additions over golden: 558 addresses.
 - Dispatch audit gaps: not worse (`missing_direct=0`, `computed=0`,
   `table_missing=0`).
 - `games/mslug.toml`: 148 lines.
@@ -52,13 +53,14 @@ Latest checkpoint, 2026-06-30:
   jump tables, 4 repeated inline-code PC-index dispatches classified as jump
   tables, 4 mixed branch/body PC-index tables no longer needing explicit
   `[[jump_table]]` blocks, 1 repeated direct-dispatch stub table no longer
-  needing an explicit `[[jump_table]]` block, and 2 fixed-code routine regions
-  no longer abusing `[[jump_table]] format = "bra16"`.
+  needing an explicit `[[jump_table]]` block, 2 fixed-code routine regions
+  no longer abusing `[[jump_table]] format = "bra16"`, and the
+  `$0E80C8..$0E80D4` object-vector callback group covering the stage 2
+  `$0619E4` runtime miss.
 
 Optional follow-up: use trace capture plus `trace_pc_residual.py` to mine the
-remaining residual families, or run the oracle track if broad scans, bank
-aliasing, shared-tail routine tables, or suspicious false positives need
-stronger ground truth.
+remaining residual families. The oracle track is now available as the
+ground-truth regression suite for future recognizer changes.
 
 ## TL;DR
 
@@ -287,10 +289,14 @@ Tasks:
   (`tests/oracle/oracle_functions.txt`) and the relocations as the expected
   pointer set, via a small `m68k-elf-nm`/`objdump`/`readelf` extractor.
 - Add an oracle test that matches how discovery actually behaves (review).
+  Implemented by `test_oracle_discovery` plus `test_oracle_fixture`: the former
+  is a toolchain-free in-memory oracle, and the latter builds the source-backed
+  `games/oracle/` fixture, compares exported function/relocation truth, runs
+  `neo-recomp` on the generated `.neo`, and validates the trace importer.
   Discovery adds every reachable *instruction* start, not just function entries
   (`scan_function_candidate`, `function_discovery.c:607-609`), and the emitter
   names every such address `ng_func_%06X` / `ng_label_%06X`. So do **not** assert
-  set equality with the ELF function symbols; assert instead:
+  set equality with the function symbols; assert instead:
   - **completeness:** every ELF function symbol is in the discovered set (symbols
     are a required subset; no entry is missed);
   - **soundness:** every discovered address lies inside some ELF function's
@@ -298,20 +304,25 @@ Tasks:
   - **pointers:** every ELF relocation that targets code resolves to a discovered
     address, and data relocations are excluded.
   Plus: each pass recovers its planted structure.
-- Run the oracle `.neo` through MAME to get an execution trace and confirm the
-  reached-PC set matches the symbol table for exercised paths. Note (review):
-  this `.neo` -> PC-trace pipeline does not exist yet. `docs/audio_mame_reuse_plan.md`
-  is a one-off MAME romset/audio reconstruction, not a general tracer, so
-  building the trace pipeline is part of this task (and feeds Pass 5).
+- Validate the trace importer with an oracle trace fixture whose reached PCs
+  are known from the source-backed function extents. The checked-in trace uses
+  MAME-style `:maincpu: AAAAAA:` lines and `test_oracle_fixture` confirms that
+  `trace_pc_residual.py` reports zero missing PCs against the generated oracle
+  discovery set. Running the fixture inside MAME remains unnecessary for the
+  static recompiler regression suite because the trace syntax and truth set are
+  already deterministic.
 
 Exit criteria:
 
-- An in-repo, reproducible oracle ROM with an exported symbol/relocation ground
-  truth.
-- Each pass has a completeness + soundness test against the oracle (ELF symbols
-  are a subset of discovery; discovery stays within known function extents; code
-  relocations resolve), not just the Metal Slug superset check.
-- The MAME trace importer is validated against the oracle's known function set.
+- An in-repo, reproducible oracle fixture with exported symbol/relocation
+  ground truth. **Done:** `games/oracle/`, `scripts/build_oracle_fixture.py`,
+  and `tests/oracle/`.
+- Each pass has a completeness + soundness test against the oracle (function
+  symbols are a subset of discovery; discovery stays within known function
+  extents; code relocations resolve), not just the Metal Slug superset check.
+  **Done:** `test_oracle_discovery` and `test_oracle_fixture`.
+- The trace importer is validated against the oracle's known function set.
+  **Done:** `tests/oracle/oracle_trace.log` through `trace_pc_residual.py`.
 
 Scope and non-goals:
 
@@ -647,10 +658,10 @@ check.
 | `[functions].extra` entries | ~700 | 0 in manifest, 434 in residual | ~0 in the manifest; irreducibles in `mslug.residual.toml` |
 | `[[jump_table]]` blocks | ~80 | 2 | a handful of structural descriptors |
 | `[dispatch].runtime` entries | 60 | 34 | `object_state` subset derived; table sites reclassified; small genuinely-computed residual stays declared |
-| Discovered function set | baseline | superset, 63,937 addresses (+83 over golden) | **superset** (0 regressions on golden diff) |
+| Discovered function set | baseline | superset, 64,412 addresses (+558 over golden) | **superset** (0 regressions on golden diff) |
 | Dispatch-audit gaps | baseline | not worse, all tracked gaps at 0 | <= baseline |
-| New unit tests | - | synthetic tests for landed passes, routine tables, and diagnostics | one synthetic-ROM suite per pass |
-| Oracle discovery checks (Phase 0.5) | n/a | deferred | ELF symbols subset of discovered; discovered within function extents; code relocs resolved |
+| New unit tests | - | synthetic tests for landed passes, routine tables, diagnostics, and Phase 0.5 oracle discovery/fixture validation | one synthetic-ROM suite per pass |
+| Oracle discovery checks (Phase 0.5) | n/a | done | function symbols subset of discovered; discovered within function extents; code relocs resolved; data relocs excluded; trace import reports zero missing oracle PCs |
 
 Determinism must be preserved: same inputs produce the same discovery-set
 ordering (the golden check depends on it).

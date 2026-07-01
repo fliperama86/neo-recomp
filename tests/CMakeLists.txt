@@ -18,6 +18,11 @@ add_executable(test_function_discovery
 )
 target_link_libraries(test_function_discovery PRIVATE neo_recompiler_core)
 
+add_executable(test_oracle_discovery
+    test_oracle_discovery.c
+)
+target_link_libraries(test_oracle_discovery PRIVATE neo_recompiler_core)
+
 add_executable(test_dispatch_audit
     test_dispatch_audit.c
 )
@@ -106,6 +111,7 @@ if(MSVC)
     target_compile_options(test_m68k_decode PRIVATE /W4)
     target_compile_options(test_m68k_validate PRIVATE /W4)
     target_compile_options(test_function_discovery PRIVATE /W4)
+    target_compile_options(test_oracle_discovery PRIVATE /W4)
     target_compile_options(test_dispatch_audit PRIVATE /W4)
     target_compile_options(test_game_config PRIVATE /W4)
     target_compile_options(test_c_emitter PRIVATE /W4)
@@ -122,6 +128,7 @@ else()
     target_compile_options(test_m68k_decode PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_m68k_validate PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_function_discovery PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(test_oracle_discovery PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_dispatch_audit PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_game_config PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_c_emitter PRIVATE -Wall -Wextra -Wpedantic)
@@ -139,6 +146,7 @@ add_test(NAME test_p_rom COMMAND test_p_rom)
 add_test(NAME test_m68k_decode COMMAND test_m68k_decode)
 add_test(NAME test_m68k_validate COMMAND test_m68k_validate)
 add_test(NAME test_function_discovery COMMAND test_function_discovery)
+add_test(NAME test_oracle_discovery COMMAND test_oracle_discovery)
 add_test(NAME test_dispatch_audit COMMAND test_dispatch_audit)
 add_test(NAME test_game_config COMMAND test_game_config)
 add_test(NAME test_c_emitter COMMAND test_c_emitter)
@@ -172,5 +180,13 @@ if(Python3_Interpreter_FOUND)
                 "${CMAKE_CURRENT_SOURCE_DIR}/test_trace_tools.py"
                 "${CMAKE_SOURCE_DIR}"
                 "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(
+        NAME test_oracle_fixture
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/test_oracle_fixture.py"
+                "${CMAKE_SOURCE_DIR}"
+                "${CMAKE_CURRENT_BINARY_DIR}"
+                "$<TARGET_FILE:neo-recomp>"
     )
 endif()

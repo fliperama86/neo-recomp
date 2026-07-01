@@ -1,0 +1,79 @@
+[game]
+name = "neo-recomp discovery oracle"
+short_name = "oracle"
+year = 2026
+
+[program]
+address_space = "m68k"
+fixed_base = 0x000000
+fixed_size = 0x000800
+bank_window_base = 0x200000
+bank_window_size = 0x000100
+
+[functions]
+entry = [0x000200]
+
+[[bank]]
+id = 0
+offset = 0x000800
+size = 0x000100
+
+[[bank]]
+id = 1
+offset = 0x000900
+size = 0x000100
+
+[[dispatcher]]
+kind = "object_state"
+state_slot = 0x70
+install_slots = [0x70]
+spawn_helpers = [0x000280]
+
+[[state_table]]
+root = 0x000300
+table_start = 0x000300
+table_end = 0x000320
+stride = 4
+sentinel = 0xFFFFFFFF
+follow_chain = true
+target = "0x0002A0-0x0002E0"
+max_tables = 4
+max_entries = 4
+
+[[record_format]]
+name = "oracle_tagged_records"
+tag = 0x0800
+stride = 2
+callback_offsets = [2]
+target = "0x0002E0-0x000400"
+scan = ["0x000320-0x000340"]
+
+[[record_format]]
+name = "oracle_fixed_records"
+width = 0x10
+callback_offsets = [4]
+sentinel = 0xFFFFFFFF
+target = "0x000380-0x000400"
+scan = ["0x000340-0x000360"]
+
+[[record_format]]
+name = "oracle_object_vector"
+stride = 4
+callback_offsets = [0]
+sentinel = 0xFFFFFFFF
+target = "0x0003A0-0x000400"
+scan = ["0x000440-0x000450"]
+
+[[record_format]]
+name = "oracle_banked_record"
+stride = 4
+callback_offsets = [0]
+target = "0x200000-0x200100"
+scan = ["bank:*"]
+
+[[routine_table]]
+name = "oracle_routine_table"
+stride = 0x10
+width = 0x10
+min_instructions = 2
+scan = ["0x000400-0x000420"]

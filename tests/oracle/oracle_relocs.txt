@@ -1,0 +1,20 @@
+# name site_bank site target_bank target kind
+bank0_record_entry 0 0x200000 0 0x200020 code
+bank1_record_entry 1 0x200000 1 0x200020 code
+cart_header_entry none 0x000124 none 0x000200 code
+direct_jsr none 0x000202 none 0x000220 code
+fixed_record_entry none 0x000344 none 0x000380 code
+object_state_install none 0x000208 none 0x000240 code
+object_vector_a none 0x000440 none 0x0003A0 code
+object_vector_b none 0x000444 none 0x0003C0 code
+object_vector_data_pointer none 0x000448 none 0x000460 data
+routine_table_branch none 0x000416 none 0x000430 code
+routine_table_call none 0x000404 none 0x000220 code
+spawn_helper_call none 0x000218 none 0x000280 code
+spawn_install none 0x000212 none 0x000260 code
+state_table_chain_entry none 0x000310 none 0x0002C0 code
+state_table_chain_pointer none 0x000304 none 0x000310 data
+state_table_entry none 0x000300 none 0x0002A0 code
+tagged_record_entry none 0x000322 none 0x0002E0 code
+vector_entry none 0x000004 none 0x000200 code
+wrong_tag_data_pointer none 0x000332 none 0x0003E0 data
