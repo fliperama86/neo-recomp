@@ -34,9 +34,9 @@ format = "tagged_abs32"
 match = 0x0800
 target_offset = 2
 table_start = 0x074000
-table_end = 0x077000
+table_end = 0x300000
 target_start = 0x020000
-target_end = 0x080000
+target_end = 0x300000
 stride = 2
 max_entries = 640
 [[record_format]]
