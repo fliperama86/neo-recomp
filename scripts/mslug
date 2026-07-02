@@ -19,8 +19,8 @@ Default paths:
   ~/Documents/Games/Mister/NEOGEO/bios/sp-s2.sp1
 
 Examples:
-  scripts/mslug            # launch cached host only, no pre-window fast-forward
-  scripts/mslug quick      # cached launch with 10k pre-window fast-forward
+  scripts/mslug            # launch cached host if fresh, otherwise explain rebuild
+  scripts/mslug quick      # cached launch if fresh with 10k pre-window fast-forward
   scripts/mslug build      # expensive build/relink only
   scripts/mslug rebuild    # force build/relink, then launch
   scripts/mslug attract    # cached launch with deeper 500k fast-forward
@@ -29,6 +29,31 @@ USAGE
 
 is_build_only() {
   [[ "${NG_MSLUG_SDL_BUILD_ONLY:-0}" != "0" ]]
+}
+
+is_fresh() {
+  local output="$1"
+  shift
+  [[ -f "$output" ]] || return 1
+  local input
+  for input in "$@"; do
+    [[ -e "$input" ]] || continue
+    if [[ "$input" -nt "$output" ]]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+cached_host_is_fresh() {
+  local build_dir="${BUILD_DIR:-$ROOT/build}"
+  is_fresh "$HOST_BIN" \
+    "$build_dir/neo-recomp" \
+    "$build_dir/mslug_recomp_shards/shards.list" \
+    "$ROOT/games/mslug.toml" \
+    "$ROOT/games/mslug.residual.toml" \
+    "$ROOT/games/mslug.mined_record_tables.toml" \
+    "$ROOT/scripts/run_mslug_sdl.sh"
 }
 
 launch_cached_host() {
@@ -396,14 +421,21 @@ while (($#)); do
   shift
 done
 
-# The user-facing command should feel like "play": no hidden recompilation.
-# Use `scripts/mslug build` for the expensive generated-code pipeline, then
-# `scripts/mslug` for sub-second cached launches.
+# The user-facing command should feel like "play": no hidden multi-minute
+# recompilation.  But launching stale generated code makes dispatch misses look
+# like discovery gaps, so fail fast with an explicit rebuild instruction.
 if ((! REBUILD)) && ! is_build_only; then
-  if ((${#args[@]})); then
-    launch_cached_host "${args[@]}"
+  if cached_host_is_fresh; then
+    if ((${#args[@]})); then
+      launch_cached_host "${args[@]}"
+    else
+      launch_cached_host
+    fi
   else
-    launch_cached_host
+    printf 'cached Metal Slug host is stale; not launching stale generated code\n' >&2
+    printf 'run: scripts/mslug rebuild\n' >&2
+    printf 'or:  ./run.sh rebuild\n' >&2
+    exit 1
   fi
 fi
 

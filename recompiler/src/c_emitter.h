@@ -18,6 +18,11 @@ int ng_emit_c_checked(FILE *out,
                       const NgProgramRom *rom,
                       const NgFunctionDiscovery *discovery,
                       NgEmitDiagnostics *diagnostics);
+int ng_emit_c_shards(const char *out_dir,
+                     const NgProgramRom *rom,
+                     const NgFunctionDiscovery *discovery,
+                     uint32_t functions_per_shard,
+                     NgEmitDiagnostics *diagnostics);
 int ng_emit_c(FILE *out,
               const NgProgramRom *rom,
               const NgFunctionDiscovery *discovery);

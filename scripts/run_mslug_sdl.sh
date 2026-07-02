@@ -33,11 +33,15 @@ AUTO_COIN_FRAME="${NG_MSLUG_SDL_AUTO_COIN_FRAME:-}"
 AUTO_START_FRAME="${NG_MSLUG_SDL_AUTO_START_FRAME:-}"
 AUTO_P1_A_FRAME="${NG_MSLUG_SDL_AUTO_P1_A_FRAME:-}"
 BUILD_ONLY="${NG_MSLUG_SDL_BUILD_ONLY:-0}"
+FORCE_BIOS_RECOMP="${NG_MSLUG_FORCE_BIOS_RECOMP:-0}"
+DEFAULT_CART_SHARD_JOBS="$(sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+CART_SHARD_SIZE="${NG_MSLUG_C_SHARD_SIZE:-2048}"
+CART_SHARD_JOBS="${NG_MSLUG_C_SHARD_JOBS:-$DEFAULT_CART_SHARD_JOBS}"
 
 OPTFLAGS_VALUE="${NG_MSLUG_SDL_OPTFLAGS:--O1 -DNDEBUG}"
 # shellcheck disable=SC2206
 OPTFLAGS=($OPTFLAGS_VALUE)
-CFLAGS=(-std=c99 -Wall -Wextra "${OPTFLAGS[@]}" -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_CYCLE_HOOK=ng_generated_cycle_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
+CFLAGS=(-std=c99 -Wall -Wextra -Wno-unused-function "${OPTFLAGS[@]}" -DNG_GENERATED_INSTRUCTION_HOOK=ng_generated_instruction_hook -DNG_GENERATED_CYCLE_HOOK=ng_generated_cycle_hook -DNG_GENERATED_SHOULD_YIELD=ng_generated_should_yield -I"$ROOT/include" -I"$ROOT/recompiler/src")
 CXXFLAGS=(-std=c++17 -Wall -Wextra "${OPTFLAGS[@]}" -I"$ROOT/include" -I"$ROOT/runtime/src" -isystem "$ROOT/third_party/ymfm")
 
 log_step() {
@@ -117,15 +121,17 @@ if [[ -n "$AUTO_P1_A_FRAME" ]]; then
   log_note "auto P1 A frame: $AUTO_P1_A_FRAME"
 fi
 log_note "native C optimization flags: ${OPTFLAGS[*]:-(none)}"
+log_note "cart C sharding: size=$CART_SHARD_SIZE jobs=$CART_SHARD_JOBS"
 
 log_step "Configuring/building recompiler tools"
 cmake -S "$ROOT" -B "$BUILD_DIR" >/dev/null
 cmake --build "$BUILD_DIR" --target neo-recomp generate-bios-recomp -j4
 
-CART_C="$BUILD_DIR/mslug_recomp.c"
+CART_SHARD_DIR="$BUILD_DIR/mslug_recomp_shards"
+CART_SHARD_LIST="$CART_SHARD_DIR/shards.list"
 CART_AUDIT="$BUILD_DIR/mslug_dispatch_audit.txt"
 BIOS_C="$BUILD_DIR/bios_recomp_mslug_headless.c"
-CART_OBJ="$BUILD_DIR/mslug_recomp_cart.o"
+BIOS_SEEDS_STAMP="$BUILD_DIR/bios_recomp_mslug_headless.seeds"
 BIOS_OBJ="$BUILD_DIR/bios_recomp_mslug_headless.o"
 HARNESS_OBJ="$BUILD_DIR/generated_smoke_harness_live.o"
 RUNTIME_OBJ="$BUILD_DIR/neogeo_runtime_live.o"
@@ -140,32 +146,50 @@ P_ROM_OBJ="$BUILD_DIR/p_rom_live.o"
 SDL_HOST_OBJ="$BUILD_DIR/sdl_live_host.o"
 HOST_BIN="$BUILD_DIR/mslug_sdl_host"
 FLAGS_STAMP="$BUILD_DIR/mslug_live_cflags.stamp"
+CART_SHARD_SIZE_STAMP="$CART_SHARD_DIR/shard_size.stamp"
 
 FLAGS_TEXT="$(printf '%q ' "${CFLAGS[@]}")"
 if [[ ! -f "$FLAGS_STAMP" ]] || [[ "$(cat "$FLAGS_STAMP")" != "$FLAGS_TEXT" ]]; then
   printf '%s\n' "$FLAGS_TEXT" >"$FLAGS_STAMP"
 fi
+mkdir -p "$CART_SHARD_DIR"
+if [[ ! -f "$CART_SHARD_SIZE_STAMP" ]] || [[ "$(cat "$CART_SHARD_SIZE_STAMP")" != "$CART_SHARD_SIZE" ]]; then
+  printf '%s\n' "$CART_SHARD_SIZE" >"$CART_SHARD_SIZE_STAMP"
+fi
 
 RECOMP_LOG="$BUILD_DIR/mslug_recomp.log"
-if is_fresh "$CART_C" "$BUILD_DIR/neo-recomp" "$ROOT/games/mslug.toml" "$NEO_PATH"; then
+if is_fresh "$CART_SHARD_LIST" \
+  "$BUILD_DIR/neo-recomp" \
+  "$ROOT/games/mslug.toml" \
+  "$ROOT/games/mslug.residual.toml" \
+  "$ROOT/games/mslug.mined_record_tables.toml" \
+  "$CART_SHARD_SIZE_STAMP" \
+  "$NEO_PATH"; then
   log_step "Recompiling Metal Slug cart CPU code"
-  log_note "cached: $CART_C"
+  log_note "cached shards: $CART_SHARD_LIST"
 else
-  log_step "Recompiling Metal Slug cart CPU code"
+  log_step "Recompiling Metal Slug cart CPU code into shards"
   if ! "$BUILD_DIR/neo-recomp" \
     --game "$ROOT/games/mslug.toml" \
     --neo "$NEO_PATH" \
-    --emit-c "$CART_C" \
+    --emit-c-shards "$CART_SHARD_DIR" \
+    --emit-c-shard-size "$CART_SHARD_SIZE" \
     --emit-dispatch-audit "$CART_AUDIT" \
     --fail-on-dispatch-gaps >"$RECOMP_LOG"; then
     cat "$RECOMP_LOG" >&2
     exit 1
   fi
-  grep -E "game config functions|function candidates|generated C:|dispatch audit:" "$RECOMP_LOG" || true
+  grep -E "game config functions|function candidates|generated C shards:|dispatch audit:" "$RECOMP_LOG" || true
 fi
 
 BIOS_SEEDS="0xC00402,0xC00438,0xC00444,0xC0044A,0xC00468,0xC004C2,0xC004CE,0xC11142,0xC133BA,0xC187C4,0xC187CC,0xC187D4,0xC18814,0xC1881A,0xC187B6,0xC17F0E,0xC1868A,0xC18690,0xC18832,0xC18012,0xC18074,0xC18082,0xC180DC,0xC1811A,0xC18194,0xC181AE,0xC18208,0xC188DC,0xC182A6"
-if is_fresh "$BIOS_C" "$BUILD_DIR/generate-bios-recomp" "$BIOS_PATH" "$ROOT/scripts/run_mslug_sdl.sh"; then
+if [[ ! -f "$BIOS_SEEDS_STAMP" ]] || [[ "$(cat "$BIOS_SEEDS_STAMP")" != "$BIOS_SEEDS" ]]; then
+  printf '%s\n' "$BIOS_SEEDS" >"$BIOS_SEEDS_STAMP"
+fi
+if [[ "$FORCE_BIOS_RECOMP" != "0" ]]; then
+  rm -f "$BIOS_C" "$BIOS_OBJ"
+fi
+if is_fresh "$BIOS_C" "$BIOS_PATH" "$BIOS_SEEDS_STAMP"; then
   log_step "Generating BIOS recomp slice"
   log_note "cached: $BIOS_C"
 else
@@ -176,16 +200,38 @@ else
     "$BIOS_C"
 fi
 
-if is_fresh "$CART_OBJ" "$CART_C" "$FLAGS_STAMP"; then
-  log_step "Compiling generated cart C"
-  log_note "cached: $CART_OBJ"
+CART_OBJS=()
+CART_COMPILE_LIST="$BUILD_DIR/mslug_cart_shards_to_compile.txt"
+: >"$CART_COMPILE_LIST"
+if [[ ! -f "$CART_SHARD_LIST" ]]; then
+  echo "cart shard list missing: $CART_SHARD_LIST" >&2
+  exit 1
+fi
+while IFS= read -r shard_c; do
+  [[ -n "$shard_c" ]] || continue
+  shard_obj="${shard_c%.c}.o"
+  CART_OBJS+=("$shard_obj")
+  if ! is_fresh "$shard_obj" "$shard_c" "$FLAGS_STAMP"; then
+    printf '%s\n%s\n' "$shard_c" "$shard_obj" >>"$CART_COMPILE_LIST"
+  fi
+done <"$CART_SHARD_LIST"
+if [[ -s "$CART_COMPILE_LIST" ]]; then
+  CART_COMPILE_SCRIPT="$BUILD_DIR/compile_mslug_cart_shard.sh"
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf 'set -euo pipefail\n'
+    printf 'cc'
+    printf ' %q' "${CFLAGS[@]}"
+    printf ' -DNG_GENERATED_CALL=ng_cart_generated_call -DNG_GENERATED_DISPATCH=ng_generated_call -c "$1" -o "$2"\n'
+  } >"$CART_COMPILE_SCRIPT"
+  chmod +x "$CART_COMPILE_SCRIPT"
+  STALE_SHARDS=$(( $(wc -l <"$CART_COMPILE_LIST") / 2 ))
+  log_step "Compiling generated cart C shards"
+  log_note "stale: $STALE_SHARDS/${#CART_OBJS[@]} objects, jobs=$CART_SHARD_JOBS"
+  xargs -n 2 -P "$CART_SHARD_JOBS" "$CART_COMPILE_SCRIPT" <"$CART_COMPILE_LIST"
 else
-  log_step "Compiling generated cart C (slow/silent; this can take a minute or more)"
-  cc "${CFLAGS[@]}" \
-    -DNG_GENERATED_CALL=ng_cart_generated_call \
-    -DNG_GENERATED_DISPATCH=ng_generated_call \
-    -c "$CART_C" \
-    -o "$CART_OBJ"
+  log_step "Compiling generated cart C shards"
+  log_note "cached: ${#CART_OBJS[@]} objects"
 fi
 if is_fresh "$BIOS_OBJ" "$BIOS_C" "$FLAGS_STAMP"; then
   log_step "Compiling generated BIOS C"
@@ -239,7 +285,7 @@ log_step "Linking SDL host"
 c++ \
   "$SDL_HOST_OBJ" \
   "$HARNESS_OBJ" \
-  "$CART_OBJ" \
+  "${CART_OBJS[@]}" \
   "$BIOS_OBJ" \
   "$RUNTIME_OBJ" \
   "$VIDEO_OBJ" \

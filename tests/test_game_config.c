@@ -279,6 +279,8 @@ int main(void) {
             "  \"0x000400-0x000480\",\n"
             "  \"bank:*\",\n"
             "  \"bank:2\",\n"
+            "  \"auto:fixed\",\n"
+            "  \"auto:bank:*:0x200020-0x200060\",\n"
             "]\n"
             "\n"
             "[[routine_table]]\n"
@@ -408,7 +410,7 @@ int main(void) {
     CHECK(config.record_formats[0].cluster_max_entries == 9u);
     CHECK(config.record_formats[0].target_start == 0x000800u);
     CHECK(config.record_formats[0].target_end == 0x000900u);
-    CHECK(config.record_formats[0].scan_count == 3u);
+    CHECK(config.record_formats[0].scan_count == 5u);
     CHECK(config.record_formats[0].scans[0].kind ==
           NG_GAME_CONFIG_RECORD_SCAN_RANGE);
     CHECK(config.record_formats[0].scans[0].start == 0x000400u);
@@ -418,6 +420,12 @@ int main(void) {
     CHECK(config.record_formats[0].scans[2].kind ==
           NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE);
     CHECK(config.record_formats[0].scans[2].bank_id == 2u);
+    CHECK(config.record_formats[0].scans[3].kind ==
+          NG_GAME_CONFIG_RECORD_SCAN_FIXED_AUTO);
+    CHECK(config.record_formats[0].scans[4].kind ==
+          NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL_AUTO);
+    CHECK(config.record_formats[0].scans[4].start == 0x200020u);
+    CHECK(config.record_formats[0].scans[4].end == 0x200060u);
     CHECK(strcmp(config.record_formats[1].name, "child_fixed") == 0);
     CHECK(!config.record_formats[1].has_tag);
     CHECK(config.record_formats[1].width == 0x0Au);

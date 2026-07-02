@@ -871,22 +871,66 @@ static void append_record_scan_token(NgGameConfig *config,
         return;
     }
 
+    char local[128];
+    snprintf(local, sizeof(local), "%s", token);
+    token = local;
+
+    int auto_scan = 0;
+    if (strncmp(token, "auto:", 5u) == 0 && token[5] != '\0') {
+        auto_scan = 1;
+        token += 5u;
+    }
+    size_t token_len = strlen(token);
+    if (token_len > 5u && strcmp(token + token_len - 5u, ":auto") == 0) {
+        auto_scan = 1;
+        local[(size_t)(token - local) + token_len - 5u] = '\0';
+    }
+
     NgGameConfigRecordScan *scan = &record->scans[record->scan_count];
     memset(scan, 0, sizeof(*scan));
     if (strcmp(token, "fixed") == 0) {
-        scan->kind = NG_GAME_CONFIG_RECORD_SCAN_FIXED;
-    } else if (strcmp(token, "bank:*") == 0) {
-        scan->kind = NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL;
+        scan->kind = auto_scan ?
+            NG_GAME_CONFIG_RECORD_SCAN_FIXED_AUTO :
+            NG_GAME_CONFIG_RECORD_SCAN_FIXED;
+    } else if (strcmp(token, "fixed:auto") == 0) {
+        scan->kind = NG_GAME_CONFIG_RECORD_SCAN_FIXED_AUTO;
+    } else if (strncmp(token, "bank:*", 6u) == 0) {
+        const char *rest = token + 6u;
+        if (*rest == '\0') {
+            /* full bank window */
+        } else if (*rest == ':') {
+            if (!parse_range_value(rest + 1u, &scan->start, &scan->end)) {
+                return;
+            }
+        } else {
+            return;
+        }
+        scan->kind = auto_scan ?
+            NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL_AUTO :
+            NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL;
     } else if (strncmp(token, "bank:", 5u) == 0 && token[5] != '\0') {
         char *end = NULL;
         unsigned long bank = strtoul(token + 5u, &end, 0);
-        if (end == token + 5u || *end != '\0') {
+        if (end == token + 5u) {
             return;
         }
-        scan->kind = NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE;
+        if (*end == '\0') {
+            /* full bank window */
+        } else if (*end == ':') {
+            if (!parse_range_value(end + 1u, &scan->start, &scan->end)) {
+                return;
+            }
+        } else {
+            return;
+        }
+        scan->kind = auto_scan ?
+            NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE_AUTO :
+            NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE;
         scan->bank_id = (uint32_t)bank;
     } else if (parse_range_value(token, &scan->start, &scan->end)) {
-        scan->kind = NG_GAME_CONFIG_RECORD_SCAN_RANGE;
+        scan->kind = auto_scan ?
+            NG_GAME_CONFIG_RECORD_SCAN_RANGE_AUTO :
+            NG_GAME_CONFIG_RECORD_SCAN_RANGE;
     } else {
         return;
     }

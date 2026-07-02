@@ -85,7 +85,7 @@ int main(void) {
     CHECK(audit.runtime_computed_count == 0u);
     CHECK(audit.jump_table_count == 1u);
     CHECK(audit.jump_table_resolved_entries == 3u);
-    CHECK(audit.jump_table_missing_entries == 1u);
+    CHECK(audit.jump_table_missing_entries == 0u);
     CHECK(ng_dispatch_audit_has_gaps(&audit));
     CHECK(!audit.truncated);
 
@@ -99,7 +99,7 @@ int main(void) {
     CHECK(audit.sites[1].site_addr == 0x1Au);
     CHECK(audit.sites[1].table_addr == 0x1Cu);
     CHECK(audit.sites[1].resolved_entries == 3u);
-    CHECK(audit.sites[1].missing_entries == 1u);
+    CHECK(audit.sites[1].missing_entries == 0u);
 
     CHECK(audit.sites[2].kind == NG_DISPATCH_AUDIT_COMPUTED);
     CHECK(audit.sites[2].site_addr == 0x60u);
@@ -129,7 +129,7 @@ int main(void) {
     fclose(out);
     CHECK(strstr(text, "dispatch audit: sites=6 direct=3 missing_direct=1 external_direct=1 computed=2 runtime_computed=0 jump_tables=1") != NULL);
     CHECK(strstr(text, "$000010 DIRECT JSR target=$000080 discovered=yes") != NULL);
-    CHECK(strstr(text, "$00001A JUMP_TABLE JMP table=$00001C resolved=3 missing=1") != NULL);
+    CHECK(strstr(text, "$00001A JUMP_TABLE JMP table=$00001C resolved=3 missing=0") != NULL);
     CHECK(strstr(text, "$000060 COMPUTED JSR target=<runtime>") != NULL);
     CHECK(strstr(text, "$000068 COMPUTED JSR target=<runtime>") != NULL);
     CHECK(strstr(text, "$000070 DIRECT JSR target=$000300 discovered=no") != NULL);
@@ -140,17 +140,14 @@ int main(void) {
     CHECK(ng_dispatch_audit_write_suggestions(out, &audit));
     CHECK(read_file(out, text, sizeof(text)));
     fclose(out);
-    CHECK(strstr(text, "suggestion_count = 4") != NULL);
+    CHECK(strstr(text, "suggestion_count = 3") != NULL);
     CHECK(strstr(text, "kind = \"missing_direct\"") != NULL);
     CHECK(strstr(text, "site = 0x000070") != NULL);
     CHECK(strstr(text, "target = 0x000300") != NULL);
     CHECK(strstr(text, "kind = \"computed_dispatch\"") != NULL);
     CHECK(strstr(text, "site = 0x000060") != NULL);
     CHECK(strstr(text, "site = 0x000068") != NULL);
-    CHECK(strstr(text, "kind = \"jump_table_missing\"") != NULL);
-    CHECK(strstr(text, "site = 0x00001A") != NULL);
-    CHECK(strstr(text, "table = 0x00001C") != NULL);
-    CHECK(strstr(text, "missing_entries = 1") != NULL);
+    CHECK(strstr(text, "kind = \"jump_table_missing\"") == NULL);
     CHECK(strstr(text, "site = 0x000078") == NULL);
 
     audit.missing_direct_count = 0u;
@@ -181,6 +178,80 @@ int main(void) {
     CHECK(strstr(text, "$000068 COMPUTED JSR target=<runtime>\n") != NULL);
 
     ng_program_rom_free(&rom);
+
+    {
+        NgProgramRom table_call_rom = make_rom(0xD0u);
+        CHECK(table_call_rom.data != NULL);
+
+        write16(&table_call_rom, 0x00u, 0x41FAu); /* LEA $000040(PC),A0 */
+        write16(&table_call_rom, 0x02u, 0x003Eu);
+        write16(&table_call_rom, 0x04u, 0x227Cu); /* MOVEA.L #$FFFFFFFF,A1 */
+        write32(&table_call_rom, 0x06u, 0xFFFFFFFFu);
+        write16(&table_call_rom, 0x0Au, 0x4EB9u); /* JSR table selector */
+        write32(&table_call_rom, 0x0Cu, 0x000000C0u);
+        write16(&table_call_rom, 0x10u, 0x4ED1u); /* JMP (A1), helper-selected */
+        write32(&table_call_rom, 0x40u, 0x00000070u);
+        write32(&table_call_rom, 0x44u, 0x00000080u);
+        write16(&table_call_rom, 0x70u, 0x4E75u);
+        write16(&table_call_rom, 0x80u, 0x4E75u);
+        write16(&table_call_rom, 0xC0u, 0x4E75u);
+
+        NgGameConfig table_call_config;
+        ng_game_config_init(&table_call_config);
+        table_call_config.table_call_count = 1u;
+        table_call_config.table_calls[0].helper = 0x000000C0u;
+        table_call_config.table_calls[0].table_start = 0x40u;
+        table_call_config.table_calls[0].table_end = 0x50u;
+        table_call_config.table_calls[0].table_reg = 0u;
+        table_call_config.table_calls[0].max_entries = 2u;
+        table_call_config.table_calls[0].format =
+            NG_GAME_CONFIG_TABLE_CALL_ABS32_SPARSE;
+
+        const uint32_t table_call_seeds[] = {0x00u};
+        static NgFunctionDiscovery table_call_discovery;
+        CHECK(ng_function_discover_from_game_config(&table_call_rom,
+                                                    table_call_seeds,
+                                                    1u,
+                                                    &table_call_config,
+                                                    &table_call_discovery));
+        CHECK(ng_dispatch_audit_build_with_config(&table_call_rom,
+                                                  &table_call_discovery,
+                                                  &table_call_config,
+                                                  &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.runtime_computed_count == 1u);
+        CHECK(audit.sites[audit.count - 1u].kind ==
+              NG_DISPATCH_AUDIT_COMPUTED);
+        CHECK(audit.sites[audit.count - 1u].site_addr == 0x10u);
+        CHECK(audit.sites[audit.count - 1u].runtime_allowed);
+
+        ng_program_rom_free(&table_call_rom);
+    }
+
+    {
+        NgProgramRom work_ram_rom = make_rom(0x20u);
+        CHECK(work_ram_rom.data != NULL);
+
+        write16(&work_ram_rom, 0x00u, 0x2279u); /* MOVEA.L $00100020,A1 */
+        write32(&work_ram_rom, 0x02u, 0x00100020u);
+        write16(&work_ram_rom, 0x06u, 0x4E91u); /* JSR (A1), RAM callback */
+        write16(&work_ram_rom, 0x08u, 0x4E75u);
+
+        static NgFunctionDiscovery work_ram_discovery;
+        CHECK(ng_function_discover_from_entry(&work_ram_rom,
+                                              0x00u,
+                                              &work_ram_discovery));
+        CHECK(ng_dispatch_audit_build(&work_ram_rom,
+                                      &work_ram_discovery,
+                                      &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.runtime_computed_count == 1u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_COMPUTED);
+        CHECK(audit.sites[0].site_addr == 0x06u);
+        CHECK(audit.sites[0].runtime_allowed);
+
+        ng_program_rom_free(&work_ram_rom);
+    }
 
     {
         NgProgramRom inline_rom = make_rom(0x40u);
@@ -601,11 +672,11 @@ int main(void) {
     write16(&stop_rom, 0x12u, 0x4EB9u);
     write32(&stop_rom, 0x14u, 0x00000300u);
 
-    write16(&stop_rom, 0x20u, 0x4AFCu); /* ILLEGAL; do not scan into $22 */
+    write16(&stop_rom, 0x20u, 0x4AFCu); /* ILLEGAL-style assertion; may fall through */
     write16(&stop_rom, 0x22u, 0x4EB9u);
     write32(&stop_rom, 0x24u, 0x00000300u);
 
-    write16(&stop_rom, 0x30u, 0x4E41u); /* TRAP #1; do not scan into $32 */
+    write16(&stop_rom, 0x30u, 0x4E41u); /* TRAP #1 assertion; may fall through */
     write16(&stop_rom, 0x32u, 0x4EB9u);
     write32(&stop_rom, 0x34u, 0x00000300u);
 
@@ -632,12 +703,12 @@ int main(void) {
     CHECK(ng_function_discovery_add(&stop_discovery, &stop_rom, 0x60u));
 
     CHECK(ng_dispatch_audit_build(&stop_rom, &stop_discovery, &audit));
-    CHECK(audit.count == 0u);
-    CHECK(audit.direct_count == 0u);
-    CHECK(audit.missing_direct_count == 0u);
+    CHECK(audit.count == 2u);
+    CHECK(audit.direct_count == 2u);
+    CHECK(audit.missing_direct_count == 2u);
     CHECK(audit.computed_count == 0u);
     CHECK(audit.jump_table_count == 0u);
-    CHECK(!ng_dispatch_audit_has_gaps(&audit));
+    CHECK(ng_dispatch_audit_has_gaps(&audit));
     CHECK(!audit.truncated);
 
     ng_program_rom_free(&stop_rom);

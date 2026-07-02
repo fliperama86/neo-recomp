@@ -8,9 +8,16 @@
 #include <string.h>
 
 #define NG_FUNCTION_DISCOVERY_BRANCH_TABLE_MAX_ENTRIES 32u
+#define NG_FUNCTION_DISCOVERY_BRANCH_PROBE_MAX_INSTRUCTIONS 12u
+#define NG_FUNCTION_DISCOVERY_HEURISTIC_TARGET_MAX_INSTRUCTIONS 32u
 
 static int is_probable_function_target(const NgProgramRom *rom,
                                        uint32_t addr);
+static int is_probable_heuristic_code_target(const NgProgramRom *rom,
+                                             uint32_t addr);
+static int table_call_target_allowed(const NgProgramRom *rom,
+                                     const NgGameConfigTableCall *call,
+                                     uint32_t target);
 static int is_direct_function_target(const NgM68kInstr *instr);
 
 void ng_function_discovery_init(NgFunctionDiscovery *discovery) {
@@ -92,15 +99,48 @@ uint32_t ng_function_discovery_bank_at(const NgFunctionDiscovery *discovery,
         discovery->banks[index] : NG_FUNCTION_DISCOVERY_BANK_NONE;
 }
 
-int ng_function_discovery_add(NgFunctionDiscovery *discovery,
-                              const NgProgramRom *rom,
-                              uint32_t addr) {
+int ng_function_discovery_is_entry_at(const NgFunctionDiscovery *discovery,
+                                      uint32_t index) {
+    return discovery && index < discovery->count && discovery->entries[index];
+}
+
+int ng_function_discovery_entry_contains_bank(
+    const NgFunctionDiscovery *discovery,
+    uint32_t addr,
+    uint32_t bank) {
+    if (!discovery) {
+        return 0;
+    }
+    for (uint32_t i = 0; i < discovery->count; ++i) {
+        uint32_t entry_bank = discovery->banked[i] ?
+            discovery->banks[i] : NG_FUNCTION_DISCOVERY_BANK_NONE;
+        if (discovery->addrs[i] == addr &&
+            entry_bank == bank &&
+            discovery->entries[i]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int ng_function_discovery_add_with_entry(
+    NgFunctionDiscovery *discovery,
+    const NgProgramRom *rom,
+    uint32_t addr,
+    int is_entry) {
     if (!discovery || !rom || !is_probable_function_target(rom, addr)) {
         return 0;
     }
     uint32_t bank = discovery_bank_for_addr(rom, addr);
-    if (ng_function_discovery_contains_bank(discovery, addr, bank)) {
-        return 1;
+    for (uint32_t i = 0; i < discovery->count; ++i) {
+        uint32_t entry_bank = discovery->banked[i] ?
+            discovery->banks[i] : NG_FUNCTION_DISCOVERY_BANK_NONE;
+        if (discovery->addrs[i] == addr && entry_bank == bank) {
+            if (is_entry) {
+                discovery->entries[i] = 1u;
+            }
+            return 1;
+        }
     }
     uint32_t max_candidates = discovery->max_candidates != 0u ?
         discovery->max_candidates : NG_FUNCTION_DISCOVERY_MAX_CANDIDATES;
@@ -113,6 +153,7 @@ int ng_function_discovery_add(NgFunctionDiscovery *discovery,
     }
 
     discovery->addrs[discovery->count] = addr;
+    discovery->entries[discovery->count] = is_entry ? 1u : 0u;
     if (bank != NG_FUNCTION_DISCOVERY_BANK_NONE) {
         discovery->banks[discovery->count] = bank;
         discovery->banked[discovery->count] = 1u;
@@ -122,6 +163,18 @@ int ng_function_discovery_add(NgFunctionDiscovery *discovery,
     }
     ++discovery->count;
     return 1;
+}
+
+static int ng_function_discovery_add_label(NgFunctionDiscovery *discovery,
+                                           const NgProgramRom *rom,
+                                           uint32_t addr) {
+    return ng_function_discovery_add_with_entry(discovery, rom, addr, 0);
+}
+
+int ng_function_discovery_add(NgFunctionDiscovery *discovery,
+                              const NgProgramRom *rom,
+                              uint32_t addr) {
+    return ng_function_discovery_add_with_entry(discovery, rom, addr, 1);
 }
 
 static void add_jump_table_targets(const NgProgramRom *rom,
@@ -195,7 +248,11 @@ static void add_jump_table_targets(const NgProgramRom *rom,
             break;
         }
 
-        ng_function_discovery_add(out, rom, ng_program_rom_read32(rom, entry_addr));
+        uint32_t target = ng_program_rom_read32(rom, entry_addr);
+        if (!is_probable_heuristic_code_target(rom, target)) {
+            continue;
+        }
+        ng_function_discovery_add(out, rom, target);
     }
 }
 
@@ -206,11 +263,8 @@ static int config_jump_table_target_allowed(const NgProgramRom *rom,
         return 0;
     }
 
-    if (table->target_end <= table->target_start) {
-        return 1;
-    }
-
-    if (target < table->target_start || target >= table->target_end) {
+    if (table->target_end > table->target_start &&
+        (target < table->target_start || target >= table->target_end)) {
         return 0;
     }
 
@@ -285,12 +339,80 @@ static int is_probable_function_target(const NgProgramRom *rom,
            instr.mnemonic != NG_M68K_INVALID;
 }
 
+static int heuristic_target_has_code_shape(const NgM68kInstr *instr) {
+    if (!instr) {
+        return 0;
+    }
+
+    switch (instr->mnemonic) {
+    case NG_M68K_RTS:
+    case NG_M68K_RTE:
+    case NG_M68K_RTR:
+    case NG_M68K_STOP:
+    case NG_M68K_TRAP:
+    case NG_M68K_TRAPV:
+    case NG_M68K_BRA:
+    case NG_M68K_BSR:
+    case NG_M68K_BCC:
+    case NG_M68K_DBCC:
+    case NG_M68K_JMP:
+    case NG_M68K_JSR:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int is_probable_heuristic_code_target(const NgProgramRom *rom,
+                                             uint32_t addr) {
+    if (!is_probable_function_target(rom, addr)) {
+        return 0;
+    }
+
+    uint32_t pc = addr;
+    for (uint32_t i = 0u;
+         i < NG_FUNCTION_DISCOVERY_HEURISTIC_TARGET_MAX_INSTRUCTIONS;
+         ++i) {
+        NgM68kInstr instr;
+        if (!ng_m68k_decode(rom, pc, &instr) ||
+            instr.byte_length == 0u ||
+            !ng_m68k_validate(&instr) ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID) {
+            return 0;
+        }
+
+        /*
+           A/F-line and raw ILLEGAL opcodes are valid 68000 exception
+           encodings, but in heuristic pointer scans they are much more often
+           sprite/animation data being decoded as instructions. Direct calls
+           and branches still use the weaker entry filter above.
+        */
+        if (instr.mnemonic == NG_M68K_ILLEGAL ||
+            instr.mnemonic == NG_M68K_RESET) {
+            return 0;
+        }
+
+        if (heuristic_target_has_code_shape(&instr)) {
+            return 1;
+        }
+
+        if (UINT32_MAX - pc < instr.byte_length) {
+            return 0;
+        }
+        pc += instr.byte_length;
+    }
+
+    return 1;
+}
+
 static void add_sparse_abs32_table_targets(const NgProgramRom *rom,
                                            uint32_t table_addr,
+                                           const NgGameConfigTableCall *call,
                                            uint32_t max_entries,
                                            uint32_t sentinel,
                                            NgFunctionDiscovery *out) {
-    if (!rom || !out || max_entries == 0u ||
+    if (!rom || !call || !out || max_entries == 0u ||
         !ng_program_rom_addr_is_mapped(rom, table_addr)) {
         return;
     }
@@ -306,7 +428,7 @@ static void add_sparse_abs32_table_targets(const NgProgramRom *rom,
         if (target == sentinel) {
             continue;
         }
-        if (!is_probable_function_target(rom, target)) {
+        if (!table_call_target_allowed(rom, call, target)) {
             break;
         }
 
@@ -471,7 +593,7 @@ static int table_call_target_allowed(const NgProgramRom *rom,
         return 0;
     }
 
-    return is_probable_function_target(rom, target);
+    return is_probable_heuristic_code_target(rom, target);
 }
 
 static void add_tagged_abs32_stream_targets(const NgProgramRom *rom,
@@ -515,7 +637,7 @@ static void add_config_table_call_targets(const NgProgramRom *rom,
                                           NgFunctionDiscovery *out) {
     if (!rom || !config || !instr || !areg || !out ||
         instr->mnemonic != NG_M68K_JSR ||
-        instr->src.mode != NG_M68K_EA_ABS_L) {
+        !is_direct_function_target(instr)) {
         return;
     }
 
@@ -538,6 +660,7 @@ static void add_config_table_call_targets(const NgProgramRom *rom,
         case NG_GAME_CONFIG_TABLE_CALL_ABS32_SPARSE:
             add_sparse_abs32_table_targets(rom,
                                            table_addr,
+                                           call,
                                            call->max_entries,
                                            call->sentinel,
                                            out);
@@ -570,6 +693,279 @@ static int is_branch_target_candidate(const NgM68kInstr *instr) {
         return instr->condition != 0u; /* DBT never decrements or branches. */
     }
     return 0;
+}
+
+static int is_indirect_areg_dispatch(const NgM68kInstr *instr) {
+    return instr &&
+           (instr->mnemonic == NG_M68K_JSR ||
+            instr->mnemonic == NG_M68K_JMP) &&
+           instr->src.mode == NG_M68K_EA_AIND &&
+           instr->src.reg < 8u;
+}
+
+static int abs_pointer_load_addr(const NgM68kInstr *load,
+                                 uint8_t reg,
+                                 uint32_t *ptr_addr) {
+    if (!load || !ptr_addr ||
+        load->mnemonic != NG_M68K_MOVEA ||
+        load->size != 4u ||
+        load->dst.mode != NG_M68K_EA_AREG ||
+        load->dst.reg != reg) {
+        return 0;
+    }
+
+    if (load->src.mode == NG_M68K_EA_ABS_W ||
+        load->src.mode == NG_M68K_EA_ABS_L ||
+        load->src.mode == NG_M68K_EA_PC_DISP) {
+        *ptr_addr = load->src.absolute_addr & 0x00FFFFFFu;
+        return 1;
+    }
+    return 0;
+}
+
+static void add_abs_pointer_target_from_view(const NgProgramRom *rom,
+                                             uint32_t ptr_addr,
+                                             NgFunctionDiscovery *out) {
+    if (!rom || !out ||
+        !ng_program_rom_addr_is_mapped(rom, ptr_addr) ||
+        !ng_program_rom_addr_is_mapped(rom, ptr_addr + 3u)) {
+        return;
+    }
+
+    uint32_t target = ng_program_rom_read32(rom, ptr_addr);
+    if (is_probable_function_target(rom, target)) {
+        ng_function_discovery_add(out, rom, target);
+    }
+}
+
+static void add_abs_pointer_indirect_targets(const NgProgramRom *rom,
+                                             uint32_t start_addr,
+                                             const NgM68kInstr *load,
+                                             const NgM68kInstr *dispatch,
+                                             NgFunctionDiscovery *out) {
+    if (!rom || !load || !dispatch || !out ||
+        !is_indirect_areg_dispatch(dispatch)) {
+        return;
+    }
+
+    uint32_t ptr_addr = 0;
+    if (!abs_pointer_load_addr(load, dispatch->src.reg, &ptr_addr)) {
+        return;
+    }
+
+    if (ng_program_rom_addr_is_banked(rom, ptr_addr) &&
+        !ng_program_rom_addr_is_banked(rom, start_addr) &&
+        ng_program_rom_bank_count(rom) > 1u) {
+        uint32_t bank_count = ng_program_rom_bank_count(rom);
+        for (uint32_t bank = 0; bank < bank_count; ++bank) {
+            if (!ng_program_rom_bank_is_configured(rom, bank)) {
+                continue;
+            }
+            NgProgramRom bank_rom = *rom;
+            ng_program_rom_select_bank(&bank_rom, bank);
+            add_abs_pointer_target_from_view(&bank_rom, ptr_addr, out);
+        }
+        return;
+    }
+
+    add_abs_pointer_target_from_view(rom, ptr_addr, out);
+}
+
+static void add_static_areg_indirect_target(const NgProgramRom *rom,
+                                            uint32_t start_addr,
+                                            const NgM68kInstr *dispatch,
+                                            const NgM68kStaticAregState *areg,
+                                            NgFunctionDiscovery *out) {
+    if (!rom || !dispatch || !areg || !out ||
+        !is_indirect_areg_dispatch(dispatch) ||
+        dispatch->src.reg >= 8u ||
+        !areg->valid[dispatch->src.reg]) {
+        return;
+    }
+
+    uint32_t target = areg->target[dispatch->src.reg] & 0x00FFFFFFu;
+    if (ng_program_rom_addr_is_banked(rom, target) &&
+        !ng_program_rom_addr_is_banked(rom, start_addr) &&
+        ng_program_rom_bank_count(rom) > 1u) {
+        uint32_t bank_count = ng_program_rom_bank_count(rom);
+        for (uint32_t bank = 0; bank < bank_count; ++bank) {
+            if (!ng_program_rom_bank_is_configured(rom, bank)) {
+                continue;
+            }
+            NgProgramRom bank_rom = *rom;
+            ng_program_rom_select_bank(&bank_rom, bank);
+            ng_function_discovery_add(out, &bank_rom, target);
+        }
+        return;
+    }
+
+    ng_function_discovery_add(out, rom, target);
+}
+
+static void static_dreg_reset(uint8_t *valid) {
+    if (valid) {
+        memset(valid, 0, 8u * sizeof(*valid));
+    }
+}
+
+static void static_dreg_update(uint8_t *valid,
+                               uint32_t *target,
+                               const NgM68kInstr *instr) {
+    if (!valid || !target || !instr) {
+        return;
+    }
+
+    if (instr->mnemonic == NG_M68K_JSR ||
+        instr->mnemonic == NG_M68K_BSR) {
+        static_dreg_reset(valid);
+        return;
+    }
+
+    if (instr->mnemonic == NG_M68K_MOVE &&
+        instr->dst.mode == NG_M68K_EA_DREG &&
+        instr->dst.reg < 8u) {
+        if (instr->size == 4u && instr->src.mode == NG_M68K_EA_IMM) {
+            target[instr->dst.reg] = instr->src.immediate & 0x00FFFFFFu;
+            valid[instr->dst.reg] = 1u;
+        } else {
+            valid[instr->dst.reg] = 0u;
+        }
+        return;
+    }
+
+    switch (instr->mnemonic) {
+    case NG_M68K_MOVEQ:
+    case NG_M68K_ADD:
+    case NG_M68K_ADDQ:
+    case NG_M68K_ADDX:
+    case NG_M68K_SUB:
+    case NG_M68K_SUBQ:
+    case NG_M68K_SUBX:
+    case NG_M68K_OR:
+    case NG_M68K_AND:
+    case NG_M68K_EOR:
+    case NG_M68K_MULU:
+    case NG_M68K_MULS:
+    case NG_M68K_DIVU:
+    case NG_M68K_DIVS:
+    case NG_M68K_CLR:
+    case NG_M68K_NEG:
+    case NG_M68K_NEGX:
+    case NG_M68K_NBCD:
+    case NG_M68K_NOT:
+    case NG_M68K_EXT:
+    case NG_M68K_SWAP:
+    case NG_M68K_ASL:
+    case NG_M68K_ASR:
+    case NG_M68K_LSL:
+    case NG_M68K_LSR:
+    case NG_M68K_ROXL:
+    case NG_M68K_ROXR:
+    case NG_M68K_ROL:
+    case NG_M68K_ROR:
+    case NG_M68K_ADDI:
+    case NG_M68K_SUBI:
+    case NG_M68K_ORI:
+    case NG_M68K_ANDI:
+    case NG_M68K_EORI:
+        if (instr->dst.mode == NG_M68K_EA_DREG && instr->dst.reg < 8u) {
+            valid[instr->dst.reg] = 0u;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static void static_dreg_to_areg_update(NgM68kStaticAregState *areg,
+                                       const uint8_t *dreg_valid,
+                                       const uint32_t *dreg_target,
+                                       const NgM68kInstr *instr) {
+    if (!areg || !dreg_valid || !dreg_target || !instr ||
+        instr->mnemonic != NG_M68K_MOVEA ||
+        instr->size != 4u ||
+        instr->src.mode != NG_M68K_EA_DREG ||
+        instr->src.reg >= 8u ||
+        instr->dst.mode != NG_M68K_EA_AREG ||
+        instr->dst.reg >= 8u) {
+        return;
+    }
+
+    if (dreg_valid[instr->src.reg]) {
+        areg->target[instr->dst.reg] =
+            dreg_target[instr->src.reg] & 0x00FFFFFFu;
+        areg->valid[instr->dst.reg] = 1u;
+    }
+}
+
+static int scan_state_has_static_targets(const NgM68kStaticAregState *areg,
+                                         const uint8_t *dreg_valid) {
+    if (!areg || !dreg_valid) {
+        return 0;
+    }
+    for (uint32_t i = 0; i < 8u; ++i) {
+        if (areg->valid[i] || dreg_valid[i]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void add_branch_target_static_indirects(const NgProgramRom *rom,
+                                               uint32_t start_addr,
+                                               uint32_t branch_target,
+                                               const NgM68kStaticAregState *areg,
+                                               const uint8_t *dreg_valid,
+                                               const uint32_t *dreg_target,
+                                               NgFunctionDiscovery *out) {
+    if (!rom || !areg || !dreg_valid || !dreg_target || !out ||
+        !scan_state_has_static_targets(areg, dreg_valid) ||
+        !is_probable_function_target(rom, branch_target)) {
+        return;
+    }
+
+    NgM68kStaticAregState probe_areg = *areg;
+    uint8_t probe_dreg_valid[8];
+    uint32_t probe_dreg_target[8];
+    memcpy(probe_dreg_valid, dreg_valid, sizeof(probe_dreg_valid));
+    memcpy(probe_dreg_target, dreg_target, sizeof(probe_dreg_target));
+
+    uint32_t pc = branch_target & 0x00FFFFFFu;
+    for (uint32_t i = 0u;
+         i < NG_FUNCTION_DISCOVERY_BRANCH_PROBE_MAX_INSTRUCTIONS;
+         ++i) {
+        NgM68kInstr instr;
+        if (!ng_m68k_decode(rom, pc, &instr) ||
+            instr.byte_length == 0u ||
+            !ng_m68k_validate(&instr) ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID) {
+            break;
+        }
+
+        add_static_areg_indirect_target(rom,
+                                        start_addr,
+                                        &instr,
+                                        &probe_areg,
+                                        out);
+
+        if (instr.mnemonic == NG_M68K_BRA ||
+            instr.mnemonic == NG_M68K_JMP ||
+            instr.mnemonic == NG_M68K_RTS ||
+            instr.mnemonic == NG_M68K_RTE ||
+            instr.mnemonic == NG_M68K_RTR) {
+            break;
+        }
+
+        ng_m68k_static_areg_update(&probe_areg, &instr);
+        static_dreg_to_areg_update(&probe_areg,
+                                   probe_dreg_valid,
+                                   probe_dreg_target,
+                                   &instr);
+        static_dreg_update(probe_dreg_valid, probe_dreg_target, &instr);
+
+        pc += instr.byte_length;
+    }
 }
 
 static int has_static_code_target(const NgM68kInstr *instr) {
@@ -636,6 +1032,23 @@ static int dispatcher_task_state_store_slot_allowed(
 
     for (uint32_t i = 0; i < config->dispatcher_count; ++i) {
         if (dispatcher_install_slot_matches(&config->dispatchers[i], slot)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int config_state_table_contains_addr(const NgGameConfig *config,
+                                            uint32_t addr) {
+    if (!config) {
+        return 0;
+    }
+    addr &= 0x00FFFFFFu;
+    for (uint32_t i = 0; i < config->state_table_count; ++i) {
+        const NgGameConfigStateTable *table = &config->state_tables[i];
+        if (table->table_end > table->table_start &&
+            addr >= (table->table_start & 0x00FFFFFFu) &&
+            addr < (table->table_end & 0x00FFFFFFu)) {
             return 1;
         }
     }
@@ -712,7 +1125,8 @@ static int dispatcher_task_spawn_wrapper_allowed(const NgProgramRom *rom,
     return 0;
 }
 
-static int is_task_state_store(const NgGameConfig *config,
+static int is_task_state_store(const NgProgramRom *rom,
+                               const NgGameConfig *config,
                                const NgM68kInstr *load,
                                const NgM68kInstr *store,
                                uint32_t *target) {
@@ -744,6 +1158,10 @@ static int is_task_state_store(const NgGameConfig *config,
     if (!dispatcher_task_state_store_slot_allowed(config, store)) {
         return 0;
     }
+    if (!is_probable_heuristic_code_target(rom, load->target) &&
+        !config_state_table_contains_addr(config, load->target)) {
+        return 0;
+    }
 
     *target = load->target;
     return 1;
@@ -771,6 +1189,9 @@ static int is_task_spawn_call(const NgProgramRom *rom,
     uint32_t helper = call->target & 0x00FFFFFFu;
     if (!dispatcher_task_spawn_helper_allowed(config, helper) &&
         !dispatcher_task_spawn_wrapper_allowed(rom, config, helper)) {
+        return 0;
+    }
+    if (!is_probable_heuristic_code_target(rom, load->target)) {
         return 0;
     }
 
@@ -958,7 +1379,8 @@ static void add_inline_callback_targets(const NgProgramRom *rom,
 
 static int record_format_target_allowed(const NgProgramRom *rom,
                                         const NgGameConfigRecordFormat *record,
-                                        uint32_t target) {
+                                        uint32_t target,
+                                        int strict_target_shape) {
     if (!rom || !record) {
         return 0;
     }
@@ -966,7 +1388,9 @@ static int record_format_target_allowed(const NgProgramRom *rom,
         (target < record->target_start || target >= record->target_end)) {
         return 0;
     }
-    return is_probable_function_target(rom, target);
+    return strict_target_shape ?
+        is_probable_heuristic_code_target(rom, target) :
+        is_probable_function_target(rom, target);
 }
 
 static int record_scan_bounds(const NgProgramRom *rom,
@@ -979,6 +1403,7 @@ static int record_scan_bounds(const NgProgramRom *rom,
 
     switch (scan->kind) {
     case NG_GAME_CONFIG_RECORD_SCAN_FIXED:
+    case NG_GAME_CONFIG_RECORD_SCAN_FIXED_AUTO:
         if (rom->address_map_enabled) {
             if (rom->fixed_size == 0u ||
                 UINT32_MAX - rom->fixed_base < rom->fixed_size) {
@@ -993,15 +1418,23 @@ static int record_scan_bounds(const NgProgramRom *rom,
         return 1;
     case NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL:
     case NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE:
+    case NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL_AUTO:
+    case NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE_AUTO:
         if (!rom->address_map_enabled ||
             rom->bank_window_size == 0u ||
             UINT32_MAX - rom->bank_window_base < rom->bank_window_size) {
             return 0;
         }
+        if (scan->end > scan->start) {
+            *out_start = scan->start;
+            *out_end = scan->end;
+            return 1;
+        }
         *out_start = rom->bank_window_base;
         *out_end = rom->bank_window_base + rom->bank_window_size;
         return 1;
     case NG_GAME_CONFIG_RECORD_SCAN_RANGE:
+    case NG_GAME_CONFIG_RECORD_SCAN_RANGE_AUTO:
         if (scan->end <= scan->start) {
             return 0;
         }
@@ -1011,6 +1444,26 @@ static int record_scan_bounds(const NgProgramRom *rom,
     default:
         return 0;
     }
+}
+
+static int record_scan_is_auto(const NgGameConfigRecordScan *scan) {
+    return scan &&
+           (scan->kind == NG_GAME_CONFIG_RECORD_SCAN_FIXED_AUTO ||
+            scan->kind == NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL_AUTO ||
+            scan->kind == NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE_AUTO ||
+            scan->kind == NG_GAME_CONFIG_RECORD_SCAN_RANGE_AUTO);
+}
+
+static int record_scan_is_bank_all(const NgGameConfigRecordScan *scan) {
+    return scan &&
+           (scan->kind == NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL ||
+            scan->kind == NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL_AUTO);
+}
+
+static int record_scan_is_bank_one(const NgGameConfigRecordScan *scan) {
+    return scan &&
+           (scan->kind == NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE ||
+            scan->kind == NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE_AUTO);
 }
 
 static int record_format_entry_matches(const NgProgramRom *rom,
@@ -1034,7 +1487,8 @@ static int record_format_entry_matches(const NgProgramRom *rom,
 static int record_format_entry_has_valid_target(
     const NgProgramRom *rom,
     const NgGameConfigRecordFormat *record,
-    uint32_t addr) {
+    uint32_t addr,
+    int strict_target_shape) {
     if (!rom || !record || !record_format_entry_matches(rom, record, addr)) {
         return 0;
     }
@@ -1052,7 +1506,10 @@ static int record_format_entry_has_valid_target(
         if (record->has_sentinel && target == record->sentinel) {
             continue;
         }
-        if (record_format_target_allowed(rom, record, target)) {
+        if (record_format_target_allowed(rom,
+                                         record,
+                                         target,
+                                         strict_target_shape)) {
             return 1;
         }
     }
@@ -1063,6 +1520,7 @@ static void add_record_format_entry_targets(
     const NgProgramRom *rom,
     const NgGameConfigRecordFormat *record,
     uint32_t addr,
+    int strict_target_shape,
     NgFunctionDiscovery *out) {
     if (!rom || !record || !out ||
         !record_format_entry_matches(rom, record, addr)) {
@@ -1082,7 +1540,10 @@ static void add_record_format_entry_targets(
         if (record->has_sentinel && target == record->sentinel) {
             continue;
         }
-        if (record_format_target_allowed(rom, record, target)) {
+        if (record_format_target_allowed(rom,
+                                         record,
+                                         target,
+                                         strict_target_shape)) {
             ng_function_discovery_add(out, rom, target);
         }
     }
@@ -1094,6 +1555,7 @@ static void add_record_format_run_targets(
     uint32_t run_start,
     uint32_t run_entries,
     uint32_t stride,
+    int strict_target_shape,
     NgFunctionDiscovery *out) {
     if (!rom || !record || !out || run_entries == 0u || stride == 0u) {
         return;
@@ -1101,7 +1563,11 @@ static void add_record_format_run_targets(
 
     uint32_t addr = run_start;
     for (uint32_t i = 0; i < run_entries; ++i) {
-        add_record_format_entry_targets(rom, record, addr, out);
+        add_record_format_entry_targets(rom,
+                                        record,
+                                        addr,
+                                        strict_target_shape,
+                                        out);
         if (UINT32_MAX - addr < stride) {
             break;
         }
@@ -1115,6 +1581,7 @@ static void flush_record_format_cluster(
     uint32_t run_start,
     uint32_t run_entries,
     uint32_t stride,
+    int strict_target_shape,
     NgFunctionDiscovery *out) {
     if (run_entries >= record->cluster_min_entries &&
         (record->cluster_max_entries == 0u ||
@@ -1124,8 +1591,27 @@ static void flush_record_format_cluster(
                                       run_start,
                                       run_entries,
                                       stride,
+                                      strict_target_shape,
                                       out);
     }
+}
+
+static uint32_t record_format_auto_phase_step(
+    const NgGameConfigRecordFormat *record,
+    uint32_t start,
+    uint32_t stride) {
+    if (!record || (stride & 1u) != 0u || (start & 1u) != 0u) {
+        return 1u;
+    }
+    if (record->has_tag && (record->tag_offset & 1u) != 0u) {
+        return 1u;
+    }
+    for (uint32_t i = 0; i < record->callback_offset_count; ++i) {
+        if ((record->callback_offsets[i] & 1u) != 0u) {
+            return 1u;
+        }
+    }
+    return 2u;
 }
 
 static void add_record_format_region_targets(
@@ -1133,6 +1619,7 @@ static void add_record_format_region_targets(
     const NgGameConfigRecordFormat *record,
     uint32_t start,
     uint32_t end,
+    int strict_target_shape,
     NgFunctionDiscovery *out) {
     if (!rom || !record || !out ||
         record->callback_offset_count == 0u ||
@@ -1160,7 +1647,10 @@ static void add_record_format_region_targets(
         }
 
         if (cluster_min_entries != 0u) {
-            if (record_format_entry_has_valid_target(rom, record, addr)) {
+            if (record_format_entry_has_valid_target(rom,
+                                                     record,
+                                                     addr,
+                                                     strict_target_shape)) {
                 if (run_entries == 0u) {
                     run_start = addr;
                 }
@@ -1171,11 +1661,16 @@ static void add_record_format_region_targets(
                                             run_start,
                                             run_entries,
                                             stride,
+                                            strict_target_shape,
                                             out);
                 run_entries = 0u;
             }
         } else {
-            add_record_format_entry_targets(rom, record, addr, out);
+            add_record_format_entry_targets(rom,
+                                            record,
+                                            addr,
+                                            strict_target_shape,
+                                            out);
         }
 
         if (UINT32_MAX - addr < stride) {
@@ -1190,7 +1685,49 @@ static void add_record_format_region_targets(
                                     run_start,
                                     run_entries,
                                     stride,
+                                    strict_target_shape,
                                     out);
+    }
+}
+
+static void add_record_format_auto_region_targets(
+    const NgProgramRom *rom,
+    const NgGameConfigRecordFormat *record,
+    uint32_t start,
+    uint32_t end,
+    NgFunctionDiscovery *out) {
+    if (!rom || !record || !out ||
+        record->callback_offset_count == 0u ||
+        end <= start) {
+        return;
+    }
+
+    uint32_t stride = record->stride != 0u ? record->stride : record->width;
+    if (stride == 0u) {
+        return;
+    }
+
+    NgGameConfigRecordFormat clustered = *record;
+    if (clustered.cluster_min_entries <= 1u) {
+        clustered.cluster_min_entries = 3u;
+    }
+
+    uint32_t phase_step =
+        record_format_auto_phase_step(record, start, stride);
+    for (uint32_t phase = 0u; phase < stride; phase += phase_step) {
+        if (UINT32_MAX - start < phase) {
+            break;
+        }
+        uint32_t phase_start = start + phase;
+        if (phase_start >= end) {
+            break;
+        }
+        add_record_format_region_targets(rom,
+                                         &clustered,
+                                         phase_start,
+                                         end,
+                                         1,
+                                         out);
     }
 }
 
@@ -1204,7 +1741,7 @@ static void add_record_format_targets(const NgProgramRom *rom,
     for (uint32_t i = 0; i < record->scan_count; ++i) {
         uint32_t start = 0u;
         uint32_t end = 0u;
-        if (record->scans[i].kind == NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL) {
+        if (record_scan_is_bank_all(&record->scans[i])) {
             uint32_t bank_count = ng_program_rom_bank_count(rom);
             for (uint32_t bank = 0; bank < bank_count; ++bank) {
                 if (!ng_program_rom_bank_is_configured(rom, bank)) {
@@ -1218,15 +1755,24 @@ static void add_record_format_targets(const NgProgramRom *rom,
                                         &end)) {
                     continue;
                 }
-                add_record_format_region_targets(&bank_rom,
-                                                 record,
-                                                 start,
-                                                 end,
-                                                 out);
+                if (record_scan_is_auto(&record->scans[i])) {
+                    add_record_format_auto_region_targets(&bank_rom,
+                                                          record,
+                                                          start,
+                                                          end,
+                                                          out);
+                } else {
+                    add_record_format_region_targets(&bank_rom,
+                                                     record,
+                                                     start,
+                                                     end,
+                                                     0,
+                                                     out);
+                }
             }
             continue;
         }
-        if (record->scans[i].kind == NG_GAME_CONFIG_RECORD_SCAN_BANK_ONE) {
+        if (record_scan_is_bank_one(&record->scans[i])) {
             if (!ng_program_rom_bank_is_configured(
                     rom,
                     record->scans[i].bank_id)) {
@@ -1240,17 +1786,35 @@ static void add_record_format_targets(const NgProgramRom *rom,
                                     &end)) {
                 continue;
             }
-            add_record_format_region_targets(&bank_rom,
-                                             record,
-                                             start,
-                                             end,
-                                             out);
+            if (record_scan_is_auto(&record->scans[i])) {
+                add_record_format_auto_region_targets(&bank_rom,
+                                                      record,
+                                                      start,
+                                                      end,
+                                                      out);
+            } else {
+                add_record_format_region_targets(&bank_rom,
+                                                 record,
+                                                 start,
+                                                 end,
+                                                 0,
+                                                 out);
+            }
             continue;
         }
         if (!record_scan_bounds(rom, &record->scans[i], &start, &end)) {
             continue;
         }
-        add_record_format_region_targets(rom, record, start, end, out);
+        if (record_scan_is_auto(&record->scans[i])) {
+            add_record_format_auto_region_targets(rom, record, start, end, out);
+        } else {
+            add_record_format_region_targets(rom,
+                                             record,
+                                             start,
+                                             end,
+                                             0,
+                                             out);
+        }
     }
 }
 
@@ -1425,8 +1989,12 @@ static void scan_function_candidate(const NgProgramRom *rom,
     int have_previous = 0;
     NgM68kStaticAregState areg;
     NgM68kStaticAregState previous_areg;
+    uint8_t dreg_valid[8];
+    uint32_t dreg_target[8];
     ng_m68k_static_areg_reset(&areg);
     ng_m68k_static_areg_reset(&previous_areg);
+    static_dreg_reset(dreg_valid);
+    memset(dreg_target, 0, sizeof(dreg_target));
 
     for (uint32_t i = 0; i < NG_FUNCTION_DISCOVERY_MAX_INSTRUCTIONS; ++i) {
         NgM68kInstr instr;
@@ -1442,7 +2010,7 @@ static void scan_function_candidate(const NgProgramRom *rom,
         }
 
         if (pc != start_addr) {
-            ng_function_discovery_add(out, rom, pc);
+            ng_function_discovery_add_label(out, rom, pc);
         }
 
         if (have_previous) {
@@ -1460,7 +2028,11 @@ static void scan_function_candidate(const NgProgramRom *rom,
                 add_jump_table_targets(rom, &pattern, out);
             } else {
                 uint32_t target = 0;
-                if (is_task_state_store(config, &previous, &instr, &target)) {
+                if (is_task_state_store(rom,
+                                        config,
+                                        &previous,
+                                        &instr,
+                                        &target)) {
                     ng_function_discovery_add(out, rom, target);
                 } else if (is_task_spawn_call(rom,
                                               config,
@@ -1468,6 +2040,12 @@ static void scan_function_candidate(const NgProgramRom *rom,
                                               &instr,
                                               &target)) {
                     ng_function_discovery_add(out, rom, target);
+                } else {
+                    add_abs_pointer_indirect_targets(rom,
+                                                     start_addr,
+                                                     &previous,
+                                                     &instr,
+                                                     out);
                 }
             }
         }
@@ -1491,12 +2069,22 @@ static void scan_function_candidate(const NgProgramRom *rom,
         }
 
         add_config_table_call_targets(rom, config, &instr, &areg, out);
+        add_static_areg_indirect_target(rom, start_addr, &instr, &areg, out);
 
         if (is_direct_function_target(&instr)) {
             ng_function_discovery_add(out, rom, instr.target);
         }
         if (is_branch_target_candidate(&instr)) {
             ng_function_discovery_add(out, rom, instr.target);
+            if ((instr.target & 0x00FFFFFFu) > pc) {
+                add_branch_target_static_indirects(rom,
+                                                   start_addr,
+                                                   instr.target,
+                                                   &areg,
+                                                   dreg_valid,
+                                                   dreg_target,
+                                                   out);
+            }
         }
         if ((instr.mnemonic == NG_M68K_JSR || instr.mnemonic == NG_M68K_BSR) &&
             instr.byte_length != 0) {
@@ -1516,6 +2104,11 @@ static void scan_function_candidate(const NgProgramRom *rom,
 
         previous_areg = areg;
         ng_m68k_static_areg_update(&areg, &instr);
+        static_dreg_to_areg_update(&areg,
+                                   dreg_valid,
+                                   dreg_target,
+                                   &instr);
+        static_dreg_update(dreg_valid, dreg_target, &instr);
 
         pc += instr.byte_length;
         previous = instr;

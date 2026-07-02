@@ -111,7 +111,9 @@ void ng_m68k_static_areg_update(NgM68kStaticAregState *state,
 
     if (instr->mnemonic == NG_M68K_JSR ||
         instr->mnemonic == NG_M68K_BSR) {
-        ng_m68k_static_areg_reset(state);
+        state->valid[0] = 0u;
+        state->valid[1] = 0u;
+        state->valid[7] = 0u;
         return;
     }
 

@@ -2,7 +2,7 @@
 name = "Metal Slug - Super Vehicle-001"
 short_name = "mslug"
 year = 1996
-discovery_files = ["mslug.residual.toml"]
+discovery_files = ["mslug.residual.toml", "mslug.mined_record_tables.toml"]
 [program]
 address_space = "m68k"
 fixed_base = 0x000000
@@ -39,6 +39,16 @@ target_start = 0x020000
 target_end = 0x300000
 stride = 2
 max_entries = 640
+[[table_call]]
+helper = 0x072C08
+table_reg = "A0"
+format = "abs32_sparse"
+sentinel = 0xFFFFFFFF
+table_start = 0x200000
+table_end = 0x300000
+target_start = 0x060000
+target_end = 0x073000
+max_entries = 16
 [[record_format]]
 name = "mission1_tagged_action_record"
 tag = 0x0800
@@ -68,43 +78,7 @@ name = "mission1_fixed_14_callback_fields"
 stride = 0x14
 callback_offsets = [0]
 sentinel = 0xFFFFFFFF
-scan = ["0x097684-0x097724", "0x09730E-0x0973EE", "0x096BC2-0x096CB2", "0x0975E4-0x097684"]
-[[record_format]]
-name = "object_vector_0e8xxx_callback_slots"
-stride = 4
-callback_offsets = [0]
-sentinel = 0xFFFFFFFF
-scan = ["0x0E8000-0x0E805C", "0x0E806C-0x0E8090", "0x0E80A0-0x0E80C8", "0x0E8180-0x0E81A0", "0x0E8260-0x0E82A0", "0x0E82D0-0x0E8300", "0x0E8324-0x0E833C", "0x0E8390-0x0E83D0", "0x0E83E4-0x0E840C", "0x0E840C-0x0E843C", "0x0E843C-0x0E8524"]
-[[record_format]]
-name = "object_vector_0e8xxx_cluster_scan_061xxx"
-stride = 4
-callback_offsets = [0]
-sentinel = 0xFFFFFFFF
-cluster_min_entries = 3
-cluster_max_entries = 16
-target = "0x061000-0x062000"
-scan = ["0x0E8000-0x0E8524"]
-[[record_format]]
-name = "object_vector_0e8xxx_cluster_scan_07dxxx"
-stride = 4
-callback_offsets = [0]
-sentinel = 0xFFFFFFFF
-cluster_min_entries = 3
-cluster_max_entries = 16
-target = "0x07D000-0x07F000"
-scan = ["0x0E8000-0x0E8524"]
-[[record_format]]
-name = "object_vector_0e8158_filtered_slots"
-stride = 4
-callback_offsets = [0]
-target = "0x060000-0x070000"
-scan = ["0x0E8158-0x0E8178"]
-[[record_format]]
-name = "object_vector_0e8234_filtered_slots"
-stride = 4
-callback_offsets = [0]
-target = "0x060000-0x076000"
-scan = ["0x0E8234-0x0E8260"]
+scan = ["0x097684-0x097724", "0x09730E-0x0973EE", "0x096BC2-0x096CB2", "0x0975E4-0x097684", "0x096E80-0x096FAC"]
 [[jump_table]]
 start = 0x0749E8
 end = 0x074F58

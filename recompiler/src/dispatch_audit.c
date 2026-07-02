@@ -10,6 +10,7 @@
 #define NG_DISPATCH_AUDIT_MAX_SEEN NG_FUNCTION_DISCOVERY_MAX_CANDIDATES
 #define NG_DISPATCH_AUDIT_BRANCH_TABLE_MAX_ENTRIES 32u
 #define NG_DISPATCH_AUDIT_RECENT_INSTRUCTIONS 8u
+#define NG_DISPATCH_AUDIT_TABLE_TARGET_MAX_INSTRUCTIONS 32u
 
 void ng_dispatch_audit_init(NgDispatchAudit *audit) {
     if (audit) {
@@ -38,17 +39,84 @@ static int instr_is_dispatch(const NgM68kInstr *instr) {
 static int instr_stops_scan(const NgM68kInstr *instr) {
     switch (instr->mnemonic) {
     case NG_M68K_BRA:
-    case NG_M68K_ILLEGAL:
     case NG_M68K_JMP:
     case NG_M68K_RTE:
     case NG_M68K_RTR:
     case NG_M68K_RTS:
-    case NG_M68K_STOP:
-    case NG_M68K_TRAP:
         return 1;
     default:
         return 0;
     }
+}
+
+static int audit_probable_function_target(const NgProgramRom *rom,
+                                          uint32_t addr) {
+    if (!rom || (addr & 1u) != 0u ||
+        !ng_program_rom_addr_is_mapped(rom, addr)) {
+        return 0;
+    }
+
+    NgM68kInstr instr;
+    return ng_m68k_decode(rom, addr, &instr) &&
+           instr.byte_length != 0u &&
+           ng_m68k_validate(&instr) &&
+           instr.mnemonic != NG_M68K_UNKNOWN &&
+           instr.mnemonic != NG_M68K_INVALID;
+}
+
+static int audit_static_table_target_has_code_shape(const NgM68kInstr *instr) {
+    if (!instr) {
+        return 0;
+    }
+
+    switch (instr->mnemonic) {
+    case NG_M68K_RTS:
+    case NG_M68K_RTE:
+    case NG_M68K_RTR:
+    case NG_M68K_STOP:
+    case NG_M68K_TRAP:
+    case NG_M68K_TRAPV:
+    case NG_M68K_BRA:
+    case NG_M68K_BSR:
+    case NG_M68K_BCC:
+    case NG_M68K_DBCC:
+    case NG_M68K_JMP:
+    case NG_M68K_JSR:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int audit_probable_static_table_target(const NgProgramRom *rom,
+                                              uint32_t addr) {
+    if (!audit_probable_function_target(rom, addr)) {
+        return 0;
+    }
+
+    uint32_t pc = addr;
+    for (uint32_t i = 0u;
+         i < NG_DISPATCH_AUDIT_TABLE_TARGET_MAX_INSTRUCTIONS;
+         ++i) {
+        NgM68kInstr instr;
+        if (!ng_m68k_decode(rom, pc, &instr) ||
+            instr.byte_length == 0u ||
+            !ng_m68k_validate(&instr) ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID ||
+            instr.mnemonic == NG_M68K_ILLEGAL ||
+            instr.mnemonic == NG_M68K_RESET) {
+            return 0;
+        }
+        if (audit_static_table_target_has_code_shape(&instr)) {
+            return 1;
+        }
+        if (UINT32_MAX - pc < instr.byte_length) {
+            return 0;
+        }
+        pc += instr.byte_length;
+    }
+    return 1;
 }
 
 static uint32_t audit_bank_for_addr(const NgProgramRom *rom, uint32_t addr) {
@@ -223,6 +291,76 @@ static int dispatcher_runtime_dispatch_allowed(
     return 0;
 }
 
+static int instr_loads_areg_from_work_ram(const NgM68kInstr *instr,
+                                          uint8_t areg) {
+    if (!instr ||
+        instr->mnemonic != NG_M68K_MOVEA ||
+        instr->dst.mode != NG_M68K_EA_AREG ||
+        instr->dst.reg != areg ||
+        (instr->src.mode != NG_M68K_EA_ABS_W &&
+         instr->src.mode != NG_M68K_EA_ABS_L)) {
+        return 0;
+    }
+    return ng_address_region(instr->src.absolute_addr) == NG_REGION_WORK_RAM;
+}
+
+static int work_ram_runtime_dispatch_allowed(const NgM68kInstr *instr,
+                                             const NgM68kInstr *recent,
+                                             uint32_t recent_count) {
+    if (!instr || instr->src.mode != NG_M68K_EA_AIND) {
+        return 0;
+    }
+
+    uint8_t areg = instr->src.reg;
+    for (uint32_t i = recent_count; i > 0u; --i) {
+        const NgM68kInstr *prev = &recent[i - 1u];
+        if (!instr_writes_areg(prev, areg)) {
+            continue;
+        }
+        return instr_loads_areg_from_work_ram(prev, areg);
+    }
+    return 0;
+}
+
+static int table_call_helper_allowed(const NgGameConfig *config,
+                                     uint32_t helper) {
+    if (!config) {
+        return 0;
+    }
+    helper &= 0x00FFFFFFu;
+    for (uint32_t i = 0; i < config->table_call_count; ++i) {
+        if ((config->table_calls[i].helper & 0x00FFFFFFu) == helper) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int table_call_runtime_dispatch_allowed(
+    const NgGameConfig *config,
+    const NgM68kInstr *instr,
+    const NgM68kInstr *recent,
+    uint32_t recent_count) {
+    if (!config || !instr || instr->src.mode != NG_M68K_EA_AIND) {
+        return 0;
+    }
+
+    uint8_t areg = instr->src.reg;
+    for (uint32_t i = recent_count; i > 0u; --i) {
+        const NgM68kInstr *prev = &recent[i - 1u];
+        if (instr_writes_areg(prev, areg)) {
+            return 0;
+        }
+        if (prev->mnemonic == NG_M68K_JSR ||
+            prev->mnemonic == NG_M68K_BSR) {
+            return instr_is_direct_target(prev) &&
+                   table_call_helper_allowed(config,
+                                             prev->target & 0x00FFFFFFu);
+        }
+    }
+    return 0;
+}
+
 static NgDispatchAuditSite *audit_append(const NgProgramRom *rom,
                                          NgDispatchAudit *audit,
                                          NgDispatchAuditKind kind,
@@ -289,6 +427,13 @@ static void audit_record_computed(const NgProgramRom *rom,
         site->runtime_allowed =
             (uint8_t)(runtime_dispatch_allowed(config, instr->addr) ||
                       dispatcher_runtime_dispatch_allowed(config,
+                                                          instr,
+                                                          recent,
+                                                          recent_count) ||
+                      work_ram_runtime_dispatch_allowed(instr,
+                                                        recent,
+                                                        recent_count) ||
+                      table_call_runtime_dispatch_allowed(config,
                                                           instr,
                                                           recent,
                                                           recent_count));
@@ -392,8 +537,10 @@ static void audit_record_jump_table(const NgProgramRom *rom,
             break;
         }
         uint32_t target = ng_program_rom_read32(rom, entry_addr);
-        if (ng_program_rom_addr_is_mapped(rom, target) &&
-            ng_function_discovery_contains_for_rom(discovery, rom, target)) {
+        if (!audit_probable_static_table_target(rom, target)) {
+            continue;
+        }
+        if (ng_function_discovery_contains_for_rom(discovery, rom, target)) {
             ++site->resolved_entries;
             ++audit->jump_table_resolved_entries;
         } else {

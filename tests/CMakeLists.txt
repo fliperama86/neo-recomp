@@ -189,4 +189,18 @@ if(Python3_Interpreter_FOUND)
                 "${CMAKE_CURRENT_BINARY_DIR}"
                 "$<TARGET_FILE:neo-recomp>"
     )
+    add_test(
+        NAME test_ngdevkit_symbol_oracle
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/test_ngdevkit_symbol_oracle.py"
+                "${CMAKE_SOURCE_DIR}"
+                "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    add_test(
+        NAME test_record_table_miner
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/test_record_table_miner.py"
+                "${CMAKE_SOURCE_DIR}"
+                "${CMAKE_CURRENT_BINARY_DIR}"
+    )
 endif()

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define CHECK(expr) do { \
     if (!(expr)) { \
@@ -29,6 +30,17 @@ static int read_file(FILE *f, char *out, size_t out_size) {
     }
     out[size] = 0;
     return 1;
+}
+
+static int read_path(const char *path, char *out, size_t out_size) {
+    FILE *f = fopen(path, "r");
+    int ok;
+    if (!f) {
+        return 0;
+    }
+    ok = read_file(f, out, out_size);
+    fclose(f);
+    return ok;
 }
 
 static NgProgramRom make_rom(uint32_t size) {
@@ -1169,6 +1181,55 @@ int main(void) {
         CHECK(strstr(text, "uint8_t ng_ea_000000 = ng68k_read8(0x00000006u);") != NULL);
         CHECK(strstr(text, "{ uint8_t ng_mask = (uint8_t)(1u << (0u)); uint8_t ng_value = (uint8_t)(ng_ea_000000);") != NULL);
         CHECK(strstr(text, "ng68k_write8(0x00000006u") == NULL);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        char dir[] = "/tmp/neo-recomp-shards-XXXXXX";
+        char path[256];
+        NgEmitDiagnostics diagnostics;
+        NgProgramRom rom = make_rom(0x80u);
+        CHECK(rom.data != NULL);
+        write16(&rom, 0x00u, 0x4E75u); /* RTS */
+        write16(&rom, 0x20u, 0x4E75u); /* RTS */
+        write16(&rom, 0x40u, 0x4E75u); /* RTS */
+        write16(&rom, 0x60u, 0x4E75u); /* RTS */
+
+        ng_function_discovery_init(&discovery);
+        discovery.addrs[discovery.count++] = 0x00000000u;
+        discovery.addrs[discovery.count++] = 0x00000020u;
+        discovery.addrs[discovery.count++] = 0x00000040u;
+        discovery.addrs[discovery.count++] = 0x00000060u;
+
+        CHECK(mkdtemp(dir) != NULL);
+        ng_emit_diagnostics_init(&diagnostics);
+        CHECK(ng_emit_c_shards(dir, &rom, &discovery, 2u, &diagnostics));
+
+        snprintf(path, sizeof(path), "%s/shards.list", dir);
+        CHECK(read_path(path, text, sizeof(text)));
+        CHECK(strstr(text, "generated_dispatch.c") != NULL);
+        CHECK(strstr(text, "generated_shard_0000.c") != NULL);
+        CHECK(strstr(text, "generated_shard_0001.c") != NULL);
+
+        snprintf(path, sizeof(path), "%s/generated_dispatch.c", dir);
+        CHECK(read_path(path, text, sizeof(text)));
+        CHECK(strstr(text, "int NG_GENERATED_SHARD_STEP(_shard_0000)(uint32_t addr);") != NULL);
+        CHECK(strstr(text, "{ 0x00000040u, 1u },") != NULL);
+        CHECK(strstr(text, "case 1u: (void)NG_GENERATED_SHARD_STEP(_shard_0001)(addr); return;") != NULL);
+        CHECK(strstr(text, "void NG_GENERATED_CALL(uint32_t addr)") != NULL);
+
+        snprintf(path, sizeof(path), "%s/generated_shard_0000.c", dir);
+        CHECK(read_path(path, text, sizeof(text)));
+        CHECK(strstr(text, "int NG_GENERATED_SHARD_STEP(_shard_0000)(uint32_t addr)") != NULL);
+        CHECK(strstr(text, "case 0x00000000u: ng_func_000000(); return 1;") != NULL);
+        CHECK(strstr(text, "case 0x00000020u: ng_func_000020(); return 1;") != NULL);
+        CHECK(strstr(text, "case 0x00000040u:") == NULL);
+
+        snprintf(path, sizeof(path), "%s/generated_shard_0001.c", dir);
+        CHECK(read_path(path, text, sizeof(text)));
+        CHECK(strstr(text, "case 0x00000040u: ng_func_000040(); return 1;") != NULL);
+        CHECK(strstr(text, "case 0x00000060u: ng_func_000060(); return 1;") != NULL);
 
         ng_program_rom_free(&rom);
     }

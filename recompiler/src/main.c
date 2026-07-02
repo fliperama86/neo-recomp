@@ -13,11 +13,15 @@
 #include <string.h>
 
 #define CLI_MAX_FUNCTION_PREVIEWS 4u
-#define CLI_MAX_DISCOVERY_SEEDS (1u + NG_GAME_CONFIG_MAX_FUNCTIONS * 2u)
+#define CLI_MAX_VECTOR_SEEDS 62u
+#define CLI_MAX_NEOGEO_HEADER_SEEDS 4u
+#define CLI_MAX_DISCOVERY_SEEDS \
+    (1u + CLI_MAX_VECTOR_SEEDS + CLI_MAX_NEOGEO_HEADER_SEEDS + \
+     NG_GAME_CONFIG_MAX_FUNCTIONS * 2u)
 
 static void print_usage(const char *argv0) {
     fprintf(stderr,
-            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>) [--emit-c <out.c>] [--emit-discovery-set <out.txt>] [--emit-dispatch-audit <out.txt>] [--emit-dispatch-suggestions <out.toml>] [--fail-on-dispatch-gaps]\n",
+            "Usage: %s --game <game.toml> (--p1 <program.rom> [--p2 <program.rom>] | --neo <game.neo>) [--emit-c <out.c>] [--emit-c-shards <out-dir>] [--emit-c-shard-size <count>] [--emit-discovery-set <out.txt>] [--emit-discovery-entries <out.txt>] [--emit-dispatch-audit <out.txt>] [--emit-dispatch-suggestions <out.toml>] [--fail-on-dispatch-gaps]\n",
             argv0);
 }
 
@@ -120,16 +124,82 @@ static int emit_c_file(const char *path,
         return 0;
     }
 
-    int ok = ng_emit_c(out, rom, discovery);
+    NgEmitDiagnostics diagnostics;
+    ng_emit_diagnostics_init(&diagnostics);
+
+    int ok = ng_emit_c_checked(out, rom, discovery, &diagnostics);
     if (fclose(out) != 0) {
         ok = 0;
     }
     if (!ok) {
-        fprintf(stderr, "failed to emit %s\n", path);
+        fprintf(stderr, "failed to emit %s", path);
+        if (diagnostics.unsupported_count != 0u ||
+            diagnostics.decode_error_count != 0u) {
+            fprintf(stderr,
+                    " (unsupported=%u",
+                    (unsigned)diagnostics.unsupported_count);
+            if (diagnostics.unsupported_count != 0u) {
+                fprintf(stderr,
+                        " first=$%06X",
+                        diagnostics.first_unsupported_addr & 0xFFFFFFu);
+            }
+            fprintf(stderr,
+                    ", decode_errors=%u",
+                    (unsigned)diagnostics.decode_error_count);
+            if (diagnostics.decode_error_count != 0u) {
+                fprintf(stderr,
+                        " first=$%06X",
+                        diagnostics.first_decode_error_addr & 0xFFFFFFu);
+            }
+            fputc(')', stderr);
+        }
+        fputc('\n', stderr);
         return 0;
     }
 
     printf("generated C: %s\n", path);
+    return 1;
+}
+
+static int emit_c_shards_dir(const char *path,
+                             const NgProgramRom *rom,
+                             const NgFunctionDiscovery *discovery,
+                             uint32_t functions_per_shard) {
+    NgEmitDiagnostics diagnostics;
+    ng_emit_diagnostics_init(&diagnostics);
+
+    int ok = ng_emit_c_shards(path,
+                              rom,
+                              discovery,
+                              functions_per_shard,
+                              &diagnostics);
+    if (!ok) {
+        fprintf(stderr, "failed to emit C shards %s", path);
+        if (diagnostics.unsupported_count != 0u ||
+            diagnostics.decode_error_count != 0u) {
+            fprintf(stderr,
+                    " (unsupported=%u",
+                    (unsigned)diagnostics.unsupported_count);
+            if (diagnostics.unsupported_count != 0u) {
+                fprintf(stderr,
+                        " first=$%06X",
+                        diagnostics.first_unsupported_addr & 0xFFFFFFu);
+            }
+            fprintf(stderr,
+                    ", decode_errors=%u",
+                    (unsigned)diagnostics.decode_error_count);
+            if (diagnostics.decode_error_count != 0u) {
+                fprintf(stderr,
+                        " first=$%06X",
+                        diagnostics.first_decode_error_addr & 0xFFFFFFu);
+            }
+            fputc(')', stderr);
+        }
+        fputc('\n', stderr);
+        return 0;
+    }
+
+    printf("generated C shards: %s\n", path);
     return 1;
 }
 
@@ -148,25 +218,40 @@ static int compare_discovery_set_row(const void *a, const void *b) {
 }
 
 static int emit_discovery_set_file(const char *path,
-                                   const NgFunctionDiscovery *discovery) {
+                                   const NgFunctionDiscovery *discovery,
+                                   int entries_only) {
     if (!path || !discovery) {
         return 0;
     }
 
     DiscoverySetRow *sorted = NULL;
-    if (discovery->count != 0u) {
-        sorted = (DiscoverySetRow *)malloc((size_t)discovery->count *
+    uint32_t row_count = 0u;
+    for (uint32_t i = 0; i < discovery->count; ++i) {
+        if (!entries_only || ng_function_discovery_is_entry_at(discovery, i)) {
+            ++row_count;
+        }
+    }
+
+    if (row_count != 0u) {
+        sorted = (DiscoverySetRow *)malloc((size_t)row_count *
                                            sizeof(*sorted));
         if (!sorted) {
             fprintf(stderr, "cannot allocate discovery set buffer\n");
             return 0;
         }
+        row_count = 0u;
         for (uint32_t i = 0; i < discovery->count; ++i) {
-            sorted[i].addr = discovery->addrs[i] & 0x00FFFFFFu;
-            sorted[i].bank = ng_function_discovery_bank_at(discovery, i);
+            if (entries_only &&
+                !ng_function_discovery_is_entry_at(discovery, i)) {
+                continue;
+            }
+            sorted[row_count].addr = discovery->addrs[i] & 0x00FFFFFFu;
+            sorted[row_count].bank = ng_function_discovery_bank_at(discovery,
+                                                                   i);
+            ++row_count;
         }
         qsort(sorted,
-              discovery->count,
+              row_count,
               sizeof(*sorted),
               compare_discovery_set_row);
     }
@@ -183,7 +268,7 @@ static int emit_discovery_set_file(const char *path,
     uint32_t previous_bank = NG_FUNCTION_DISCOVERY_BANK_NONE;
     int have_previous = 0;
     int ok = 1;
-    for (uint32_t i = 0; i < discovery->count; ++i) {
+    for (uint32_t i = 0; i < row_count; ++i) {
         uint32_t addr = sorted[i].addr;
         uint32_t bank = sorted[i].bank;
         if (have_previous && addr == previous && bank == previous_bank) {
@@ -214,7 +299,10 @@ static int emit_discovery_set_file(const char *path,
         return 0;
     }
 
-    printf("discovery set: %s (addrs=%u)\n", path, written);
+    printf("%s: %s (addrs=%u)\n",
+           entries_only ? "discovery entries" : "discovery set",
+           path,
+           written);
     return 1;
 }
 
@@ -308,15 +396,65 @@ static void add_discovery_seed(uint32_t *seeds,
     seeds[(*seed_count)++] = seed;
 }
 
+static void add_vector_discovery_seeds(const NgProgramRom *rom,
+                                       uint32_t *seeds,
+                                       uint32_t *seed_count) {
+    if (!rom || !seeds || !seed_count) {
+        return;
+    }
+
+    for (uint32_t vector = 2u; vector < 64u; ++vector) {
+        uint32_t value = ng_program_rom_read32(rom, vector * 4u);
+        if (value == 0u || !ng_program_rom_addr_is_mapped(rom, value)) {
+            continue;
+        }
+        add_discovery_seed(seeds, seed_count, value);
+    }
+}
+
+static void add_neogeo_header_discovery_seeds(const NgProgramRom *rom,
+                                              uint32_t *seeds,
+                                              uint32_t *seed_count) {
+    static const uint32_t stub_addrs[CLI_MAX_NEOGEO_HEADER_SEEDS] = {
+        0x000122u, /* USER */
+        0x000128u, /* PLAYER_START */
+        0x00012Eu, /* DEMO_END */
+        0x000134u, /* COIN_SOUND */
+    };
+    if (!rom || !seeds || !seed_count || !ng_program_rom_has_cart_header(rom)) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < CLI_MAX_NEOGEO_HEADER_SEEDS; ++i) {
+        uint32_t stub = stub_addrs[i];
+        if (!ng_program_rom_addr_is_mapped(rom, stub) ||
+            !ng_program_rom_addr_is_mapped(rom, stub + 5u)) {
+            continue;
+        }
+
+        if (ng_program_rom_read16(rom, stub) != 0x4EF9u) {
+            continue;
+        }
+
+        uint32_t target = ng_program_rom_read32(rom, stub + 2u);
+        if (ng_program_rom_addr_is_mapped(rom, target)) {
+            add_discovery_seed(seeds, seed_count, target);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     const char *game_path = NULL;
     const char *p1_path = NULL;
     const char *p2_path = NULL;
     const char *neo_path = NULL;
     const char *emit_c_path = NULL;
+    const char *emit_c_shards_path = NULL;
     const char *emit_discovery_set_path = NULL;
+    const char *emit_discovery_entries_path = NULL;
     const char *emit_dispatch_audit_path = NULL;
     const char *emit_dispatch_suggestions_path = NULL;
+    uint32_t emit_c_shard_size = 0u;
     int fail_on_dispatch_gaps = 0;
 
     for (int i = 1; i < argc; ++i) {
@@ -330,8 +468,21 @@ int main(int argc, char **argv) {
             neo_path = argv[++i];
         } else if (strcmp(argv[i], "--emit-c") == 0 && i + 1 < argc) {
             emit_c_path = argv[++i];
+        } else if (strcmp(argv[i], "--emit-c-shards") == 0 && i + 1 < argc) {
+            emit_c_shards_path = argv[++i];
+        } else if (strcmp(argv[i], "--emit-c-shard-size") == 0 && i + 1 < argc) {
+            char *end = NULL;
+            unsigned long parsed = strtoul(argv[++i], &end, 0);
+            if (!end || *end != 0 || parsed > 0xFFFFFFFFul) {
+                print_usage(argv[0]);
+                return 2;
+            }
+            emit_c_shard_size = (uint32_t)parsed;
         } else if (strcmp(argv[i], "--emit-discovery-set") == 0 && i + 1 < argc) {
             emit_discovery_set_path = argv[++i];
+        } else if (strcmp(argv[i], "--emit-discovery-entries") == 0 &&
+                   i + 1 < argc) {
+            emit_discovery_entries_path = argv[++i];
         } else if (strcmp(argv[i], "--emit-dispatch-audit") == 0 && i + 1 < argc) {
             emit_dispatch_audit_path = argv[++i];
         } else if (strcmp(argv[i], "--emit-dispatch-suggestions") == 0 &&
@@ -441,6 +592,8 @@ int main(int argc, char **argv) {
                 uint32_t seeds[CLI_MAX_DISCOVERY_SEEDS];
                 uint32_t seed_count = 0;
                 add_discovery_seed(seeds, &seed_count, cart_entry);
+                add_vector_discovery_seeds(&rom, seeds, &seed_count);
+                add_neogeo_header_discovery_seeds(&rom, seeds, &seed_count);
                 NgFunctionDiscovery discovery;
                 if (ng_function_discover_from_game_config(&rom,
                                                           seeds,
@@ -458,11 +611,27 @@ int main(int argc, char **argv) {
                     print_function_candidates(&rom, &discovery);
                     if (emit_discovery_set_path &&
                         !emit_discovery_set_file(emit_discovery_set_path,
-                                                 &discovery)) {
+                                                 &discovery,
+                                                 0)) {
+                        ng_program_rom_free(&rom);
+                        return 1;
+                    }
+                    if (emit_discovery_entries_path &&
+                        !emit_discovery_set_file(emit_discovery_entries_path,
+                                                 &discovery,
+                                                 1)) {
                         ng_program_rom_free(&rom);
                         return 1;
                     }
                     if (emit_c_path && !emit_c_file(emit_c_path, &rom, &discovery)) {
+                        ng_program_rom_free(&rom);
+                        return 1;
+                    }
+                    if (emit_c_shards_path &&
+                        !emit_c_shards_dir(emit_c_shards_path,
+                                           &rom,
+                                           &discovery,
+                                           emit_c_shard_size)) {
                         ng_program_rom_free(&rom);
                         return 1;
                     }

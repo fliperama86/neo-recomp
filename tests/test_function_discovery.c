@@ -133,6 +133,52 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x120u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x10u, 0x4E75u);       /* base seed */
+        write32(&rom, 0x2Eu, 0x000000A0u);   /* stride-$14 cluster */
+        write32(&rom, 0x42u, 0x000000B0u);
+        write32(&rom, 0x56u, 0x000000C0u);
+        write32(&rom, 0x84u, 0x000000D0u);   /* two-entry run is too short */
+        write32(&rom, 0x98u, 0x000000E0u);
+        write16(&rom, 0xA0u, 0x4E75u);
+        write16(&rom, 0xB0u, 0x4E75u);
+        write16(&rom, 0xC0u, 0x4E75u);
+        write16(&rom, 0xD0u, 0x4E75u);
+        write16(&rom, 0xE0u, 0x4E75u);
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.record_format_count = 1u;
+        config.record_formats[0].stride = 0x14u;
+        config.record_formats[0].callback_offset_count = 1u;
+        config.record_formats[0].callback_offsets[0] = 0u;
+        config.record_formats[0].cluster_min_entries = 3u;
+        config.record_formats[0].target_start = 0xA0u;
+        config.record_formats[0].target_end = 0xF0u;
+        config.record_formats[0].scan_count = 1u;
+        config.record_formats[0].scans[0].kind =
+            NG_GAME_CONFIG_RECORD_SCAN_RANGE_AUTO;
+        config.record_formats[0].scans[0].start = 0x20u;
+        config.record_formats[0].scans[0].end = 0xA0u;
+
+        const uint32_t seeds[] = {0x00000010u};
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    seeds,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0xA0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xB0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xC0u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0xD0u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0xE0u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x200u);
         CHECK(rom.data != NULL);
         ng_program_rom_set_address_map(&rom, 0x000000u, 0x100u, 0x200000u, 0x100u);
@@ -152,6 +198,60 @@ int main(void) {
         CHECK(discovery.addrs[0] == 0x200010u);
         CHECK(discovery.addrs[1] == 0x000020u);
         CHECK(discovery.addrs[2] == 0x200016u);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x200u);
+        CHECK(rom.data != NULL);
+        ng_program_rom_set_address_map(&rom,
+                                       0x000000u,
+                                       0x100u,
+                                       0x200000u,
+                                       0x100u);
+
+        write16(&rom, 0x10u, 0x4E75u);
+        write32(&rom, 0x120u, 0x00000080u);  /* inside bounded scan */
+        write32(&rom, 0x132u, 0x00000090u);  /* inside bounded scan */
+        write32(&rom, 0x144u, 0x000000A0u);  /* inside bounded scan */
+        write32(&rom, 0x180u, 0x000000B0u);  /* valid but outside range */
+        write32(&rom, 0x192u, 0x000000C0u);
+        write32(&rom, 0x1A4u, 0x000000D0u);
+        write16(&rom, 0x80u, 0x4E75u);
+        write16(&rom, 0x90u, 0x4E75u);
+        write16(&rom, 0xA0u, 0x4E75u);
+        write16(&rom, 0xB0u, 0x4E75u);
+        write16(&rom, 0xC0u, 0x4E75u);
+        write16(&rom, 0xD0u, 0x4E75u);
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.record_format_count = 1u;
+        config.record_formats[0].stride = 0x12u;
+        config.record_formats[0].callback_offset_count = 1u;
+        config.record_formats[0].callback_offsets[0] = 0u;
+        config.record_formats[0].cluster_min_entries = 3u;
+        config.record_formats[0].target_start = 0x80u;
+        config.record_formats[0].target_end = 0xE0u;
+        config.record_formats[0].scan_count = 1u;
+        config.record_formats[0].scans[0].kind =
+            NG_GAME_CONFIG_RECORD_SCAN_BANK_ALL_AUTO;
+        config.record_formats[0].scans[0].start = 0x200020u;
+        config.record_formats[0].scans[0].end = 0x200056u;
+
+        const uint32_t seeds[] = {0x00000010u};
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    seeds,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x80u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x90u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xA0u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0xB0u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0xC0u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0xD0u));
 
         ng_program_rom_free(&rom);
     }
@@ -463,9 +563,9 @@ int main(void) {
         write16(&rom, 0x02u, 0x003Eu);
         write16(&rom, 0x04u, 0x227Cu);       /* MOVEA.L #$FFFFFFFF,A1 */
         write32(&rom, 0x06u, 0xFFFFFFFFu);
-        write16(&rom, 0x0Au, 0x4EB9u);       /* JSR table selector */
-        write32(&rom, 0x0Cu, 0x000000C0u);
-        write16(&rom, 0x10u, 0x4E75u);       /* caller continuation */
+        write16(&rom, 0x0Au, 0x4EBAu);       /* JSR table selector */
+        write16(&rom, 0x0Cu, 0x00B4u);
+        write16(&rom, 0x0Eu, 0x4E75u);       /* caller continuation */
         write32(&rom, 0x40u, 0xFFFFFFFFu);   /* sparse leading sentinel */
         write32(&rom, 0x44u, 0x00000070u);
         write32(&rom, 0x48u, 0xFFFFFFFFu);   /* sparse interior sentinel */
@@ -496,7 +596,7 @@ int main(void) {
         CHECK(ng_function_discovery_contains(&discovery, 0x00u));
         CHECK(ng_function_discovery_contains(&discovery, 0x04u));
         CHECK(ng_function_discovery_contains(&discovery, 0x0Au));
-        CHECK(ng_function_discovery_contains(&discovery, 0x10u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x0Eu));
         CHECK(ng_function_discovery_contains(&discovery, 0x70u));
         CHECK(ng_function_discovery_contains(&discovery, 0x90u));
         CHECK(ng_function_discovery_contains(&discovery, 0xC0u));
@@ -593,6 +693,139 @@ int main(void) {
         CHECK(ng_function_discovery_contains_bank(&discovery,
                                                   0x200020u,
                                                   1u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x180u);
+        CHECK(rom.data != NULL);
+        ng_program_rom_set_address_map(&rom,
+                                       0x000000u,
+                                       0x100u,
+                                       0x200000u,
+                                       0x40u);
+
+        write16(&rom, 0x20u, 0x2079u);       /* MOVEA.L $200000,A0 */
+        write32(&rom, 0x22u, 0x00200000u);
+        write16(&rom, 0x26u, 0x4E90u);       /* JSR (A0) */
+        write16(&rom, 0x28u, 0x4E75u);       /* caller continuation */
+
+        write32(&rom, 0x100u, 0x00200020u);  /* bank 0 interface slot */
+        write16(&rom, 0x120u, 0x4E75u);      /* bank 0 target */
+        write32(&rom, 0x140u, 0x00200020u);  /* bank 1 interface slot */
+        write16(&rom, 0x160u, 0x4E75u);      /* bank 1 target */
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x20u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x20u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x26u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x28u));
+        CHECK(ng_function_discovery_contains_bank(&discovery,
+                                                  0x200020u,
+                                                  0u));
+        CHECK(ng_function_discovery_contains_bank(&discovery,
+                                                  0x200020u,
+                                                  1u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0xA0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x47F9u);       /* LEA $000080,A3 */
+        write32(&rom, 0x02u, 0x00000080u);
+        write16(&rom, 0x06u, 0x4E93u);       /* JSR (A3) */
+        write16(&rom, 0x08u, 0x4E75u);       /* caller continuation */
+        write16(&rom, 0x80u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x00u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x06u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x08u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x80u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0xA0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x47F9u);       /* LEA $000080,A3 */
+        write32(&rom, 0x02u, 0x00000080u);
+        write16(&rom, 0x06u, 0x6600u);       /* BNE.W $000020 */
+        write16(&rom, 0x08u, 0x0018u);
+        write16(&rom, 0x0Au, 0x4E75u);       /* fall-through return */
+        write16(&rom, 0x20u, 0x4E93u);       /* JSR (A3), state from branch */
+        write16(&rom, 0x22u, 0x4E75u);
+        write16(&rom, 0x80u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x20u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x80u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0xA0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x203Cu);       /* MOVE.L #$000080,D0 */
+        write32(&rom, 0x02u, 0x00000080u);
+        write16(&rom, 0x06u, 0x2040u);       /* MOVEA.L D0,A0 */
+        write16(&rom, 0x08u, 0x4E90u);       /* JSR (A0) */
+        write16(&rom, 0x0Au, 0x4E75u);       /* caller continuation */
+        write16(&rom, 0x80u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x00u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x06u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x08u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x0Au));
+        CHECK(ng_function_discovery_contains(&discovery, 0x80u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0xC0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x45F9u);       /* LEA $000080,A2 */
+        write32(&rom, 0x02u, 0x00000080u);
+        write16(&rom, 0x06u, 0x4EB9u);       /* JSR $000070 */
+        write32(&rom, 0x08u, 0x00000070u);
+        write16(&rom, 0x0Cu, 0x4E92u);       /* JSR (A2) */
+        write16(&rom, 0x0Eu, 0x4E75u);
+        write16(&rom, 0x70u, 0x4E75u);
+        write16(&rom, 0x80u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x70u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x80u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0xC0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x41F9u);       /* LEA $000080,A0 */
+        write32(&rom, 0x02u, 0x00000080u);
+        write16(&rom, 0x06u, 0x4EB9u);       /* JSR $000070 */
+        write32(&rom, 0x08u, 0x00000070u);
+        write16(&rom, 0x0Cu, 0x4E90u);       /* JSR (A0), A0 was clobbered */
+        write16(&rom, 0x0Eu, 0x4E75u);
+        write16(&rom, 0x70u, 0x4E75u);
+        write16(&rom, 0x80u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x70u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x80u));
 
         ng_program_rom_free(&rom);
     }
@@ -847,6 +1080,51 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0xC0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x10u, 0x4E75u);       /* base seed */
+        write32(&rom, 0x40u, 0x00000080u);   /* data-shaped false callback */
+        write32(&rom, 0x44u, 0x000000A0u);   /* real callback cluster */
+        write32(&rom, 0x48u, 0x000000B0u);
+        write32(&rom, 0x4Cu, 0x000000B8u);
+        write16(&rom, 0x80u, 0x003Cu);       /* ORI #$F8,CCR */
+        write16(&rom, 0x82u, 0x00F8u);
+        write16(&rom, 0x84u, 0x003Bu);       /* invalid if treated as code */
+        write16(&rom, 0xA0u, 0x4E75u);
+        write16(&rom, 0xB0u, 0x4E75u);
+        write16(&rom, 0xB8u, 0x4E75u);
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.record_format_count = 1u;
+        config.record_formats[0].stride = 4u;
+        config.record_formats[0].callback_offset_count = 1u;
+        config.record_formats[0].callback_offsets[0] = 0u;
+        config.record_formats[0].target_start = 0x80u;
+        config.record_formats[0].target_end = 0xC0u;
+        config.record_formats[0].scan_count = 1u;
+        config.record_formats[0].scans[0].kind =
+            NG_GAME_CONFIG_RECORD_SCAN_RANGE_AUTO;
+        config.record_formats[0].scans[0].start = 0x40u;
+        config.record_formats[0].scans[0].end = 0x50u;
+
+        const uint32_t seeds[] = {0x00000010u};
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    seeds,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x10u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x80u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xA0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xB0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xB8u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x200u);
         CHECK(rom.data != NULL);
         ng_program_rom_set_address_map(&rom, 0x000000u, 0x100u, 0x200000u, 0x100u);
@@ -1049,6 +1327,37 @@ int main(void) {
 
         CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
         CHECK(ng_function_discovery_contains(&discovery, 0x20u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x40u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x43FAu);  /* LEA fixed data(PC),A1 */
+        write16(&rom, 0x02u, 0x001Eu);
+        write16(&rom, 0x04u, 0x2D49u);  /* MOVE.L A1,($70,A6): data cursor */
+        write16(&rom, 0x06u, 0x0070u);
+        write16(&rom, 0x08u, 0x4E75u);
+        write16(&rom, 0x20u, 0x003Cu);  /* ORI #$F8,CCR */
+        write16(&rom, 0x22u, 0x00F8u);
+        write16(&rom, 0x24u, 0x003Bu);  /* invalid if treated as code */
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.dispatcher_count = 1u;
+        config.dispatchers[0].kind = NG_GAME_CONFIG_DISPATCHER_OBJECT_STATE;
+        config.dispatchers[0].install_slot_count = 1u;
+        config.dispatchers[0].install_slots[0] = 0x70u;
+
+        uint32_t seed = 0x00u;
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    &seed,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x20u));
 
         ng_program_rom_free(&rom);
     }
@@ -1273,6 +1582,14 @@ int main(void) {
         CHECK(discovery.addrs[0] == 0x00u);
         CHECK(discovery.addrs[1] == 0x02u);
         CHECK(discovery.addrs[2] == 0x04u);
+        CHECK(ng_function_discovery_entry_contains_bank(
+            &discovery,
+            0x00u,
+            NG_FUNCTION_DISCOVERY_BANK_NONE));
+        CHECK(!ng_function_discovery_entry_contains_bank(
+            &discovery,
+            0x02u,
+            NG_FUNCTION_DISCOVERY_BANK_NONE));
 
         ng_program_rom_free(&rom);
     }

@@ -18,16 +18,28 @@ coverage checkpoint changes.
 | --- | --- | --- |
 | Phase 0, safety net | **Done** | `--emit-discovery-set`, golden snapshots, superset checker, and hard discovery-truncation failure are in place. |
 | Phase 0.5, oracle ROM | **Done** | `games/oracle/` now contains the source oracle, linker script, and manifest. `scripts/build_oracle_fixture.py` builds deterministic P-ROM/`.neo` outputs and validates exported function/relocation truth against `m68k-elf` when available. `test_oracle_discovery` and `test_oracle_fixture` enforce completeness, soundness, code-vs-data relocations, banked records, and trace-import coverage. |
+| Phase 0.6, ngdevkit examples | **Done, generic gaps fixed** | ngdevkit installed via Homebrew, all 18 public examples build, and `scripts/ngdevkit_symbol_oracle.py` runs against ELF `FUNC` symbols. The sweep now has `unattributed_rows=0` for every example. The real gaps found by this oracle were fixed generically: bank-window interface pointers, Neo Geo header callback roots, branch-carried static A-register callbacks, vector roots, D-register immediate propagation, ABI A2-A6 preservation, and wider compiler-function scans. Remaining missing ELF symbols are linked-but-unreached, aliases, filler, or inlined functions rather than discovered code outside known symbol extents. |
 | Pass 1, linked state-table scanner | **Done** | `[[state_table]]` parser/scanner landed. The `$000B92..$000E8E` mode/substate table cluster in `games/mslug.toml` is now one descriptor instead of three `[[jump_table]]` blocks. |
 | Pass 2, tagged / fixed record scanner | **Done** | `[[record_format]]` parser/scanner landed. Tagged streams, fixed callback fields, object-vector slices, clustered object-vector table scans, and exact single-longword representatives are collapsed into structural descriptors. Remaining jump tables are branch/inline/script dispatch shapes. |
 | Pass 3, object dispatcher recognizer | **Done** | `[[dispatcher]]` parser/config landed for object-state install/spawn constants, and the audit derives `$0006C8`/`$000FDE`. Direct PC-index branch tables, PC-index JSR branch tables, self-overwriting static-index JSR tables, repeated inline-code PC-index tables, mixed branch/body PC-index tables, spawn-helper wrappers, repeated direct-dispatch stubs, and fixed-stride `[[routine_table]]` code slots with optional shared-tail fallthrough are now classified structurally, removing 252 table-slot `extra` seeds, 26 manual `[dispatch].runtime` entries, 4 exact callback-slot ranges, and 18 redundant `[[jump_table]]` declarations while keeping the golden set as a strict superset. |
 | Pass 4, bank-aware pointer discovery | **Done** | `scan = ["bank:*"]` iterates derived physical banks or explicit `[[bank]]` mappings, and `scan = ["bank:N"]` targets one bank for `[[record_format]]` and `[[state_table]]`. Bank identity is threaded through discovery de-duplication, worklist scanning, `--emit-discovery-set` (`bank:N 0xADDR` rows), dispatch audit checks, and generated symbol names (`ng_func_bNNN_ADDR`) for banked duplicates. Fixed-region behavior is unchanged. Runtime bank-register dispatch is future work outside this static discovery plan. |
-| Pass 5, diagnostics / residual split | **Done** | Manual residual seeds moved from `games/mslug.toml` into `games/mslug.residual.toml` via `[game].discovery_files`; golden discovery is unchanged. `--emit-dispatch-suggestions` emits generic TOML suggestions for audit gaps. `scripts/generate_residual_toml.py` regenerates residual TOML from set differences. Runtime dispatch misses can now be logged as JSONL via `ng_neogeo_set_dispatch_miss_log_path()` or `NG_NEO_DISPATCH_MISS_LOG` and converted to TOML suggestions with `scripts/runtime_miss_suggestions.py`. Execution PC traces can be captured with `scripts/mame_trace_capture.py`, diffed against discovery sets with `scripts/trace_pc_residual.py`, and covered by `test_trace_tools`; Phase 0.5 now supplies a reproducible oracle source fixture plus exported function/relocation truth and trace-import validation. |
+| Pass 5, diagnostics / residual split | **Done, miner added** | Manual residual seeds moved from `games/mslug.toml` into `games/mslug.residual.toml` via `[game].discovery_files`; golden discovery is unchanged. `--emit-dispatch-suggestions` emits generic TOML suggestions for audit gaps. `scripts/generate_residual_toml.py` regenerates residual TOML from set differences. Runtime dispatch misses can now be logged as JSONL via `ng_neogeo_set_dispatch_miss_log_path()` or `NG_NEO_DISPATCH_MISS_LOG` and converted to TOML suggestions with `scripts/runtime_miss_suggestions.py`. Execution PC traces can be captured with `scripts/mame_trace_capture.py`, diffed against discovery sets with `scripts/trace_pc_residual.py`, and covered by `test_trace_tools`. `scripts/mine_record_tables.py` now mines fixed-stride callback-record clusters from P-ROM data using discovery entry roots as anchors, emits precise `auto:START-END` and `auto:bank:*:START-END` TOML, and is covered by `test_record_table_miner`. |
+| Generated-C build scalability | **Done** | `neo-recomp --emit-c-shards <dir> --emit-c-shard-size <count>` now writes a lightweight dispatch TU with a route table plus shard TUs with local function bodies. The Metal Slug SDL build uses 42 cart shards by default (`NG_MSLUG_C_SHARD_SIZE=2048`) and compiles stale shards in parallel (`NG_MSLUG_C_SHARD_JOBS`). Cached rebuilds avoid the old monolithic 335 MB cart C compile. |
 
 Latest checkpoint, 2026-07-01:
 
-- `ctest --test-dir build --output-on-failure`: 19/19 passed.
+- `ctest --test-dir build --output-on-failure`: 21/21 passed.
 - `scripts/check_mslug_discovery_golden.sh`: passed.
+- `./run.sh build`: passed with generated cart C sharding. First sharded cart
+  compile produced 42 objects; an immediate rebuild reused all cart/BIOS
+  generated objects and completed in about 2.4 seconds.
+- Phase 0.6 ngdevkit symbol-oracle tooling landed and live-ran against all
+  18 ngdevkit examples after installing `m68k-neogeo-elf-*`. Summary written to
+  `build/ngdevkit_symbol_oracle/summary.tsv`: 597 ELF `FUNC` symbols, 441 exact
+  discovered symbol entries, 22,565 discovered rows, and 0 unattributed rows.
+  Remaining missing symbols are classified as linked-only CRT/library helpers,
+  aliases, address-only filler functions, or functions that GCC inlined at every
+  call site. The generic gaps exposed by the sweep were fixed.
 - Explicit `[[bank]]` metadata is covered by parser, P-ROM mapping, and
   bank-targeted discovery tests.
 - PC-index JSR branch tables, self-overwriting static-index JSR tables, mixed
@@ -35,15 +47,18 @@ Latest checkpoint, 2026-07-01:
   stubs, routine tables, stage 2 object-vector callback expansion, and trace
   diagnostic tools are covered by tests.
 - Golden discovery set: 63,854 addresses.
-- Current discovery set: 67,338 addresses.
-- Current discovery additions over golden: 3,484 addresses.
+- Current discovery set: 83,195 addresses.
+- Current discovery additions over golden: 19,341 addresses.
 - Dispatch audit gaps: not worse (`missing_direct=0`, `computed=0`,
   `table_missing=0`).
 - Discovery candidate cap: 131,072 addresses.
-- `games/mslug.toml`: 166 lines.
+- `games/mslug.toml`: 140 lines.
 - `games/mslug.residual.toml`: 541 lines.
-- Current structural descriptors: 1 `[[state_table]]`, 14
-  `[[record_format]]`, 2 `[[routine_table]]`, 1 `[[dispatcher]]`.
+- `games/mslug.mined_record_tables.toml`: 39 lines, generated by
+  `scripts/mine_record_tables.py`.
+- Current structural descriptors: 1 `[[state_table]]`, 12
+  `[[record_format]]`, 3 `[[table_call]]`, 2 `[[routine_table]]`,
+  1 `[[dispatcher]]`.
 - Current `[[jump_table]]` blocks: 2.
 - Current `[functions].extra` entries in the manifest: 0.
 - Current residual `[functions].extra` entries: 434.
@@ -55,11 +70,35 @@ Latest checkpoint, 2026-07-01:
   tables, 4 mixed branch/body PC-index tables no longer needing explicit
   `[[jump_table]]` blocks, 1 repeated direct-dispatch stub table no longer
   needing an explicit `[[jump_table]]` block, 2 fixed-code routine regions
-  no longer abusing `[[jump_table]] format = "bra16"`, and clustered `$0E8xxx`
-  object-vector scans covering the stage 2 `$0619E4` and `$07E000` runtime
-  misses, plus widened helper-discovered tagged script stream bounds covering
-  `$29CB32`, and a widened `$0E83E4..$0E840C` object-vector slice
-  covering `$083BE2`, without adding those crash addresses as residual seeds.
+  no longer abusing `[[jump_table]] format = "bra16"`, widened helper-discovered
+  tagged script stream bounds covering `$29CB32`, a structural
+  `$096E80..$096FAC` fixed-record island covering `$053306`, and a banked
+  stride-$12 callback-record auto scan covering `$07815A`, without adding those
+  crash addresses as residual seeds. The full `$0E8000..$0E8524` object-vector
+  table now lives in generated `games/mslug.mined_record_tables.toml` as one
+  stride-4 auto-mined record family with 329 entries and 217 known anchors,
+  covering `$0619E4`, `$07E000`, `$083BE2`, and `$0483D2` while removing five
+  hand-owned object-vector descriptors from `games/mslug.toml`. This wider table
+  surfaced helper-mediated computed dispatches; they are handled by general
+  recompiler/audit changes: PC-relative `[[table_call]]` helper discovery,
+  table-call helper dispatch allowance in the audit, audit scanning parity
+  through fallthrough `TRAP` assertions, and invalid ABS32 audit entries treated
+  as non-code rather than missing code. Sparse ABS32 table-call discovery now
+  applies the configured target filter instead of accepting any decodable
+  longword, which removes data-shaped false positives from full C emission. A
+  second generated stride-$4A banked callback family covers the
+  `$07C918` miss as a 7-entry fixed-record cluster at `$2DFAF0..$2DFCF6`,
+  again without adding the crash address as a residual seed. The `$07815A` family now lives in
+  generated `games/mslug.mined_record_tables.toml` with precise
+  `auto:bank:*:START-END` ranges instead of a broad hand-owned `auto:bank:*`
+  scan. Record-format scans now also support `auto:` scan tokens for guarded
+  all-alignment cluster mining, precise bank-range scan tokens, and discovery
+  now tracks entry roots separately from instruction labels with
+  `--emit-discovery-entries` for oracle/miner workflows. Full unbounded auto
+  scanning is intentionally not enabled for Metal Slug yet because raw
+  first-instruction validation admits many code-interior false positives; the
+  scalable path is generated/provenance backed ranges plus entry-vs-label
+  filtering before broad ROM scans become sound.
 
 Optional follow-up: use trace capture plus `trace_pc_residual.py` to mine the
 remaining residual families. The oracle track is now available as the
@@ -337,6 +376,53 @@ Scope and non-goals:
   it; the small torture ROM is the high-leverage piece.
 - Toolchain dependency is real but well-trodden: `ngdevkit` needs a GCC m68k
   cross-toolchain. Treat standing it up as its own bounded setup task.
+
+---
+
+## Phase 0.6 - Public source-built ngdevkit examples
+
+Goal: add a second oracle track that uses real public ngdevkit examples with ELF
+symbols, so recompiler capability can be measured on ordinary source-built Neo
+Geo programs instead of only on the bespoke torture ROM or Metal Slug misses.
+
+Implemented pieces:
+
+- `games/ngdevkit_example.toml` defines the generic fixed plus bank-window
+  program map used by ngdevkit examples. It contains no example-specific seeds.
+- `scripts/ngdevkit_symbol_oracle.py` extracts `readelf` `FUNC` symbols from
+  `rom.elf` or banked `rom*.elf` files, uses executable sections for soundness
+  extents, generates CPU-order P-ROM binaries from ELF, runs
+  `neo-recomp --emit-discovery-set`, and reports symbol coverage.
+- `tests/test_ngdevkit_symbol_oracle.py` covers symbol parsing, bank assignment,
+  discovery comparison, PROM layout parsing, and objcopy bank-output
+  normalization without requiring the external ngdevkit toolchain.
+- `docs/ngdevkit_symbol_oracle.md` documents the manual live run.
+
+Latest sweep:
+
+- All 18 public examples build and run through the oracle.
+- Totals: 597 ELF `FUNC` symbols, 441 exact discovered symbol entries, 156
+  missing symbol entries, 22,565 discovery rows, 0 unattributed rows.
+- The missing entries are not current generic-discovery holes: they are
+  linked-only CRT/library helpers, aliases such as reentrant stdio entry points,
+  address-only filler functions in PROM-size examples, or functions whose bodies
+  were inlined at every call site.
+- Generic recognizer work produced by this phase: absolute bank-window function
+  pointer loads, static A-register indirect calls, branch-target probes that
+  preserve static callback registers, D-register immediate to A-register
+  propagation, ABI-preserved A2-A6 across calls, mapped vector roots, Neo Geo
+  header callback roots, and work-RAM callback dispatch audit classification.
+
+Usage after building an example:
+
+```sh
+python3 scripts/ngdevkit_symbol_oracle.py \
+  --example-dir ~/Projects/references/ngdevkit-examples/01-helloworld
+```
+
+This is intentionally report-first. `--fail-on-missing` is available once a
+chosen example becomes an expected regression target. Missing symbols should be
+classified into generic recognizer work, not pasted into a per-example manifest.
 
 ---
 
@@ -636,14 +722,17 @@ with the trace importer, the residual is produced by tooling, not by hand).
    Slug golden" to "completeness + soundness against the oracle" (ELF symbols are
    a required subset of discovery, and discovery stays inside known function
    extents), and the Pass 5 trace importer gets validated against known truth.
-3. **Pass 1** (state tables) - self-contained; biggest single structural win in
+3. **Phase 0.6** (ngdevkit examples) - optional public source-built
+   oracle. It is report-first until a chosen example is promoted to CI, then
+   missing symbols become generic recognizer work.
+4. **Pass 1** (state tables) - self-contained; biggest single structural win in
    the fixed region.
-4. **Pass 2** (record scanner) against the fixed region + current window.
-5. **Pass 3** (dispatcher recognizer) - removes `[dispatch].runtime` and the
+5. **Pass 2** (record scanner) against the fixed region + current window.
+6. **Pass 3** (dispatcher recognizer) - removes `[dispatch].runtime` and the
    install-idiom `extra` families.
-6. **Pass 4** (bank-aware) - generalizes Pass 1/2 descriptors across banks;
+7. **Pass 4** (bank-aware) - generalizes Pass 1/2 descriptors across banks;
    removes per-page duplication.
-7. **Pass 5** (diagnostics + residual split + optional trace) - makes the
+8. **Pass 5** (diagnostics + residual split + optional trace) - makes the
    remaining residual machine-generated and self-shrinking.
 
 Bank-awareness (Pass 4) is woven into Passes 1-2: implement them window-local
@@ -657,14 +746,15 @@ check.
 
 | Metric | Original baseline | Current | Target |
 | --- | --- | --- | --- |
-| `mslug.toml` lines | 1614 | 166 | < ~150 (descriptors only) |
+| `mslug.toml` lines | 1614 | 140 | < ~150 (descriptors only) |
 | `[functions].extra` entries | ~700 | 0 in manifest, 434 in residual | ~0 in the manifest; irreducibles in `mslug.residual.toml` |
 | `[[jump_table]]` blocks | ~80 | 2 | a handful of structural descriptors |
 | `[dispatch].runtime` entries | 60 | 34 | `object_state` subset derived; table sites reclassified; small genuinely-computed residual stays declared |
-| Discovered function set | baseline | superset, 67,338 addresses (+3,484 over golden) | **superset** (0 regressions on golden diff) |
+| Discovered function set | baseline | superset, 83,195 addresses (+19,341 over golden) | **superset** (0 regressions on golden diff) |
 | Dispatch-audit gaps | baseline | not worse, all tracked gaps at 0 | <= baseline |
-| New unit tests | - | synthetic tests for landed passes, routine tables, diagnostics, and Phase 0.5 oracle discovery/fixture validation | one synthetic-ROM suite per pass |
+| New unit tests | - | synthetic tests for landed passes, routine tables, diagnostics, and Phase 0.5/0.6 oracle validation | one synthetic-ROM suite per pass |
 | Oracle discovery checks (Phase 0.5) | n/a | done | function symbols subset of discovered; discovered within function extents; code relocs resolved; data relocs excluded; trace import reports zero missing oracle PCs |
+| ngdevkit symbol oracle (Phase 0.6) | n/a | tooling landed, live run depends on external toolchain | chosen public examples report zero missing symbols or produce generic recognizer work items |
 
 Determinism must be preserved: same inputs produce the same discovery-set
 ordering (the golden check depends on it).
