@@ -1222,6 +1222,47 @@ static int is_task_spawn_call(const NgProgramRom *rom,
     return 1;
 }
 
+static int is_indexed_task_spawn_call(const NgProgramRom *rom,
+                                      const NgGameConfig *config,
+                                      const NgM68kInstr *load,
+                                      const NgM68kInstr *call,
+                                      const NgM68kStaticAregState *areg,
+                                      NgM68kJumpTablePattern *out) {
+    if (!rom || !load || !call || !areg || !out) {
+        return 0;
+    }
+    if (load->mnemonic != NG_M68K_MOVEA ||
+        load->size != 4u ||
+        load->src.mode != NG_M68K_EA_AINDEX ||
+        load->src.reg > 7u ||
+        !areg->valid[load->src.reg] ||
+        load->dst.mode != NG_M68K_EA_AREG ||
+        load->dst.reg != 1u) {
+        return 0;
+    }
+    if (call->mnemonic != NG_M68K_JSR ||
+        !is_direct_function_target(call)) {
+        return 0;
+    }
+
+    uint32_t helper = call->target & 0x00FFFFFFu;
+    if (!dispatcher_task_spawn_helper_allowed(config, helper) &&
+        !dispatcher_task_spawn_wrapper_allowed(rom, config, helper)) {
+        return 0;
+    }
+
+    memset(out, 0, sizeof(*out));
+    out->table_addr =
+        (uint32_t)(areg->target[load->src.reg] +
+                   (int32_t)load->src.displacement) &
+        0x00FFFFFFu;
+    out->index_reg = load->src.index_reg;
+    out->target_reg = load->dst.reg;
+    out->entry_size = 4u;
+    out->entry_kind = NG_M68K_JUMP_TABLE_ENTRY_ABS32;
+    return 1;
+}
+
 static int is_work_ram_absolute(uint32_t addr) {
     return addr >= 0x00100000u && addr <= 0x0010FFFFu;
 }
@@ -2063,6 +2104,13 @@ static void scan_function_candidate(const NgProgramRom *rom,
                                               &instr,
                                               &target)) {
                     ng_function_discovery_add(out, rom, target);
+                } else if (is_indexed_task_spawn_call(rom,
+                                                       config,
+                                                       &previous,
+                                                       &instr,
+                                                       &previous_areg,
+                                                       &pattern)) {
+                    add_jump_table_targets(rom, &pattern, out);
                 } else {
                     add_abs_pointer_indirect_targets(rom,
                                                      start_addr,

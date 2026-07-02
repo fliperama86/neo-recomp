@@ -47,8 +47,8 @@ Latest checkpoint, 2026-07-01:
   stubs, routine tables, stage 2 object-vector callback expansion, and trace
   diagnostic tools are covered by tests.
 - Golden discovery set: 63,854 addresses.
-- Current discovery set: 83,245 addresses.
-- Current discovery additions over golden: 19,391 addresses.
+- Current discovery set: 83,403 addresses.
+- Current discovery additions over golden: 19,549 addresses.
 - Dispatch audit gaps: not worse (`missing_direct=0`, `computed=0`,
   `table_missing=0`).
 - Discovery candidate cap: 131,072 addresses.
@@ -92,6 +92,10 @@ Latest checkpoint, 2026-07-01:
   `$077C7E` is now covered by a generic `record_abs32` table-call descriptor
   that follows static `A1` record pointers and adds the callback at record
   offset `$0E`, covering `$07C996` from `$2DF798 + $0E` without a residual seed.
+  Static indexed spawn-helper tables are now recognized when an ABS32 table
+  entry is loaded into `A1` and then passed to a configured helper such as
+  `$0006FE`, covering `$0467F6`/`$046800` from the `$025CC6` table without
+  residual seeds.
   The `$07815A` family now lives in
   generated `games/mslug.mined_record_tables.toml` with precise
   `auto:bank:*:START-END` ranges instead of a broad hand-owned `auto:bank:*`
@@ -754,7 +758,7 @@ check.
 | `[functions].extra` entries | ~700 | 0 in manifest, 434 in residual | ~0 in the manifest; irreducibles in `mslug.residual.toml` |
 | `[[jump_table]]` blocks | ~80 | 2 | a handful of structural descriptors |
 | `[dispatch].runtime` entries | 60 | 34 | `object_state` subset derived; table sites reclassified; small genuinely-computed residual stays declared |
-| Discovered function set | baseline | superset, 83,245 addresses (+19,391 over golden) | **superset** (0 regressions on golden diff) |
+| Discovered function set | baseline | superset, 83,403 addresses (+19,549 over golden) | **superset** (0 regressions on golden diff) |
 | Dispatch-audit gaps | baseline | not worse, all tracked gaps at 0 | <= baseline |
 | New unit tests | - | synthetic tests for landed passes, routine tables, diagnostics, and Phase 0.5/0.6 oracle validation | one synthetic-ROM suite per pass |
 | Oracle discovery checks (Phase 0.5) | n/a | done | function symbols subset of discovered; discovered within function extents; code relocs resolved; data relocs excluded; trace import reports zero missing oracle PCs |

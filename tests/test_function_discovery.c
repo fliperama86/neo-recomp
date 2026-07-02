@@ -510,6 +510,50 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0xD0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x207Cu);       /* MOVEA.L #$40,A0 */
+        write32(&rom, 0x02u, 0x00000040u);
+        write16(&rom, 0x06u, 0xE548u);       /* LSL.W #2,D0 */
+        write16(&rom, 0x08u, 0x2270u);       /* MOVEA.L ($0,A0,D0.W),A1 */
+        write16(&rom, 0x0Au, 0x0000u);
+        write16(&rom, 0x0Cu, 0x4EB9u);       /* JSR spawn helper */
+        write32(&rom, 0x0Eu, 0x000000C0u);
+        write16(&rom, 0x12u, 0x4E75u);
+        write32(&rom, 0x40u, 0x00000070u);
+        write32(&rom, 0x44u, 0x00000080u);
+        write32(&rom, 0x48u, 0x00000090u);
+        write32(&rom, 0x4Cu, 0x000000A0u);
+        write16(&rom, 0x70u, 0x4E75u);
+        write16(&rom, 0x80u, 0x4E75u);
+        write16(&rom, 0x90u, 0x4E75u);
+        write16(&rom, 0xA0u, 0x4E75u);
+        write16(&rom, 0xC0u, 0x4E75u);
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.dispatcher_count = 1u;
+        config.dispatchers[0].kind = NG_GAME_CONFIG_DISPATCHER_OBJECT_STATE;
+        config.dispatchers[0].spawn_helper_count = 1u;
+        config.dispatchers[0].spawn_helpers[0] = 0x000000C0u;
+
+        const uint32_t seeds[] = {0x00000000u};
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    seeds,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x70u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x80u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x90u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xA0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xC0u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0xA0u);
         CHECK(rom.data != NULL);
 
