@@ -10,6 +10,11 @@
 #define NG_FUNCTION_DISCOVERY_BRANCH_TABLE_MAX_ENTRIES 32u
 #define NG_FUNCTION_DISCOVERY_BRANCH_PROBE_MAX_INSTRUCTIONS 12u
 #define NG_FUNCTION_DISCOVERY_HEURISTIC_TARGET_MAX_INSTRUCTIONS 32u
+#define NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS 256u
+#define NG_FUNCTION_DISCOVERY_SCRIPT_COMMANDS 32u
+#define NG_FUNCTION_DISCOVERY_SCRIPT_TABLE_MAX_ENTRIES 64u
+#define NG_FUNCTION_DISCOVERY_SCRIPT_STREAM_MAX_STEPS 512u
+#define NG_FUNCTION_DISCOVERY_SCRIPT_STREAM_QUEUE 128u
 
 static int is_probable_function_target(const NgProgramRom *rom,
                                        uint32_t addr);
@@ -21,6 +26,10 @@ static int table_call_target_allowed(const NgProgramRom *rom,
                                      const NgGameConfigTableCall *call,
                                      uint32_t target);
 static int is_direct_function_target(const NgM68kInstr *instr);
+static void discovery_entry_rom_view(const NgProgramRom *rom,
+                                     const NgFunctionDiscovery *discovery,
+                                     uint32_t index,
+                                     NgProgramRom *out);
 
 void ng_function_discovery_init(NgFunctionDiscovery *discovery) {
     if (discovery) {
@@ -959,6 +968,758 @@ static void static_dreg_to_areg_update(NgM68kStaticAregState *areg,
             dreg_target[instr->src.reg] & 0x00FFFFFFu;
         areg->valid[instr->dst.reg] = 1u;
     }
+}
+
+typedef struct NgScriptCommandInfo {
+    uint8_t length_valid;
+    uint8_t length;
+    uint8_t jump_valid;
+    uint8_t jump_offset;
+    uint8_t callback_valid;
+    uint8_t callback_offset;
+} NgScriptCommandInfo;
+
+typedef struct NgScriptInterpreterInfo {
+    uint32_t slot;
+    uint32_t command_count;
+    uint32_t command_mask;
+    uint8_t valid;
+    uint8_t stream_reg;
+    NgScriptCommandInfo commands[NG_FUNCTION_DISCOVERY_SCRIPT_COMMANDS];
+} NgScriptInterpreterInfo;
+
+typedef struct NgStaticA6SlotPointerState {
+    uint32_t direct_target[NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS];
+    uint32_t table_addr[NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS];
+    uint32_t table_max_entries[NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS];
+    uint8_t direct_valid[NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS];
+    uint8_t table_valid[NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS];
+} NgStaticA6SlotPointerState;
+
+static void static_a6_slot_pointer_reset(NgStaticA6SlotPointerState *state) {
+    if (state) {
+        memset(state, 0, sizeof(*state));
+    }
+}
+
+static void static_a6_slot_pointer_clear(NgStaticA6SlotPointerState *state,
+                                         uint32_t slot) {
+    if (!state || slot >= NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS) {
+        return;
+    }
+    state->direct_valid[slot] = 0u;
+    state->table_valid[slot] = 0u;
+    state->direct_target[slot] = 0u;
+    state->table_addr[slot] = 0u;
+    state->table_max_entries[slot] = 0u;
+}
+
+static int ea_is_a6_slot_local(const NgM68kEa *ea, uint32_t *slot) {
+    if (!ea || !slot || ea->reg != 6u) {
+        return 0;
+    }
+    if (ea->mode == NG_M68K_EA_AIND) {
+        *slot = 0u;
+        return 1;
+    }
+    if (ea->mode == NG_M68K_EA_ADISP) {
+        *slot = (uint32_t)(uint16_t)ea->displacement;
+        return 1;
+    }
+    return 0;
+}
+
+static void static_a6_slot_pointer_update(
+    NgStaticA6SlotPointerState *state,
+    const NgM68kStaticAregState *areg,
+    const NgM68kIndexRegBoundState *index_bound,
+    const NgM68kInstr *instr) {
+    if (!state || !areg || !index_bound || !instr) {
+        return;
+    }
+
+    uint32_t slot = 0u;
+    if (!ea_is_a6_slot_local(&instr->dst, &slot) ||
+        slot >= NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS) {
+        return;
+    }
+
+    if (instr->mnemonic != NG_M68K_MOVE || instr->size != 4u) {
+        static_a6_slot_pointer_clear(state, slot);
+        return;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_IMM) {
+        state->direct_target[slot] = instr->src.immediate & 0x00FFFFFFu;
+        state->direct_valid[slot] = 1u;
+        state->table_valid[slot] = 0u;
+        return;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_AREG &&
+        instr->src.reg < 8u &&
+        areg->valid[instr->src.reg]) {
+        state->direct_target[slot] =
+            areg->target[instr->src.reg] & 0x00FFFFFFu;
+        state->direct_valid[slot] = 1u;
+        state->table_valid[slot] = 0u;
+        return;
+    }
+
+    if (instr->src.mode == NG_M68K_EA_AINDEX &&
+        instr->src.reg < 8u &&
+        instr->src.index_reg < 8u &&
+        areg->valid[instr->src.reg]) {
+        uint32_t table_addr =
+            (uint32_t)(areg->target[instr->src.reg] +
+                       (int32_t)instr->src.displacement) &
+            0x00FFFFFFu;
+        state->table_addr[slot] = table_addr;
+        state->table_max_entries[slot] = 0u;
+        if (index_bound->valid[instr->src.index_reg] &&
+            index_bound->scale_bytes[instr->src.index_reg] == 4u) {
+            state->table_max_entries[slot] =
+                index_bound->max_entries[instr->src.index_reg];
+        }
+        state->table_valid[slot] = 1u;
+        state->direct_valid[slot] = 0u;
+        return;
+    }
+
+    static_a6_slot_pointer_clear(state, slot);
+}
+
+static int instr_stops_script_probe(const NgM68kInstr *instr) {
+    return instr &&
+           (instr->mnemonic == NG_M68K_RTS ||
+            instr->mnemonic == NG_M68K_RTE ||
+            instr->mnemonic == NG_M68K_RTR ||
+            instr->mnemonic == NG_M68K_JMP);
+}
+
+static void analyze_script_command_handler(const NgProgramRom *rom,
+                                           uint32_t handler,
+                                           uint8_t stream_reg,
+                                           NgScriptCommandInfo *out) {
+    if (!rom || !out || !is_probable_function_target(rom, handler)) {
+        return;
+    }
+
+    uint8_t callback_load_valid[8] = {0};
+    uint8_t callback_load_offset[8] = {0};
+    uint32_t pc = handler & 0x00FFFFFFu;
+    for (uint32_t i = 0u; i < 32u; ++i) {
+        NgM68kInstr instr;
+        if (!ng_m68k_decode(rom, pc, &instr) ||
+            instr.byte_length == 0u ||
+            !ng_m68k_validate(&instr) ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID ||
+            instr.mnemonic == NG_M68K_ILLEGAL ||
+            instr.mnemonic == NG_M68K_RESET) {
+            return;
+        }
+
+        if (instr.mnemonic == NG_M68K_MOVEA &&
+            instr.size == 4u &&
+            instr.src.mode == NG_M68K_EA_ADISP &&
+            instr.src.reg == stream_reg &&
+            instr.src.displacement >= 0 &&
+            instr.src.displacement <= 0xFF &&
+            instr.dst.mode == NG_M68K_EA_AREG &&
+            instr.dst.reg < 8u) {
+            if (instr.dst.reg == stream_reg) {
+                out->jump_valid = 1u;
+                out->jump_offset = (uint8_t)instr.src.displacement;
+            } else {
+                callback_load_valid[instr.dst.reg] = 1u;
+                callback_load_offset[instr.dst.reg] =
+                    (uint8_t)instr.src.displacement;
+            }
+        }
+
+        if (instr.mnemonic == NG_M68K_JSR &&
+            instr.src.mode == NG_M68K_EA_AIND &&
+            instr.src.reg < 8u &&
+            callback_load_valid[instr.src.reg]) {
+            out->callback_valid = 1u;
+            out->callback_offset = callback_load_offset[instr.src.reg];
+        }
+
+        if (instr.mnemonic == NG_M68K_ADDQ &&
+            instr.size == 4u &&
+            instr.dst.mode == NG_M68K_EA_AREG &&
+            instr.dst.reg == stream_reg &&
+            instr.immediate > 0u &&
+            instr.immediate <= 0xFFu) {
+            out->length_valid = 1u;
+            out->length = (uint8_t)instr.immediate;
+        }
+
+        if (instr.mnemonic == NG_M68K_ADDI &&
+            instr.size == 4u &&
+            instr.dst.mode == NG_M68K_EA_AREG &&
+            instr.dst.reg == stream_reg &&
+            instr.immediate > 0u &&
+            instr.immediate <= 0xFFu) {
+            out->length_valid = 1u;
+            out->length = (uint8_t)instr.immediate;
+        }
+
+        if (instr_stops_script_probe(&instr)) {
+            return;
+        }
+        if (UINT32_MAX - pc < instr.byte_length) {
+            return;
+        }
+        pc += instr.byte_length;
+    }
+}
+
+static int script_command_info_has_action(
+    const NgScriptCommandInfo *commands,
+    uint32_t command_count) {
+    if (!commands) {
+        return 0;
+    }
+    for (uint32_t i = 0; i < command_count; ++i) {
+        if (commands[i].callback_valid ||
+            commands[i].jump_valid ||
+            commands[i].length_valid) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int analyze_script_interpreter(const NgProgramRom *rom,
+                                      uint32_t addr,
+                                      NgScriptInterpreterInfo *out) {
+    if (!rom || !out || !is_probable_function_target(rom, addr)) {
+        return 0;
+    }
+
+    memset(out, 0, sizeof(*out));
+    out->command_mask = 0xFFu;
+
+    NgM68kStaticAregState areg;
+    NgM68kStaticAregState previous_areg;
+    NgM68kIndexRegBoundState index_bound;
+    ng_m68k_static_areg_reset(&areg);
+    ng_m68k_static_areg_reset(&previous_areg);
+    ng_m68k_index_reg_bound_reset(&index_bound);
+
+    NgM68kInstr previous;
+    int have_previous = 0;
+    uint32_t pc = addr & 0x00FFFFFFu;
+    for (uint32_t i = 0u; i < 96u; ++i) {
+        NgM68kInstr instr;
+        if (!ng_m68k_decode(rom, pc, &instr) ||
+            instr.byte_length == 0u ||
+            !ng_m68k_validate(&instr) ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID) {
+            return 0;
+        }
+
+        uint32_t slot = 0u;
+        if (instr.mnemonic == NG_M68K_MOVEA &&
+            instr.size == 4u &&
+            instr.dst.mode == NG_M68K_EA_AREG &&
+            instr.dst.reg < 8u &&
+            ea_is_a6_slot_local(&instr.src, &slot) &&
+            slot < NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS) {
+            out->slot = slot;
+            out->stream_reg = instr.dst.reg;
+            out->valid = 1u;
+        }
+
+        if (out->valid &&
+            instr.mnemonic == NG_M68K_ANDI &&
+            instr.dst.mode == NG_M68K_EA_DREG &&
+            instr.immediate <= 0xFFu) {
+            out->command_mask = instr.immediate;
+        }
+
+        if (have_previous) {
+            NgM68kJumpTablePattern pattern;
+            if (ng_m68k_match_static_index_jump_table(&previous,
+                                                      &instr,
+                                                      &previous_areg,
+                                                      &pattern)) {
+                ng_m68k_jump_table_apply_index_bound(&pattern, &index_bound);
+                if (out->valid &&
+                    pattern.entry_kind == NG_M68K_JUMP_TABLE_ENTRY_ABS32 &&
+                    pattern.entry_size == 4u &&
+                    pattern.max_entries != 0u &&
+                    pattern.max_entries <=
+                        NG_FUNCTION_DISCOVERY_SCRIPT_COMMANDS) {
+                    out->command_count = pattern.max_entries;
+                    for (uint32_t cmd = 0u; cmd < out->command_count; ++cmd) {
+                        uint32_t entry_addr =
+                            pattern.table_addr + cmd * pattern.entry_size;
+                        if (!ng_program_rom_addr_is_mapped(rom, entry_addr) ||
+                            !ng_program_rom_addr_is_mapped(rom,
+                                                           entry_addr + 3u)) {
+                            break;
+                        }
+                        uint32_t handler =
+                            ng_program_rom_read32(rom, entry_addr) &
+                            0x00FFFFFFu;
+                        analyze_script_command_handler(rom,
+                                                       handler,
+                                                       out->stream_reg,
+                                                       &out->commands[cmd]);
+                    }
+                    return script_command_info_has_action(out->commands,
+                                                          out->command_count);
+                }
+            }
+        }
+
+        if (instr_stops_script_probe(&instr)) {
+            return 0;
+        }
+
+        previous_areg = areg;
+        ng_m68k_static_areg_update(&areg, &instr);
+        ng_m68k_index_reg_bound_update(&index_bound, &instr);
+        if (UINT32_MAX - pc < instr.byte_length) {
+            return 0;
+        }
+        pc += instr.byte_length;
+        previous = instr;
+        have_previous = 1;
+    }
+    return 0;
+}
+
+static int script_stream_target_allowed(const NgProgramRom *rom,
+                                        uint32_t target) {
+    if (!is_probable_strict_heuristic_code_target(rom, target)) {
+        return 0;
+    }
+
+    uint32_t pc = target & 0x00FFFFFFu;
+    for (uint32_t i = 0u; i < 48u; ++i) {
+        NgM68kInstr instr;
+        if (!ng_m68k_decode(rom, pc, &instr) ||
+            instr.byte_length == 0u ||
+            !ng_m68k_validate(&instr) ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID ||
+            instr.mnemonic == NG_M68K_ILLEGAL ||
+            instr.mnemonic == NG_M68K_RESET ||
+            instr.mnemonic == NG_M68K_RTE ||
+            instr.mnemonic == NG_M68K_RTR ||
+            instr.mnemonic == NG_M68K_STOP ||
+            instr.mnemonic == NG_M68K_TRAP) {
+            return 0;
+        }
+        if (instr.mnemonic == NG_M68K_RTS) {
+            return 1;
+        }
+        if (instr.mnemonic == NG_M68K_JMP) {
+            return 0;
+        }
+        if (UINT32_MAX - pc < instr.byte_length) {
+            return 0;
+        }
+        pc += instr.byte_length;
+    }
+    return 0;
+}
+
+static int script_stream_addr_seen(const uint32_t *items,
+                                   uint32_t count,
+                                   uint32_t addr) {
+    for (uint32_t i = 0u; i < count; ++i) {
+        if (items[i] == addr) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void add_script_stream_callbacks_from_root(
+    const NgProgramRom *rom,
+    const NgScriptInterpreterInfo *info,
+    uint32_t root,
+    NgFunctionDiscovery *out) {
+    if (!rom || !info || !info->valid || !out ||
+        !ng_program_rom_addr_is_mapped(rom, root)) {
+        return;
+    }
+
+    uint32_t queue[NG_FUNCTION_DISCOVERY_SCRIPT_STREAM_QUEUE];
+    uint32_t visited[NG_FUNCTION_DISCOVERY_SCRIPT_STREAM_QUEUE];
+    uint32_t head = 0u;
+    uint32_t tail = 0u;
+    uint32_t visited_count = 0u;
+    queue[tail++] = root & 0x00FFFFFFu;
+
+    while (head < tail) {
+        uint32_t pc = queue[head++];
+        if (script_stream_addr_seen(visited, visited_count, pc)) {
+            continue;
+        }
+        if (visited_count < NG_FUNCTION_DISCOVERY_SCRIPT_STREAM_QUEUE) {
+            visited[visited_count++] = pc;
+        }
+
+        for (uint32_t step = 0u;
+             step < NG_FUNCTION_DISCOVERY_SCRIPT_STREAM_MAX_STEPS;
+             ++step) {
+            if (!ng_program_rom_addr_is_mapped(rom, pc)) {
+                break;
+            }
+            uint32_t raw_command = ng_program_rom_read8(rom, pc);
+            uint32_t command = raw_command & info->command_mask;
+            if (command >= info->command_count ||
+                command >= NG_FUNCTION_DISCOVERY_SCRIPT_COMMANDS) {
+                break;
+            }
+
+            const NgScriptCommandInfo *cmd = &info->commands[command];
+            if (cmd->callback_valid) {
+                uint32_t target_addr = pc + cmd->callback_offset;
+                if (target_addr >= pc &&
+                    ng_program_rom_addr_is_mapped(rom, target_addr) &&
+                    ng_program_rom_addr_is_mapped(rom, target_addr + 3u)) {
+                    uint32_t target =
+                        ng_program_rom_read32(rom, target_addr) &
+                        0x00FFFFFFu;
+                    if (script_stream_target_allowed(rom, target)) {
+                        ng_function_discovery_add(out, rom, target);
+                    }
+                }
+            }
+
+            if (cmd->jump_valid) {
+                uint32_t next_addr = pc + cmd->jump_offset;
+                if (next_addr >= pc &&
+                    ng_program_rom_addr_is_mapped(rom, next_addr) &&
+                    ng_program_rom_addr_is_mapped(rom, next_addr + 3u)) {
+                    uint32_t next =
+                        ng_program_rom_read32(rom, next_addr) &
+                        0x00FFFFFFu;
+                    if (ng_program_rom_addr_is_mapped(rom, next) &&
+                        tail < NG_FUNCTION_DISCOVERY_SCRIPT_STREAM_QUEUE &&
+                        !script_stream_addr_seen(queue, tail, next)) {
+                        queue[tail++] = next;
+                    }
+                }
+                break;
+            }
+
+            if (!cmd->length_valid || cmd->length == 0u ||
+                UINT32_MAX - pc < cmd->length) {
+                break;
+            }
+            pc += cmd->length;
+        }
+    }
+}
+
+static int script_stream_root_plausible(const NgProgramRom *rom,
+                                        const NgScriptInterpreterInfo *info,
+                                        uint32_t root) {
+    if (!rom || !info || !info->valid ||
+        !ng_program_rom_addr_is_mapped(rom, root)) {
+        return 0;
+    }
+    uint32_t command = ng_program_rom_read8(rom, root) & info->command_mask;
+    return command < info->command_count &&
+           command < NG_FUNCTION_DISCOVERY_SCRIPT_COMMANDS;
+}
+
+static void add_script_stream_callbacks_from_table(
+    const NgProgramRom *rom,
+    const NgScriptInterpreterInfo *info,
+    uint32_t table_addr,
+    uint32_t max_entries,
+    NgFunctionDiscovery *out) {
+    if (!rom || !info || !out ||
+        !ng_program_rom_addr_is_mapped(rom, table_addr)) {
+        return;
+    }
+
+    uint32_t limit = max_entries != 0u ?
+        max_entries : NG_FUNCTION_DISCOVERY_SCRIPT_TABLE_MAX_ENTRIES;
+    if (limit > NG_FUNCTION_DISCOVERY_SCRIPT_TABLE_MAX_ENTRIES) {
+        limit = NG_FUNCTION_DISCOVERY_SCRIPT_TABLE_MAX_ENTRIES;
+    }
+
+    int saw_root = 0;
+    for (uint32_t i = 0u; i < limit; ++i) {
+        uint32_t entry_addr = table_addr + i * 4u;
+        if (!ng_program_rom_addr_is_mapped(rom, entry_addr) ||
+            !ng_program_rom_addr_is_mapped(rom, entry_addr + 3u)) {
+            break;
+        }
+
+        uint32_t root =
+            ng_program_rom_read32(rom, entry_addr) & 0x00FFFFFFu;
+        if (!script_stream_root_plausible(rom, info, root)) {
+            if (saw_root) {
+                break;
+            }
+            continue;
+        }
+        saw_root = 1;
+        add_script_stream_callbacks_from_root(rom, info, root, out);
+    }
+}
+
+static void add_script_stream_callbacks_for_interpreter(
+    const NgProgramRom *rom,
+    uint32_t start_addr,
+    const NgStaticA6SlotPointerState *slots,
+    const NgScriptInterpreterInfo *info,
+    NgFunctionDiscovery *out) {
+    if (!rom || !slots || !info || !info->valid || !out ||
+        info->slot >= NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS) {
+        return;
+    }
+
+    uint32_t slot = info->slot;
+    if (slots->direct_valid[slot]) {
+        uint32_t root = slots->direct_target[slot] & 0x00FFFFFFu;
+        if (ng_program_rom_addr_is_banked(rom, root) &&
+            !ng_program_rom_addr_is_banked(rom, start_addr) &&
+            ng_program_rom_bank_count(rom) > 1u) {
+            uint32_t bank_count = ng_program_rom_bank_count(rom);
+            for (uint32_t bank = 0u; bank < bank_count; ++bank) {
+                if (!ng_program_rom_bank_is_configured(rom, bank)) {
+                    continue;
+                }
+                NgProgramRom bank_rom = *rom;
+                ng_program_rom_select_bank(&bank_rom, bank);
+                add_script_stream_callbacks_from_root(&bank_rom,
+                                                      info,
+                                                      root,
+                                                      out);
+            }
+        } else {
+            add_script_stream_callbacks_from_root(rom, info, root, out);
+        }
+    }
+
+    if (slots->table_valid[slot]) {
+        uint32_t table_addr = slots->table_addr[slot] & 0x00FFFFFFu;
+        if (ng_program_rom_addr_is_banked(rom, table_addr) &&
+            !ng_program_rom_addr_is_banked(rom, start_addr) &&
+            ng_program_rom_bank_count(rom) > 1u) {
+            uint32_t bank_count = ng_program_rom_bank_count(rom);
+            for (uint32_t bank = 0u; bank < bank_count; ++bank) {
+                if (!ng_program_rom_bank_is_configured(rom, bank)) {
+                    continue;
+                }
+                NgProgramRom bank_rom = *rom;
+                ng_program_rom_select_bank(&bank_rom, bank);
+                add_script_stream_callbacks_from_table(
+                    &bank_rom,
+                    info,
+                    table_addr,
+                    slots->table_max_entries[slot],
+                    out);
+            }
+        } else {
+            add_script_stream_callbacks_from_table(rom,
+                                                   info,
+                                                   table_addr,
+                                                   slots->table_max_entries[slot],
+                                                   out);
+        }
+    }
+}
+
+static int script_interpreter_info_same(const NgScriptInterpreterInfo *a,
+                                        const NgScriptInterpreterInfo *b) {
+    return a && b &&
+           a->valid == b->valid &&
+           a->slot == b->slot &&
+           a->stream_reg == b->stream_reg &&
+           a->command_count == b->command_count &&
+           a->command_mask == b->command_mask;
+}
+
+static uint32_t collect_script_interpreters(
+    const NgProgramRom *rom,
+    const NgFunctionDiscovery *discovery,
+    NgScriptInterpreterInfo *infos,
+    uint32_t max_infos) {
+    if (!rom || !discovery || !infos || max_infos == 0u) {
+        return 0u;
+    }
+
+    uint32_t count = 0u;
+    int have_scan_roots = 0;
+    for (uint32_t i = 0u; i < discovery->count; ++i) {
+        if (discovery->scan_roots[i]) {
+            have_scan_roots = 1;
+            break;
+        }
+    }
+    for (uint32_t i = 0u; i < discovery->count; ++i) {
+        if (have_scan_roots && !discovery->scan_roots[i]) {
+            continue;
+        }
+        NgProgramRom view;
+        discovery_entry_rom_view(rom, discovery, i, &view);
+        NgScriptInterpreterInfo info;
+        if (!analyze_script_interpreter(&view, discovery->addrs[i], &info)) {
+            continue;
+        }
+
+        int seen = 0;
+        for (uint32_t j = 0u; j < count; ++j) {
+            if (script_interpreter_info_same(&infos[j], &info)) {
+                seen = 1;
+                break;
+            }
+        }
+        if (seen) {
+            continue;
+        }
+        if (count >= max_infos) {
+            break;
+        }
+        infos[count++] = info;
+    }
+    return count;
+}
+
+static int instr_stops_script_slot_scan(const NgM68kInstr *instr) {
+    return instr &&
+           (instr->mnemonic == NG_M68K_BRA ||
+            instr->mnemonic == NG_M68K_JMP ||
+            instr->mnemonic == NG_M68K_RTS ||
+            instr->mnemonic == NG_M68K_RTE ||
+            instr->mnemonic == NG_M68K_RTR);
+}
+
+static void add_script_stream_callbacks_for_matching_slot(
+    const NgProgramRom *rom,
+    uint32_t start_addr,
+    uint32_t slot,
+    const NgStaticA6SlotPointerState *slots,
+    const NgScriptInterpreterInfo *infos,
+    uint32_t info_count,
+    NgFunctionDiscovery *out) {
+    if (!rom || !slots || !infos || !out) {
+        return;
+    }
+    for (uint32_t i = 0u; i < info_count; ++i) {
+        if (infos[i].valid && infos[i].slot == slot) {
+            add_script_stream_callbacks_for_interpreter(rom,
+                                                        start_addr,
+                                                        slots,
+                                                        &infos[i],
+                                                        out);
+        }
+    }
+}
+
+static void add_script_stream_callbacks_from_slot_scan(
+    const NgProgramRom *rom,
+    const NgScriptInterpreterInfo *infos,
+    uint32_t info_count,
+    uint32_t start_addr,
+    NgFunctionDiscovery *out) {
+    if (!rom || !infos || info_count == 0u || !out) {
+        return;
+    }
+
+    uint32_t pc = start_addr;
+    NgM68kStaticAregState areg;
+    NgM68kIndexRegBoundState index_bound;
+    NgStaticA6SlotPointerState slots;
+    ng_m68k_static_areg_reset(&areg);
+    ng_m68k_index_reg_bound_reset(&index_bound);
+    static_a6_slot_pointer_reset(&slots);
+
+    for (uint32_t i = 0u; i < NG_FUNCTION_DISCOVERY_MAX_INSTRUCTIONS; ++i) {
+        NgM68kInstr instr;
+        if (!ng_m68k_decode(rom, pc, &instr) ||
+            instr.byte_length == 0u ||
+            !ng_m68k_validate(&instr) ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID) {
+            return;
+        }
+
+        uint32_t slot = UINT32_MAX;
+        if (ea_is_a6_slot_local(&instr.dst, &slot) &&
+            slot < NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS) {
+            static_a6_slot_pointer_update(&slots,
+                                          &areg,
+                                          &index_bound,
+                                          &instr);
+            add_script_stream_callbacks_for_matching_slot(rom,
+                                                          start_addr,
+                                                          slot,
+                                                          &slots,
+                                                          infos,
+                                                          info_count,
+                                                          out);
+        }
+
+        if (instr_stops_script_slot_scan(&instr)) {
+            return;
+        }
+
+        ng_m68k_static_areg_update(&areg, &instr);
+        ng_m68k_index_reg_bound_update(&index_bound, &instr);
+        if (UINT32_MAX - pc < instr.byte_length) {
+            return;
+        }
+        pc += instr.byte_length;
+    }
+}
+
+static uint32_t add_script_stream_callbacks_from_discovery(
+    const NgProgramRom *rom,
+    const NgFunctionDiscovery *discovery,
+    NgFunctionDiscovery *out) {
+    if (!rom || !discovery || !out) {
+        return 0u;
+    }
+
+    NgScriptInterpreterInfo infos[16];
+    uint32_t info_count =
+        collect_script_interpreters(rom,
+                                    discovery,
+                                    infos,
+                                    (uint32_t)(sizeof(infos) /
+                                               sizeof(infos[0])));
+    if (info_count == 0u) {
+        return 0u;
+    }
+
+    uint32_t before = out->count;
+    int have_scan_roots = 0;
+    for (uint32_t i = 0u; i < discovery->count; ++i) {
+        if (discovery->scan_roots[i]) {
+            have_scan_roots = 1;
+            break;
+        }
+    }
+
+    for (uint32_t i = 0u; i < discovery->count; ++i) {
+        if (have_scan_roots && !discovery->scan_roots[i]) {
+            continue;
+        }
+        NgProgramRom view;
+        discovery_entry_rom_view(rom, discovery, i, &view);
+        add_script_stream_callbacks_from_slot_scan(&view,
+                                                   infos,
+                                                   info_count,
+                                                   discovery->addrs[i],
+                                                   out);
+    }
+
+    return out->count - before;
 }
 
 static int scan_state_has_static_targets(const NgM68kStaticAregState *areg,
@@ -2469,6 +3230,7 @@ int ng_function_discover_from_game_config_limited(
     }
 
     uint32_t cursor = 0u;
+    int script_stream_pass_done = 0;
     for (;;) {
         uint32_t index = UINT32_MAX;
         while (cursor < out->count) {
@@ -2488,6 +3250,15 @@ int ng_function_discover_from_game_config_limited(
             }
         }
         if (index == UINT32_MAX) {
+            if (!script_stream_pass_done) {
+                script_stream_pass_done = 1;
+                if (add_script_stream_callbacks_from_discovery(rom,
+                                                               out,
+                                                               out) != 0u) {
+                    cursor = 0u;
+                    continue;
+                }
+            }
             break;
         }
 

@@ -33,8 +33,9 @@ Latest checkpoint, 2026-07-02:
 - `./run.sh build`: passed with generated cart C sharding. After a recompiler
   source change that did not alter generated shard contents, the Metal Slug
   build now revalidates discovery/audit/emission in about 1m28s and recompiles
-  0 cart shards because unchanged emitted files keep their mtimes. An immediate
-  rebuild reused all cart/BIOS generated objects and completed in about 3.4
+  only stale cart shards because unchanged emitted files keep their mtimes.
+  An immediate rebuild reused all cart/BIOS generated objects and completed in
+  about 2.6
   seconds.
 - Phase 0.6 ngdevkit symbol-oracle tooling landed and live-ran against all
   18 ngdevkit examples after installing `m68k-neogeo-elf-*`. Summary written to
@@ -50,8 +51,8 @@ Latest checkpoint, 2026-07-02:
   stubs, routine tables, stage 2 object-vector callback expansion, and trace
   diagnostic tools are covered by tests.
 - Golden discovery set: 63,854 addresses.
-- Current discovery set: 83,565 addresses.
-- Current discovery additions over golden: 19,711 addresses.
+- Current discovery set: 83,575 addresses.
+- Current discovery additions over golden: 19,721 addresses.
 - Dispatch audit gaps: not worse (`missing_direct=0`, `computed=0`,
   `table_missing=0`).
 - Discovery candidate cap: 131,072 addresses.
@@ -111,7 +112,7 @@ Latest checkpoint, 2026-07-02:
   `$09A8BE` from the `$09B8B2` store without a residual seed.
   Static ABS32 jump tables now derive bounded entry counts from masked
   D-register indexes, for example `ANDI #mask,Dn; LSL #2,Dn; MOVEA.L
-  (table,Dn.W),An; JMP (An)`. This discovers all 16 entries in the
+  (table,Dn.W),An; JMP (An)`. This discovers the guarded entries in the
   `$078FC0` command table, including `$079054`, without widening every
   ABS32 table or adding a Metal Slug seed. Compare/BCS guards tighten
   masked bounds, and strict validation for newly exposed high slots prevents
@@ -119,6 +120,14 @@ Latest checkpoint, 2026-07-02:
   from becoming generated code. The audit also recognizes
   the resulting script-stream callback JSR at `$079028` as a configured
   dynamic script callback site instead of a new manual runtime entry.
+  Script stream discovery now also recognizes bounded bytecode interpreters
+  that load a stream pointer from an object slot, dispatch through a command
+  table, and invoke callback commands with `MOVEA.L disp(A0),An; JSR (An)`.
+  The pass follows static stream-root tables stored into the interpreter slot,
+  parses reachable bytecode records, and adds only finite callback routines.
+  This covers the `$081808` miss through the `$2E3D68` stream-root table and
+  `$079020` callback command handler, without adding `$081808` as a residual
+  seed.
   The `$07815A` family now lives in
   generated `games/mslug.mined_record_tables.toml` with precise
   `auto:bank:*:START-END` ranges instead of a broad hand-owned `auto:bank:*`

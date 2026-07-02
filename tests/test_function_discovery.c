@@ -2209,6 +2209,64 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x220u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x41F9u);       /* LEA $000100,A0 */
+        write32(&rom, 0x02u, 0x00000100u);
+        write16(&rom, 0x06u, 0x2D70u);       /* MOVE.L (0,A0,D0.W),$90(A6) */
+        write16(&rom, 0x08u, 0x0000u);
+        write16(&rom, 0x0Au, 0x0090u);
+        write16(&rom, 0x0Cu, 0x4E75u);
+
+        write16(&rom, 0x40u, 0x206Eu);       /* MOVEA.L $90(A6),A0 */
+        write16(&rom, 0x42u, 0x0090u);
+        write16(&rom, 0x44u, 0x43FAu);       /* LEA command table,A1 */
+        write16(&rom, 0x46u, 0x003Au);
+        write16(&rom, 0x48u, 0x1010u);       /* MOVE.B (A0),D0 */
+        write16(&rom, 0x4Au, 0x0C00u);       /* CMPI.B #$0B,D0 */
+        write16(&rom, 0x4Cu, 0x000Bu);
+        write16(&rom, 0x4Eu, 0x6500u);       /* BCS to masked index */
+        write16(&rom, 0x50u, 0x0004u);
+        write16(&rom, 0x52u, 0x4E71u);
+        write16(&rom, 0x54u, 0x0280u);       /* ANDI.L #$0F,D0 */
+        write32(&rom, 0x56u, 0x0000000Fu);
+        write16(&rom, 0x5Au, 0xE588u);       /* LSL.L #2,D0 */
+        write16(&rom, 0x5Cu, 0x2471u);       /* MOVEA.L (0,A1,D0.W),A2 */
+        write16(&rom, 0x5Eu, 0x0000u);
+        write16(&rom, 0x60u, 0x4ED2u);       /* JMP (A2) */
+
+        for (uint32_t i = 0; i < 11u; ++i) {
+            write32(&rom, 0x80u + i * 4u, i == 8u ? 0x000000C0u : 0x000000D0u);
+        }
+        write16(&rom, 0xC0u, 0x2268u);       /* MOVEA.L $2(A0),A1 */
+        write16(&rom, 0xC2u, 0x0002u);
+        write16(&rom, 0xC4u, 0x4E91u);       /* JSR (A1) */
+        write16(&rom, 0xC6u, 0x5C88u);       /* ADDQ.L #6,A0 */
+        write16(&rom, 0xC8u, 0x2D48u);       /* MOVE.L A0,$90(A6) */
+        write16(&rom, 0xCAu, 0x0090u);
+        write16(&rom, 0xCCu, 0x4E75u);
+        write16(&rom, 0xD0u, 0x4E75u);
+
+        write32(&rom, 0x100u, 0x00000180u);  /* script stream table */
+        write32(&rom, 0x104u, 0xFFFFFFFFu);
+        write16(&rom, 0x180u, 0x0800u);      /* callback command */
+        write32(&rom, 0x182u, 0x000001C0u);
+        write16(&rom, 0x188u, 0x0B00u);
+        write16(&rom, 0x1C0u, 0x4E75u);
+
+        const uint32_t seeds[] = {0x00000000u, 0x00000040u};
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    seeds,
+                                                    2u,
+                                                    NULL,
+                                                    &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x1C0u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         const uint32_t seed_count = NG_FUNCTION_DISCOVERY_MAX_CANDIDATES + 1u;
         NgProgramRom rom = make_rom(seed_count * 2u);
         CHECK(rom.data != NULL);
