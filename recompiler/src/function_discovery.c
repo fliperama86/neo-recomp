@@ -630,6 +630,26 @@ static void add_tagged_abs32_stream_targets(const NgProgramRom *rom,
     }
 }
 
+static void add_record_abs32_target(const NgProgramRom *rom,
+                                    uint32_t record_addr,
+                                    const NgGameConfigTableCall *call,
+                                    NgFunctionDiscovery *out) {
+    if (!rom || !call || !out) {
+        return;
+    }
+
+    uint32_t target_addr = record_addr + call->target_offset;
+    if (!ng_program_rom_addr_is_mapped(rom, target_addr) ||
+        !ng_program_rom_addr_is_mapped(rom, target_addr + 3u)) {
+        return;
+    }
+
+    uint32_t target = ng_program_rom_read32(rom, target_addr);
+    if (table_call_target_allowed(rom, call, target)) {
+        ng_function_discovery_add(out, rom, target);
+    }
+}
+
 static void add_config_table_call_targets(const NgProgramRom *rom,
                                           const NgGameConfig *config,
                                           const NgM68kInstr *instr,
@@ -667,6 +687,9 @@ static void add_config_table_call_targets(const NgProgramRom *rom,
             break;
         case NG_GAME_CONFIG_TABLE_CALL_TAGGED_ABS32:
             add_tagged_abs32_stream_targets(rom, table_addr, call, out);
+            break;
+        case NG_GAME_CONFIG_TABLE_CALL_RECORD_ABS32:
+            add_record_abs32_target(rom, table_addr, call, out);
             break;
         }
     }

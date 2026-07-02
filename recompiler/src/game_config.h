@@ -43,6 +43,7 @@ typedef struct NgGameConfigJumpTable {
 typedef enum NgGameConfigTableCallFormat {
     NG_GAME_CONFIG_TABLE_CALL_ABS32_SPARSE,
     NG_GAME_CONFIG_TABLE_CALL_TAGGED_ABS32,
+    NG_GAME_CONFIG_TABLE_CALL_RECORD_ABS32,
 } NgGameConfigTableCallFormat;
 
 typedef struct NgGameConfigTableCall {

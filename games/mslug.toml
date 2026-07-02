@@ -49,6 +49,15 @@ table_end = 0x300000
 target_start = 0x060000
 target_end = 0x073000
 max_entries = 16
+[[table_call]]
+helper = 0x077C7E
+table_reg = "A1"
+format = "record_abs32"
+target_offset = 0x0E
+table_start = 0x200000
+table_end = 0x300000
+target_start = 0x070000
+target_end = 0x080000
 [[record_format]]
 name = "mission1_tagged_action_record"
 tag = 0x0800

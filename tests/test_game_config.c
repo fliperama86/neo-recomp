@@ -250,6 +250,16 @@ int main(void) {
             "stride = 2\n"
             "max_entries = 24\n"
             "\n"
+            "[[table_call]]\n"
+            "helper = 0x077C7E\n"
+            "table_reg = \"A1\"\n"
+            "format = \"record_abs32\"\n"
+            "target_offset = 0x0E\n"
+            "target_start = 0x000700\n"
+            "target_end = 0x000800\n"
+            "table_start = 0x002000\n"
+            "table_end = 0x003000\n"
+            "\n"
             "[[state_table]]\n"
             "root = 0x0002A0\n"
             "table_start = 0x000280\n"
@@ -349,7 +359,7 @@ int main(void) {
     CHECK(config.jump_tables[4].end == 0x000194u);
     CHECK(config.jump_tables[4].stride == 2u);
     CHECK(config.jump_tables[4].format == NG_GAME_CONFIG_JUMP_TABLE_PCREL16);
-    CHECK(config.table_call_count == 2u);
+    CHECK(config.table_call_count == 3u);
     CHECK(config.table_calls[0].helper == 0x028CD4u);
     CHECK(config.table_calls[0].table_reg == 0u);
     CHECK(config.table_calls[0].format ==
@@ -362,14 +372,23 @@ int main(void) {
     CHECK(config.table_calls[0].table_end == 0x000300u);
     CHECK(config.table_calls[0].stride == 2u);
     CHECK(config.table_calls[0].max_entries == 24u);
-    CHECK(config.table_calls[1].helper == 0x000772u);
-    CHECK(config.table_calls[1].table_reg == 0u);
+    CHECK(config.table_calls[1].helper == 0x077C7Eu);
+    CHECK(config.table_calls[1].table_reg == 1u);
     CHECK(config.table_calls[1].format ==
+          NG_GAME_CONFIG_TABLE_CALL_RECORD_ABS32);
+    CHECK(config.table_calls[1].target_offset == 0x0Eu);
+    CHECK(config.table_calls[1].target_start == 0x000700u);
+    CHECK(config.table_calls[1].target_end == 0x000800u);
+    CHECK(config.table_calls[1].table_start == 0x002000u);
+    CHECK(config.table_calls[1].table_end == 0x003000u);
+    CHECK(config.table_calls[2].helper == 0x000772u);
+    CHECK(config.table_calls[2].table_reg == 0u);
+    CHECK(config.table_calls[2].format ==
           NG_GAME_CONFIG_TABLE_CALL_ABS32_SPARSE);
-    CHECK(config.table_calls[1].sentinel == 0xFFFFFFFFu);
-    CHECK(config.table_calls[1].table_start == 0x000100u);
-    CHECK(config.table_calls[1].table_end == 0x000200u);
-    CHECK(config.table_calls[1].max_entries == 12u);
+    CHECK(config.table_calls[2].sentinel == 0xFFFFFFFFu);
+    CHECK(config.table_calls[2].table_start == 0x000100u);
+    CHECK(config.table_calls[2].table_end == 0x000200u);
+    CHECK(config.table_calls[2].max_entries == 12u);
     CHECK(config.state_table_count == 2u);
     CHECK(config.state_tables[0].root == 0x0002A0u);
     CHECK(config.state_tables[0].table_start == 0x000280u);

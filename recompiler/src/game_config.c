@@ -601,6 +601,9 @@ static void parse_table_call_format(const char *value,
     } else if (strcmp(token, "tagged_abs32") == 0 ||
                strcmp(token, "tagged_long") == 0) {
         call->format = NG_GAME_CONFIG_TABLE_CALL_TAGGED_ABS32;
+    } else if (strcmp(token, "record_abs32") == 0 ||
+               strcmp(token, "record_long") == 0) {
+        call->format = NG_GAME_CONFIG_TABLE_CALL_RECORD_ABS32;
     }
 }
 

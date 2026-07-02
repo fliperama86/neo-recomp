@@ -259,6 +259,48 @@ int main(void) {
     {
         NgProgramRom rom = make_rom(0x180u);
         CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x43F9u);       /* LEA $000040,A1 */
+        write32(&rom, 0x02u, 0x00000040u);
+        write16(&rom, 0x06u, 0x4EB9u);       /* JSR record helper */
+        write32(&rom, 0x08u, 0x000000C0u);
+        write16(&rom, 0x0Cu, 0x4E75u);       /* caller continuation */
+        write32(&rom, 0x4Eu, 0x00000080u);   /* record callback at +$0E */
+        write16(&rom, 0x80u, 0x4E75u);
+        write16(&rom, 0xC0u, 0x4E75u);       /* record helper */
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.table_call_count = 1u;
+        config.table_calls[0].helper = 0x000000C0u;
+        config.table_calls[0].table_start = 0x40u;
+        config.table_calls[0].table_end = 0x60u;
+        config.table_calls[0].table_reg = 1u;
+        config.table_calls[0].target_offset = 0x0Eu;
+        config.table_calls[0].target_start = 0x80u;
+        config.table_calls[0].target_end = 0xA0u;
+        config.table_calls[0].format =
+            NG_GAME_CONFIG_TABLE_CALL_RECORD_ABS32;
+
+        const uint32_t seeds[] = {0x00000000u};
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    seeds,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x00u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x06u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x0Cu));
+        CHECK(ng_function_discovery_contains(&discovery, 0x80u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xC0u));
+        CHECK(discovery.count == 5u);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x180u);
+        CHECK(rom.data != NULL);
         ng_program_rom_set_address_map(&rom,
                                        0x000000u,
                                        0x100u,
