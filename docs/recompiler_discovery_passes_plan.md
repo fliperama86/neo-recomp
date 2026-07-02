@@ -1,6 +1,6 @@
 # Recompiler Discovery Passes Plan
 
-Last updated: 2026-07-01
+Last updated: 2026-07-02
 
 > Revised after a Codex review pass. Corrections are tagged inline with
 > "(review)": the discovery model emits instruction labels (not just function
@@ -26,7 +26,7 @@ coverage checkpoint changes.
 | Pass 5, diagnostics / residual split | **Done, miner added** | Manual residual seeds moved from `games/mslug.toml` into `games/mslug.residual.toml` via `[game].discovery_files`; golden discovery is unchanged. `--emit-dispatch-suggestions` emits generic TOML suggestions for audit gaps. `scripts/generate_residual_toml.py` regenerates residual TOML from set differences. Runtime dispatch misses can now be logged as JSONL via `ng_neogeo_set_dispatch_miss_log_path()` or `NG_NEO_DISPATCH_MISS_LOG` and converted to TOML suggestions with `scripts/runtime_miss_suggestions.py`. Execution PC traces can be captured with `scripts/mame_trace_capture.py`, diffed against discovery sets with `scripts/trace_pc_residual.py`, and covered by `test_trace_tools`. `scripts/mine_record_tables.py` now mines fixed-stride callback-record clusters from P-ROM data using discovery entry roots as anchors, emits precise `auto:START-END` and `auto:bank:*:START-END` TOML, and is covered by `test_record_table_miner`. |
 | Generated-C build scalability | **Done** | `neo-recomp --emit-c-shards <dir> --emit-c-shard-size <count>` now writes a lightweight dispatch TU with a route table plus shard TUs with local function bodies. The Metal Slug SDL build uses 42 cart shards by default (`NG_MSLUG_C_SHARD_SIZE=2048`) and compiles stale shards in parallel (`NG_MSLUG_C_SHARD_JOBS`). Discovery/audit scans use explicit scan roots plus continuation roots instead of rescanning every instruction label, and shard emission preserves mtimes for unchanged files. Cached rebuilds avoid the old monolithic 335 MB cart C compile. |
 
-Latest checkpoint, 2026-07-01:
+Latest checkpoint, 2026-07-02:
 
 - `ctest --test-dir build --output-on-failure`: 21/21 passed.
 - `scripts/check_mslug_discovery_golden.sh`: passed.
@@ -34,7 +34,7 @@ Latest checkpoint, 2026-07-01:
   source change that did not alter generated shard contents, the Metal Slug
   build now revalidates discovery/audit/emission in about 1m28s and recompiles
   0 cart shards because unchanged emitted files keep their mtimes. An immediate
-  rebuild reused all cart/BIOS generated objects and completed in about 2.6
+  rebuild reused all cart/BIOS generated objects and completed in about 3.4
   seconds.
 - Phase 0.6 ngdevkit symbol-oracle tooling landed and live-ran against all
   18 ngdevkit examples after installing `m68k-neogeo-elf-*`. Summary written to
@@ -50,8 +50,8 @@ Latest checkpoint, 2026-07-01:
   stubs, routine tables, stage 2 object-vector callback expansion, and trace
   diagnostic tools are covered by tests.
 - Golden discovery set: 63,854 addresses.
-- Current discovery set: 83,474 addresses.
-- Current discovery additions over golden: 19,620 addresses.
+- Current discovery set: 83,565 addresses.
+- Current discovery additions over golden: 19,711 addresses.
 - Dispatch audit gaps: not worse (`missing_direct=0`, `computed=0`,
   `table_missing=0`).
 - Discovery candidate cap: 131,072 addresses.
@@ -109,6 +109,16 @@ Latest checkpoint, 2026-07-01:
   or nested spawn wrapper returns an object pointer in `A0` and code stores an
   immediate state callback into an allowed object state slot, covering
   `$09A8BE` from the `$09B8B2` store without a residual seed.
+  Static ABS32 jump tables now derive bounded entry counts from masked
+  D-register indexes, for example `ANDI #mask,Dn; LSL #2,Dn; MOVEA.L
+  (table,Dn.W),An; JMP (An)`. This discovers all 16 entries in the
+  `$078FC0` command table, including `$079054`, without widening every
+  ABS32 table or adding a Metal Slug seed. Compare/BCS guards tighten
+  masked bounds, and strict validation for newly exposed high slots prevents
+  data-shaped entries such as the banked `$2CD606` slot past its `#$9` guard
+  from becoming generated code. The audit also recognizes
+  the resulting script-stream callback JSR at `$079028` as a configured
+  dynamic script callback site instead of a new manual runtime entry.
   The `$07815A` family now lives in
   generated `games/mslug.mined_record_tables.toml` with precise
   `auto:bank:*:START-END` ranges instead of a broad hand-owned `auto:bank:*`

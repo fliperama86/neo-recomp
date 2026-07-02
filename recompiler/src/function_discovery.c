@@ -15,6 +15,8 @@ static int is_probable_function_target(const NgProgramRom *rom,
                                        uint32_t addr);
 static int is_probable_heuristic_code_target(const NgProgramRom *rom,
                                              uint32_t addr);
+static int is_probable_strict_heuristic_code_target(const NgProgramRom *rom,
+                                                    uint32_t addr);
 static int table_call_target_allowed(const NgProgramRom *rom,
                                      const NgGameConfigTableCall *call,
                                      uint32_t target);
@@ -253,7 +255,13 @@ static void add_jump_table_targets(const NgProgramRom *rom,
         return;
     }
 
-    for (uint32_t i = 0; i < NG_FUNCTION_DISCOVERY_TABLE_ENTRIES; ++i) {
+    uint32_t max_entries = pattern->max_entries != 0u ?
+        pattern->max_entries : NG_FUNCTION_DISCOVERY_TABLE_ENTRIES;
+    if (max_entries > NG_FUNCTION_DISCOVERY_ABS32_TABLE_MAX_ENTRIES) {
+        max_entries = NG_FUNCTION_DISCOVERY_ABS32_TABLE_MAX_ENTRIES;
+    }
+
+    for (uint32_t i = 0; i < max_entries; ++i) {
         uint32_t entry_addr = pattern->table_addr + i * pattern->entry_size;
         if (!ng_program_rom_addr_is_mapped(rom, entry_addr) ||
             !ng_program_rom_addr_is_mapped(rom, entry_addr + 3u)) {
@@ -261,7 +269,16 @@ static void add_jump_table_targets(const NgProgramRom *rom,
         }
 
         uint32_t target = ng_program_rom_read32(rom, entry_addr);
-        if (!is_probable_heuristic_code_target(rom, target)) {
+        int strict_extra_entry =
+            pattern->max_entries != 0u &&
+            i >= NG_FUNCTION_DISCOVERY_TABLE_ENTRIES;
+        int target_allowed = strict_extra_entry ?
+            is_probable_strict_heuristic_code_target(rom, target) :
+            is_probable_heuristic_code_target(rom, target);
+        if (!target_allowed) {
+            if (pattern->max_entries != 0u) {
+                break;
+            }
             continue;
         }
         ng_function_discovery_add(out, rom, target);
@@ -375,8 +392,9 @@ static int heuristic_target_has_code_shape(const NgM68kInstr *instr) {
     }
 }
 
-static int is_probable_heuristic_code_target(const NgProgramRom *rom,
-                                             uint32_t addr) {
+static int is_probable_heuristic_code_target_impl(const NgProgramRom *rom,
+                                                  uint32_t addr,
+                                                  int allow_long_fallthrough) {
     if (!is_probable_function_target(rom, addr)) {
         return 0;
     }
@@ -415,7 +433,17 @@ static int is_probable_heuristic_code_target(const NgProgramRom *rom,
         pc += instr.byte_length;
     }
 
-    return 1;
+    return allow_long_fallthrough;
+}
+
+static int is_probable_heuristic_code_target(const NgProgramRom *rom,
+                                             uint32_t addr) {
+    return is_probable_heuristic_code_target_impl(rom, addr, 1);
+}
+
+static int is_probable_strict_heuristic_code_target(const NgProgramRom *rom,
+                                                    uint32_t addr) {
+    return is_probable_heuristic_code_target_impl(rom, addr, 0);
 }
 
 static void add_sparse_abs32_table_targets(const NgProgramRom *rom,
@@ -2168,11 +2196,13 @@ static void scan_function_candidate(const NgProgramRom *rom,
     int have_previous = 0;
     NgM68kStaticAregState areg;
     NgM68kStaticAregState previous_areg;
+    NgM68kIndexRegBoundState index_bound;
     uint8_t dreg_valid[8];
     uint32_t dreg_target[8];
     uint8_t spawn_result_areg_valid[8];
     ng_m68k_static_areg_reset(&areg);
     ng_m68k_static_areg_reset(&previous_areg);
+    ng_m68k_index_reg_bound_reset(&index_bound);
     static_dreg_reset(dreg_valid);
     memset(dreg_target, 0, sizeof(dreg_target));
     memset(spawn_result_areg_valid, 0, sizeof(spawn_result_areg_valid));
@@ -2197,15 +2227,18 @@ static void scan_function_candidate(const NgProgramRom *rom,
         if (have_previous) {
             NgM68kJumpTablePattern pattern;
             if (ng_m68k_match_pc_index_jump_table(&previous, &instr, &pattern)) {
+                ng_m68k_jump_table_apply_index_bound(&pattern, &index_bound);
                 add_jump_table_targets(rom, &pattern, out);
             } else if (ng_m68k_match_static_index_jump_table(&previous,
                                                              &instr,
                                                              &previous_areg,
                                                              &pattern)) {
+                ng_m68k_jump_table_apply_index_bound(&pattern, &index_bound);
                 add_jump_table_targets(rom, &pattern, out);
             } else if (ng_m68k_match_static_index_branch_table(&instr,
                                                                &areg,
                                                                &pattern)) {
+                ng_m68k_jump_table_apply_index_bound(&pattern, &index_bound);
                 add_jump_table_targets(rom, &pattern, out);
             } else {
                 uint32_t target = 0;
@@ -2227,6 +2260,8 @@ static void scan_function_candidate(const NgProgramRom *rom,
                                                        &instr,
                                                        &previous_areg,
                                                        &pattern)) {
+                    ng_m68k_jump_table_apply_index_bound(&pattern,
+                                                         &index_bound);
                     add_jump_table_targets(rom, &pattern, out);
                 } else {
                     add_abs_pointer_indirect_targets(rom,
@@ -2308,6 +2343,7 @@ static void scan_function_candidate(const NgProgramRom *rom,
                                    dreg_target,
                                    &instr);
         static_dreg_update(dreg_valid, dreg_target, &instr);
+        ng_m68k_index_reg_bound_update(&index_bound, &instr);
 
         if (instr.mnemonic == NG_M68K_JSR || instr.mnemonic == NG_M68K_BSR) {
             memset(spawn_result_areg_valid,

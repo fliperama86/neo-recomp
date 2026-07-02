@@ -533,6 +533,66 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x180u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x227Cu);       /* MOVEA.L #$40,A1 */
+        write32(&rom, 0x02u, 0x00000040u);
+        write16(&rom, 0x06u, 0x1010u);       /* MOVE.B (A0),D0 */
+        write16(&rom, 0x08u, 0x0280u);       /* ANDI.L #$F,D0 */
+        write32(&rom, 0x0Au, 0x0000000Fu);
+        write16(&rom, 0x0Eu, 0xE588u);       /* LSL.L #2,D0 */
+        write16(&rom, 0x10u, 0x2471u);       /* MOVEA.L ($0,A1,D0.W),A2 */
+        write16(&rom, 0x12u, 0x0000u);
+        write16(&rom, 0x14u, 0x4ED2u);       /* JMP (A2) */
+        for (uint32_t i = 0; i < 16u; ++i) {
+            uint32_t target = 0x100u + i * 4u;
+            write32(&rom, 0x40u + i * 4u, target);
+            write16(&rom, target, 0x4E75u);
+        }
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x100u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x11Cu));
+        CHECK(ng_function_discovery_contains(&discovery, 0x13Cu));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x180u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x227Cu);       /* MOVEA.L #$40,A1 */
+        write32(&rom, 0x02u, 0x00000040u);
+        write16(&rom, 0x06u, 0x0C00u);       /* CMPI.B #$9,D0 */
+        write16(&rom, 0x08u, 0x0009u);
+        write16(&rom, 0x0Au, 0x6504u);       /* BCS bounded */
+        write16(&rom, 0x0Cu, 0x4E71u);       /* assertion padding */
+        write16(&rom, 0x0Eu, 0x4E4Fu);       /* TRAP #$F */
+        write16(&rom, 0x10u, 0x0240u);       /* ANDI.W #$F,D0 */
+        write16(&rom, 0x12u, 0x000Fu);
+        write16(&rom, 0x14u, 0xE548u);       /* LSL.W #2,D0 */
+        write16(&rom, 0x16u, 0x2471u);       /* MOVEA.L ($0,A1,D0.W),A2 */
+        write16(&rom, 0x18u, 0x0000u);
+        write16(&rom, 0x1Au, 0x4ED2u);       /* JMP (A2) */
+        for (uint32_t i = 0; i < 9u; ++i) {
+            uint32_t target = 0x100u + i * 4u;
+            write32(&rom, 0x40u + i * 4u, target);
+            write16(&rom, target, 0x4E75u);
+        }
+        write32(&rom, 0x40u + 9u * 4u, 0x00000140u);
+        write16(&rom, 0x140u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x100u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x120u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x140u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0xD0u);
         CHECK(rom.data != NULL);
 

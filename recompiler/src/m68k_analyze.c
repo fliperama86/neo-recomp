@@ -4,6 +4,8 @@
 
 #include <string.h>
 
+#define NG_M68K_INDEX_BOUND_MAX_ENTRIES 64u
+
 static int has_static_code_target(const NgM68kInstr *instr) {
     if (!instr) {
         return 0;
@@ -128,6 +130,240 @@ void ng_m68k_static_areg_update(NgM68kStaticAregState *state,
     if (instr_writes_areg(instr, &reg) && reg < 8u) {
         state->valid[reg] = 0u;
     }
+}
+
+void ng_m68k_index_reg_bound_reset(NgM68kIndexRegBoundState *state) {
+    if (state) {
+        memset(state, 0, sizeof(*state));
+    }
+}
+
+static void index_reg_bound_clear(NgM68kIndexRegBoundState *state,
+                                  uint8_t reg) {
+    if (!state || reg >= 8u) {
+        return;
+    }
+    state->valid[reg] = 0u;
+    state->max_entries[reg] = 0u;
+    state->scale_bytes[reg] = 0u;
+    state->guarded_valid[reg] = 0u;
+    state->guarded_max_entries[reg] = 0u;
+    state->pending_cmp_valid[reg] = 0u;
+    state->pending_cmp_entries[reg] = 0u;
+}
+
+static int instr_is_dreg_self_add(const NgM68kInstr *instr, uint8_t reg) {
+    return instr &&
+           instr->mnemonic == NG_M68K_ADD &&
+           (instr->size == 2u || instr->size == 4u) &&
+           instr->src.mode == NG_M68K_EA_DREG &&
+           instr->dst.mode == NG_M68K_EA_DREG &&
+           instr->src.reg == reg &&
+           instr->dst.reg == reg;
+}
+
+static int index_reg_bound_scale(NgM68kIndexRegBoundState *state,
+                                 uint8_t reg,
+                                 uint32_t factor) {
+    if (!state || reg >= 8u || factor == 0u || !state->valid[reg]) {
+        return 0;
+    }
+    uint32_t scale = state->scale_bytes[reg];
+    if (scale == 0u || scale > UINT32_MAX / factor) {
+        index_reg_bound_clear(state, reg);
+        return 0;
+    }
+    scale *= factor;
+    if (scale > 16u) {
+        index_reg_bound_clear(state, reg);
+        return 0;
+    }
+    state->scale_bytes[reg] = (uint8_t)scale;
+    return 1;
+}
+
+static int instr_writes_dreg(const NgM68kInstr *instr, uint8_t *reg) {
+    if (!instr || !reg) {
+        return 0;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_DREG && instr->dst.reg < 8u) {
+        switch (instr->mnemonic) {
+        case NG_M68K_MOVE:
+        case NG_M68K_MOVEQ:
+        case NG_M68K_ADD:
+        case NG_M68K_ADDQ:
+        case NG_M68K_ADDX:
+        case NG_M68K_SUB:
+        case NG_M68K_SUBQ:
+        case NG_M68K_SUBX:
+        case NG_M68K_OR:
+        case NG_M68K_AND:
+        case NG_M68K_EOR:
+        case NG_M68K_MULU:
+        case NG_M68K_MULS:
+        case NG_M68K_DIVU:
+        case NG_M68K_DIVS:
+        case NG_M68K_CLR:
+        case NG_M68K_NEG:
+        case NG_M68K_NEGX:
+        case NG_M68K_NBCD:
+        case NG_M68K_NOT:
+        case NG_M68K_EXT:
+        case NG_M68K_SWAP:
+        case NG_M68K_ASL:
+        case NG_M68K_ASR:
+        case NG_M68K_LSL:
+        case NG_M68K_LSR:
+        case NG_M68K_ROXL:
+        case NG_M68K_ROXR:
+        case NG_M68K_ROL:
+        case NG_M68K_ROR:
+        case NG_M68K_ADDI:
+        case NG_M68K_SUBI:
+        case NG_M68K_ORI:
+        case NG_M68K_ANDI:
+        case NG_M68K_EORI:
+            *reg = instr->dst.reg;
+            return 1;
+        default:
+            break;
+        }
+    }
+
+    return 0;
+}
+
+static int instr_cmpi_immediate_to_dreg(const NgM68kInstr *instr,
+                                        uint8_t *reg,
+                                        uint32_t *bound) {
+    if (!instr || !reg || !bound ||
+        instr->mnemonic != NG_M68K_CMPI ||
+        instr->dst.mode != NG_M68K_EA_DREG ||
+        instr->dst.reg >= 8u ||
+        instr->immediate == 0u ||
+        instr->immediate > NG_M68K_INDEX_BOUND_MAX_ENTRIES) {
+        return 0;
+    }
+    *reg = instr->dst.reg;
+    *bound = instr->immediate;
+    return 1;
+}
+
+static void index_reg_bound_note_cmp(NgM68kIndexRegBoundState *state,
+                                     uint8_t reg,
+                                     uint32_t bound) {
+    if (!state || reg >= 8u || bound == 0u ||
+        bound > NG_M68K_INDEX_BOUND_MAX_ENTRIES) {
+        return;
+    }
+    state->pending_cmp_valid[reg] = 1u;
+    state->pending_cmp_entries[reg] = bound;
+}
+
+static void index_reg_bound_promote_bcs_guard(
+    NgM68kIndexRegBoundState *state,
+    const NgM68kInstr *instr) {
+    if (!state || !instr ||
+        instr->mnemonic != NG_M68K_BCC ||
+        instr->condition != 5u) {
+        for (uint32_t reg = 0; reg < 8u; ++reg) {
+            state->pending_cmp_valid[reg] = 0u;
+            state->pending_cmp_entries[reg] = 0u;
+        }
+        return;
+    }
+
+    for (uint32_t reg = 0; reg < 8u; ++reg) {
+        if (state->pending_cmp_valid[reg]) {
+            state->guarded_valid[reg] = 1u;
+            state->guarded_max_entries[reg] =
+                state->pending_cmp_entries[reg];
+        }
+        state->pending_cmp_valid[reg] = 0u;
+        state->pending_cmp_entries[reg] = 0u;
+    }
+}
+
+void ng_m68k_index_reg_bound_update(NgM68kIndexRegBoundState *state,
+                                    const NgM68kInstr *instr) {
+    if (!state || !instr) {
+        return;
+    }
+
+    if (instr->mnemonic == NG_M68K_JSR ||
+        instr->mnemonic == NG_M68K_BSR) {
+        ng_m68k_index_reg_bound_reset(state);
+        return;
+    }
+
+    uint8_t cmp_reg = 0;
+    uint32_t cmp_bound = 0;
+    if (instr_cmpi_immediate_to_dreg(instr, &cmp_reg, &cmp_bound)) {
+        index_reg_bound_note_cmp(state, cmp_reg, cmp_bound);
+        return;
+    }
+
+    index_reg_bound_promote_bcs_guard(state, instr);
+
+    if (instr->mnemonic == NG_M68K_ANDI &&
+        instr->dst.mode == NG_M68K_EA_DREG &&
+        instr->dst.reg < 8u &&
+        instr->immediate < NG_M68K_INDEX_BOUND_MAX_ENTRIES) {
+        uint32_t max_entries = instr->immediate + 1u;
+        if (state->guarded_valid[instr->dst.reg] &&
+            state->guarded_max_entries[instr->dst.reg] != 0u &&
+            state->guarded_max_entries[instr->dst.reg] < max_entries) {
+            max_entries = state->guarded_max_entries[instr->dst.reg];
+        }
+        state->max_entries[instr->dst.reg] = max_entries;
+        state->scale_bytes[instr->dst.reg] = 1u;
+        state->valid[instr->dst.reg] = 1u;
+        return;
+    }
+
+    if ((instr->mnemonic == NG_M68K_LSL ||
+         instr->mnemonic == NG_M68K_ASL) &&
+        instr->dst.mode == NG_M68K_EA_DREG &&
+        instr->dst.reg < 8u &&
+        instr->src.mode != NG_M68K_EA_DREG &&
+        (instr->size == 2u || instr->size == 4u) &&
+        instr->immediate < 8u) {
+        if (!index_reg_bound_scale(state,
+                                   instr->dst.reg,
+                                   1u << instr->immediate)) {
+            index_reg_bound_clear(state, instr->dst.reg);
+        }
+        return;
+    }
+
+    if (instr->dst.mode == NG_M68K_EA_DREG &&
+        instr->dst.reg < 8u &&
+        instr_is_dreg_self_add(instr, instr->dst.reg)) {
+        if (!index_reg_bound_scale(state, instr->dst.reg, 2u)) {
+            index_reg_bound_clear(state, instr->dst.reg);
+        }
+        return;
+    }
+
+    uint8_t reg = 0;
+    if (instr_writes_dreg(instr, &reg)) {
+        index_reg_bound_clear(state, reg);
+    }
+}
+
+void ng_m68k_jump_table_apply_index_bound(
+    NgM68kJumpTablePattern *pattern,
+    const NgM68kIndexRegBoundState *state) {
+    if (!pattern || !state ||
+        pattern->entry_kind != NG_M68K_JUMP_TABLE_ENTRY_ABS32 ||
+        pattern->index_reg >= 8u ||
+        !state->valid[pattern->index_reg] ||
+        state->scale_bytes[pattern->index_reg] != pattern->entry_size ||
+        state->max_entries[pattern->index_reg] == 0u) {
+        return;
+    }
+    pattern->max_entries = state->max_entries[pattern->index_reg];
 }
 
 int ng_m68k_match_static_index_jump_table(

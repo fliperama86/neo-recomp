@@ -254,6 +254,47 @@ int main(void) {
     }
 
     {
+        NgProgramRom script_rom = make_rom(0x40u);
+        CHECK(script_rom.data != NULL);
+
+        write16(&script_rom, 0x00u, 0x2268u); /* MOVEA.L $2(A0),A1 */
+        write16(&script_rom, 0x02u, 0x0002u);
+        write16(&script_rom, 0x04u, 0x4E91u); /* JSR (A1), script callback */
+        write16(&script_rom, 0x06u, 0x4E75u);
+
+        static NgFunctionDiscovery script_discovery;
+        CHECK(ng_function_discover_from_entry(&script_rom,
+                                              0x00u,
+                                              &script_discovery));
+        CHECK(ng_dispatch_audit_build(&script_rom,
+                                      &script_discovery,
+                                      &audit));
+        CHECK(audit.computed_count == 1u);
+        CHECK(audit.runtime_computed_count == 0u);
+
+        NgGameConfig script_config;
+        ng_game_config_init(&script_config);
+        script_config.jump_table_count = 1u;
+        script_config.jump_tables[0].start = 0x20u;
+        script_config.jump_tables[0].end = 0x30u;
+        script_config.jump_tables[0].stride = 2u;
+        script_config.jump_tables[0].format =
+            NG_GAME_CONFIG_JUMP_TABLE_SCRIPT_PREDICATE;
+
+        CHECK(ng_dispatch_audit_build_with_config(&script_rom,
+                                                  &script_discovery,
+                                                  &script_config,
+                                                  &audit));
+        CHECK(audit.computed_count == 0u);
+        CHECK(audit.runtime_computed_count == 1u);
+        CHECK(audit.sites[0].kind == NG_DISPATCH_AUDIT_COMPUTED);
+        CHECK(audit.sites[0].site_addr == 0x04u);
+        CHECK(audit.sites[0].runtime_allowed);
+
+        ng_program_rom_free(&script_rom);
+    }
+
+    {
         NgProgramRom inline_rom = make_rom(0x40u);
         CHECK(inline_rom.data != NULL);
 

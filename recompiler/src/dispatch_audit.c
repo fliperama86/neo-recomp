@@ -361,6 +361,63 @@ static int table_call_runtime_dispatch_allowed(
     return 0;
 }
 
+static int config_has_script_callback_sources(const NgGameConfig *config) {
+    if (!config) {
+        return 0;
+    }
+    for (uint32_t i = 0; i < config->jump_table_count; ++i) {
+        if (config->jump_tables[i].format ==
+                NG_GAME_CONFIG_JUMP_TABLE_SCRIPT_PREDICATE ||
+            config->jump_tables[i].format ==
+                NG_GAME_CONFIG_JUMP_TABLE_INLINE_CALLBACK ||
+            config->jump_tables[i].format ==
+                NG_GAME_CONFIG_JUMP_TABLE_TAGGED_ABS32) {
+            return 1;
+        }
+    }
+    for (uint32_t i = 0; i < config->record_format_count; ++i) {
+        if (config->record_formats[i].callback_offset_count != 0u) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int script_stream_runtime_dispatch_allowed(
+    const NgGameConfig *config,
+    const NgM68kInstr *instr,
+    const NgM68kInstr *recent,
+    uint32_t recent_count) {
+    if (!config_has_script_callback_sources(config) ||
+        !instr ||
+        instr->mnemonic != NG_M68K_JSR ||
+        instr->src.mode != NG_M68K_EA_AIND ||
+        instr->src.reg >= 8u) {
+        return 0;
+    }
+
+    uint8_t areg = instr->src.reg;
+    for (uint32_t i = recent_count; i > 0u; --i) {
+        const NgM68kInstr *prev = &recent[i - 1u];
+        if (prev->mnemonic == NG_M68K_JSR ||
+            prev->mnemonic == NG_M68K_BSR) {
+            return 0;
+        }
+        if (!instr_writes_areg(prev, areg)) {
+            continue;
+        }
+        return prev->mnemonic == NG_M68K_MOVEA &&
+               prev->size == 4u &&
+               prev->dst.mode == NG_M68K_EA_AREG &&
+               prev->dst.reg == areg &&
+               prev->src.mode == NG_M68K_EA_ADISP &&
+               prev->src.reg == 0u &&
+               prev->src.displacement >= 0 &&
+               prev->src.displacement <= 0x20;
+    }
+    return 0;
+}
+
 static NgDispatchAuditSite *audit_append(const NgProgramRom *rom,
                                          NgDispatchAudit *audit,
                                          NgDispatchAuditKind kind,
@@ -436,7 +493,11 @@ static void audit_record_computed(const NgProgramRom *rom,
                       table_call_runtime_dispatch_allowed(config,
                                                           instr,
                                                           recent,
-                                                          recent_count));
+                                                          recent_count) ||
+                      script_stream_runtime_dispatch_allowed(config,
+                                                            instr,
+                                                            recent,
+                                                            recent_count));
     }
     if (site && site->runtime_allowed) {
         ++audit->runtime_computed_count;
@@ -530,7 +591,13 @@ static void audit_record_jump_table(const NgProgramRom *rom,
         return;
     }
 
-    for (uint32_t i = 0; i < NG_FUNCTION_DISCOVERY_TABLE_ENTRIES; ++i) {
+    uint32_t max_entries = pattern->max_entries != 0u ?
+        pattern->max_entries : NG_FUNCTION_DISCOVERY_TABLE_ENTRIES;
+    if (max_entries > NG_FUNCTION_DISCOVERY_ABS32_TABLE_MAX_ENTRIES) {
+        max_entries = NG_FUNCTION_DISCOVERY_ABS32_TABLE_MAX_ENTRIES;
+    }
+
+    for (uint32_t i = 0; i < max_entries; ++i) {
         uint32_t entry_addr = pattern->table_addr + i * pattern->entry_size;
         if (!ng_program_rom_addr_is_mapped(rom, entry_addr) ||
             !ng_program_rom_addr_is_mapped(rom, entry_addr + 3u)) {
@@ -538,6 +605,9 @@ static void audit_record_jump_table(const NgProgramRom *rom,
         }
         uint32_t target = ng_program_rom_read32(rom, entry_addr);
         if (!audit_probable_static_table_target(rom, target)) {
+            if (pattern->max_entries != 0u) {
+                break;
+            }
             continue;
         }
         if (ng_function_discovery_contains_for_rom(discovery, rom, target)) {
@@ -600,8 +670,10 @@ static void audit_scan_from(const NgProgramRom *rom,
     uint32_t recent_count = 0;
     NgM68kStaticAregState areg;
     NgM68kStaticAregState previous_areg;
+    NgM68kIndexRegBoundState index_bound;
     ng_m68k_static_areg_reset(&areg);
     ng_m68k_static_areg_reset(&previous_areg);
+    ng_m68k_index_reg_bound_reset(&index_bound);
 
     for (uint32_t i = 0; i < NG_FUNCTION_DISCOVERY_MAX_INSTRUCTIONS; ++i) {
         NgM68kInstr instr;
@@ -631,18 +703,27 @@ static void audit_scan_from(const NgProgramRom *rom,
                 matched_table =
                     ng_m68k_match_pc_index_jump_table(&previous,
                                                       &instr,
-                                                      &pattern) ||
-                    ng_m68k_match_static_index_jump_table(&previous,
-                                                          &instr,
-                                                          &previous_areg,
-                                                          &pattern) ||
-                    ng_m68k_match_static_index_branch_table(&instr,
-                                                            &areg,
-                                                            &pattern) ||
-                    ng_m68k_match_pc_index_inline_code_table(rom,
-                                                              &previous,
+                                                      &pattern);
+                if (!matched_table) {
+                    matched_table =
+                        ng_m68k_match_static_index_jump_table(&previous,
                                                               &instr,
+                                                              &previous_areg,
                                                               &pattern);
+                }
+                if (!matched_table) {
+                    matched_table =
+                        ng_m68k_match_static_index_branch_table(&instr,
+                                                                &areg,
+                                                                &pattern);
+                }
+                if (!matched_table) {
+                    matched_table =
+                        ng_m68k_match_pc_index_inline_code_table(rom,
+                                                                  &previous,
+                                                                  &instr,
+                                                                  &pattern);
+                }
             }
             if (!matched_table) {
                 matched_table =
@@ -655,6 +736,9 @@ static void audit_scan_from(const NgProgramRom *rom,
                     ng_m68k_match_repeated_direct_dispatch_table(rom,
                                                                  &instr,
                                                                  &pattern);
+            }
+            if (matched_table) {
+                ng_m68k_jump_table_apply_index_bound(&pattern, &index_bound);
             }
             if (matched_table &&
                 audit_jump_table_has_entries(rom, &pattern)) {
@@ -677,6 +761,7 @@ static void audit_scan_from(const NgProgramRom *rom,
 
         previous_areg = areg;
         ng_m68k_static_areg_update(&areg, &instr);
+        ng_m68k_index_reg_bound_update(&index_bound, &instr);
         if (recent_count < NG_DISPATCH_AUDIT_RECENT_INSTRUCTIONS) {
             recent[recent_count++] = instr;
         } else {
