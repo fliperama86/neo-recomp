@@ -26,6 +26,11 @@ static int table_call_target_allowed(const NgProgramRom *rom,
                                      const NgGameConfigTableCall *call,
                                      uint32_t target);
 static int is_direct_function_target(const NgM68kInstr *instr);
+static int dispatcher_task_state_store_slot_allowed(
+    const NgGameConfig *config,
+    const NgM68kInstr *store);
+static int config_state_table_contains_addr(const NgGameConfig *config,
+                                            uint32_t addr);
 static void discovery_entry_rom_view(const NgProgramRom *rom,
                                      const NgFunctionDiscovery *discovery,
                                      uint32_t index,
@@ -996,6 +1001,18 @@ typedef struct NgStaticA6SlotPointerState {
     uint8_t table_valid[NG_FUNCTION_DISCOVERY_STATIC_A6_SLOTS];
 } NgStaticA6SlotPointerState;
 
+typedef struct NgStaticAregValueSet {
+    uint32_t values[NG_FUNCTION_DISCOVERY_SCRIPT_TABLE_MAX_ENTRIES];
+    uint32_t count;
+    uint8_t valid;
+} NgStaticAregValueSet;
+
+typedef struct NgStaticAregSetState {
+    NgStaticAregValueSet areg[8];
+    NgStaticAregValueSet stack[8];
+    uint32_t stack_count;
+} NgStaticAregSetState;
+
 static void static_a6_slot_pointer_reset(NgStaticA6SlotPointerState *state) {
     if (state) {
         memset(state, 0, sizeof(*state));
@@ -1027,6 +1044,271 @@ static int ea_is_a6_slot_local(const NgM68kEa *ea, uint32_t *slot) {
         return 1;
     }
     return 0;
+}
+
+static void static_areg_set_reset(NgStaticAregSetState *state) {
+    if (state) {
+        memset(state, 0, sizeof(*state));
+    }
+}
+
+static void static_areg_value_set_clear(NgStaticAregValueSet *set) {
+    if (set) {
+        memset(set, 0, sizeof(*set));
+    }
+}
+
+static void static_areg_value_set_add(NgStaticAregValueSet *set,
+                                      uint32_t value) {
+    if (!set) {
+        return;
+    }
+    value &= 0x00FFFFFFu;
+    for (uint32_t i = 0u; i < set->count; ++i) {
+        if (set->values[i] == value) {
+            set->valid = 1u;
+            return;
+        }
+    }
+    if (set->count >= NG_FUNCTION_DISCOVERY_SCRIPT_TABLE_MAX_ENTRIES) {
+        return;
+    }
+    set->values[set->count++] = value;
+    set->valid = 1u;
+}
+
+static int instr_pushes_areg_to_stack(const NgM68kInstr *instr, uint8_t *reg) {
+    if (!instr || !reg ||
+        instr->mnemonic != NG_M68K_MOVE ||
+        instr->size != 4u ||
+        instr->src.mode != NG_M68K_EA_AREG ||
+        instr->src.reg >= 8u ||
+        instr->dst.mode != NG_M68K_EA_APRE ||
+        instr->dst.reg != 7u) {
+        return 0;
+    }
+    *reg = instr->src.reg;
+    return 1;
+}
+
+static int instr_pops_stack_to_areg(const NgM68kInstr *instr, uint8_t *reg) {
+    if (!instr || !reg ||
+        instr->mnemonic != NG_M68K_MOVEA ||
+        instr->size != 4u ||
+        instr->src.mode != NG_M68K_EA_APOST ||
+        instr->src.reg != 7u ||
+        instr->dst.mode != NG_M68K_EA_AREG ||
+        instr->dst.reg >= 8u) {
+        return 0;
+    }
+    *reg = instr->dst.reg;
+    return 1;
+}
+
+static int instr_is_areg_index_load(const NgM68kInstr *instr) {
+    return instr &&
+           instr->mnemonic == NG_M68K_MOVEA &&
+           instr->size == 4u &&
+           instr->src.mode == NG_M68K_EA_AINDEX &&
+           instr->src.reg < 8u &&
+           instr->src.index_reg < 8u &&
+           instr->dst.mode == NG_M68K_EA_AREG &&
+           instr->dst.reg < 8u;
+}
+
+static uint32_t static_areg_index_load_entry_count(
+    const NgM68kInstr *instr,
+    const NgM68kIndexRegBoundState *index_bound) {
+    if (!instr || !index_bound || !instr_is_areg_index_load(instr)) {
+        return 0u;
+    }
+    uint8_t index_reg = instr->src.index_reg;
+    if (index_bound->valid[index_reg] &&
+        index_bound->scale_bytes[index_reg] == 4u &&
+        index_bound->max_entries[index_reg] != 0u) {
+        return index_bound->max_entries[index_reg];
+    }
+    return 16u;
+}
+
+static void static_areg_value_set_from_static_areg(
+    NgStaticAregValueSet *set,
+    const NgM68kStaticAregState *areg,
+    uint8_t reg) {
+    static_areg_value_set_clear(set);
+    if (!set || !areg || reg >= 8u || !areg->valid[reg]) {
+        return;
+    }
+    static_areg_value_set_add(set, areg->target[reg]);
+}
+
+static int static_areg_value_is_table_base(const NgProgramRom *rom,
+                                           uint32_t value) {
+    return ng_program_rom_addr_is_mapped(rom, value) &&
+           (ng_program_rom_addr_is_banked(rom, value) ||
+            !is_probable_function_target(rom, value));
+}
+
+static void static_areg_set_load_indexed_table(
+    const NgProgramRom *rom,
+    const NgM68kStaticAregState *areg,
+    const NgM68kIndexRegBoundState *index_bound,
+    NgStaticAregSetState *state,
+    const NgM68kInstr *instr) {
+    if (!rom || !areg || !index_bound || !state ||
+        !instr_is_areg_index_load(instr)) {
+        return;
+    }
+
+    NgStaticAregValueSet bases;
+    if (state->areg[instr->src.reg].valid) {
+        bases = state->areg[instr->src.reg];
+    } else {
+        static_areg_value_set_from_static_areg(&bases, areg, instr->src.reg);
+    }
+    if (!bases.valid || bases.count == 0u) {
+        static_areg_value_set_clear(&state->areg[instr->dst.reg]);
+        return;
+    }
+
+    uint32_t entry_count =
+        static_areg_index_load_entry_count(instr, index_bound);
+    if (entry_count > NG_FUNCTION_DISCOVERY_SCRIPT_TABLE_MAX_ENTRIES) {
+        entry_count = NG_FUNCTION_DISCOVERY_SCRIPT_TABLE_MAX_ENTRIES;
+    }
+
+    NgStaticAregValueSet result;
+    static_areg_value_set_clear(&result);
+    for (uint32_t b = 0u; b < bases.count; ++b) {
+        uint32_t base = bases.values[b] & 0x00FFFFFFu;
+        if (!static_areg_value_is_table_base(rom, base)) {
+            continue;
+        }
+        uint32_t table_addr =
+            (uint32_t)(base + (int32_t)instr->src.displacement) &
+            0x00FFFFFFu;
+        for (uint32_t i = 0u; i < entry_count; ++i) {
+            uint32_t entry_addr = table_addr + i * 4u;
+            if (!ng_program_rom_addr_is_mapped(rom, entry_addr) ||
+                !ng_program_rom_addr_is_mapped(rom, entry_addr + 3u)) {
+                break;
+            }
+            uint32_t value = ng_program_rom_read32(rom, entry_addr) &
+                0x00FFFFFFu;
+            if (!ng_program_rom_addr_is_mapped(rom, value)) {
+                if (index_bound->valid[instr->src.index_reg]) {
+                    continue;
+                }
+                break;
+            }
+            static_areg_value_set_add(&result, value);
+        }
+    }
+
+    state->areg[instr->dst.reg] = result;
+}
+
+static int instr_writes_areg_local(const NgM68kInstr *instr, uint8_t *reg) {
+    if (!instr || !reg) {
+        return 0;
+    }
+    if (instr->dst.mode == NG_M68K_EA_AREG && instr->dst.reg < 8u) {
+        switch (instr->mnemonic) {
+        case NG_M68K_LEA:
+        case NG_M68K_MOVEA:
+        case NG_M68K_ADDA:
+        case NG_M68K_SUBA:
+        case NG_M68K_ADDQ:
+        case NG_M68K_SUBQ:
+            *reg = instr->dst.reg;
+            return 1;
+        default:
+            break;
+        }
+    }
+    return 0;
+}
+
+static void static_areg_set_update(
+    const NgProgramRom *rom,
+    const NgM68kStaticAregState *areg_before,
+    const NgM68kIndexRegBoundState *index_bound_before,
+    NgStaticAregSetState *state,
+    const NgM68kInstr *instr) {
+    if (!rom || !areg_before || !index_bound_before || !state || !instr) {
+        return;
+    }
+
+    uint8_t reg = 0u;
+    if (instr_pushes_areg_to_stack(instr, &reg)) {
+        if (state->stack_count < 8u) {
+            if (state->areg[reg].valid) {
+                state->stack[state->stack_count++] = state->areg[reg];
+            } else {
+                NgStaticAregValueSet singleton;
+                static_areg_value_set_from_static_areg(&singleton,
+                                                       areg_before,
+                                                       reg);
+                state->stack[state->stack_count++] = singleton;
+            }
+        }
+        return;
+    }
+
+    if (instr_pops_stack_to_areg(instr, &reg)) {
+        if (state->stack_count != 0u) {
+            state->areg[reg] = state->stack[--state->stack_count];
+        } else {
+            static_areg_value_set_clear(&state->areg[reg]);
+        }
+        return;
+    }
+
+    if (instr->mnemonic == NG_M68K_JSR || instr->mnemonic == NG_M68K_BSR) {
+        static_areg_value_set_clear(&state->areg[0]);
+        static_areg_value_set_clear(&state->areg[1]);
+        static_areg_value_set_clear(&state->areg[7]);
+        return;
+    }
+
+    if (instr_is_areg_index_load(instr)) {
+        static_areg_set_load_indexed_table(rom,
+                                           areg_before,
+                                           index_bound_before,
+                                           state,
+                                           instr);
+        return;
+    }
+
+    if (instr_writes_areg_local(instr, &reg)) {
+        static_areg_value_set_clear(&state->areg[reg]);
+    }
+}
+
+static void add_static_areg_set_state_targets(
+    const NgProgramRom *rom,
+    const NgGameConfig *config,
+    const NgM68kInstr *instr,
+    const NgStaticAregSetState *state,
+    NgFunctionDiscovery *out) {
+    if (!rom || !instr || !state || !out ||
+        instr->mnemonic != NG_M68K_MOVE ||
+        instr->size != 4u ||
+        instr->src.mode != NG_M68K_EA_AREG ||
+        instr->src.reg >= 8u ||
+        !state->areg[instr->src.reg].valid ||
+        !dispatcher_task_state_store_slot_allowed(config, instr)) {
+        return;
+    }
+
+    const NgStaticAregValueSet *set = &state->areg[instr->src.reg];
+    for (uint32_t i = 0u; i < set->count; ++i) {
+        uint32_t target = set->values[i] & 0x00FFFFFFu;
+        if (is_probable_strict_heuristic_code_target(rom, target) ||
+            config_state_table_contains_addr(config, target)) {
+            ng_function_discovery_add(out, rom, target);
+        }
+    }
 }
 
 static void static_a6_slot_pointer_update(
@@ -2958,12 +3240,14 @@ static void scan_function_candidate(const NgProgramRom *rom,
     NgM68kStaticAregState areg;
     NgM68kStaticAregState previous_areg;
     NgM68kIndexRegBoundState index_bound;
+    NgStaticAregSetState areg_sets;
     uint8_t dreg_valid[8];
     uint32_t dreg_target[8];
     uint8_t spawn_result_areg_valid[8];
     ng_m68k_static_areg_reset(&areg);
     ng_m68k_static_areg_reset(&previous_areg);
     ng_m68k_index_reg_bound_reset(&index_bound);
+    static_areg_set_reset(&areg_sets);
     static_dreg_reset(dreg_valid);
     memset(dreg_target, 0, sizeof(dreg_target));
     memset(spawn_result_areg_valid, 0, sizeof(spawn_result_areg_valid));
@@ -3054,6 +3338,11 @@ static void scan_function_candidate(const NgProgramRom *rom,
 
         add_config_table_call_targets(rom, config, &instr, &areg, out);
         add_static_areg_indirect_target(rom, start_addr, &instr, &areg, out);
+        add_static_areg_set_state_targets(rom,
+                                          config,
+                                          &instr,
+                                          &areg_sets,
+                                          out);
 
         {
             uint32_t target = 0;
@@ -3098,6 +3387,11 @@ static void scan_function_candidate(const NgProgramRom *rom,
         }
 
         previous_areg = areg;
+        static_areg_set_update(rom,
+                               &areg,
+                               &index_bound,
+                               &areg_sets,
+                               &instr);
         ng_m68k_static_areg_update(&areg, &instr);
         static_dreg_to_areg_update(&areg,
                                    dreg_valid,

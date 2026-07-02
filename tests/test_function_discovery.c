@@ -593,6 +593,95 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x400u);
+        CHECK(rom.data != NULL);
+        ng_program_rom_set_address_map(&rom,
+                                       0x000000u,
+                                       0x180u,
+                                       0x200000u,
+                                       0x200u);
+
+        write16(&rom, 0x00u, 0x41F9u);       /* LEA $200040,A0 */
+        write32(&rom, 0x02u, 0x00200040u);
+        write16(&rom, 0x06u, 0x0C00u);       /* CMPI.B #$6,D0 */
+        write16(&rom, 0x08u, 0x0006u);
+        write16(&rom, 0x0Au, 0x6304u);       /* BLS over clamp */
+        write16(&rom, 0x0Cu, 0x103Cu);       /* MOVE.B #0,D0 */
+        write16(&rom, 0x0Eu, 0x0000u);
+        write16(&rom, 0x10u, 0xE588u);       /* LSL.L #2,D0 */
+        write16(&rom, 0x12u, 0x2270u);       /* MOVEA.L ($0,A0,D0.W),A1 */
+        write16(&rom, 0x14u, 0x0000u);
+        write16(&rom, 0x16u, 0x2D49u);       /* MOVE.L A1,($3C,A6) */
+        write16(&rom, 0x18u, 0x003Cu);
+        write16(&rom, 0x1Au, 0x4E75u);
+        for (uint32_t i = 0; i < 7u; ++i) {
+            uint32_t target = 0x100u + i * 4u;
+            write32(&rom, 0x1C0u + i * 4u, target);
+            write16(&rom, target, 0x4E75u);
+        }
+        write32(&rom, 0x1C0u + 7u * 4u, 0x00000140u);
+        write16(&rom, 0x140u, 0x4E75u);
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.dispatcher_count = 1u;
+        config.dispatchers[0].kind = NG_GAME_CONFIG_DISPATCHER_OBJECT_STATE;
+        config.dispatchers[0].install_slot_count = 1u;
+        config.dispatchers[0].install_slots[0] = 0x3Cu;
+
+        uint32_t seed = 0x00u;
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    &seed,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x100u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x118u));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x140u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x400u);
+        CHECK(rom.data != NULL);
+        ng_program_rom_set_address_map(&rom,
+                                       0x000000u,
+                                       0x200u,
+                                       0x200000u,
+                                       0x200u);
+
+        write16(&rom, 0x00u, 0x41F9u);       /* LEA $200000,A0 */
+        write32(&rom, 0x02u, 0x00200000u);
+        write16(&rom, 0x06u, 0x0240u);       /* ANDI.W #0,D0 */
+        write16(&rom, 0x08u, 0x0000u);
+        write16(&rom, 0x0Au, 0xE548u);       /* LSL.W #2,D0 */
+        write16(&rom, 0x0Cu, 0x2270u);       /* MOVEA.L ($0,A0,D0.W),A1 */
+        write16(&rom, 0x0Eu, 0x0000u);
+        write16(&rom, 0x10u, 0x2D49u);       /* MOVE.L A1,($3C,A6) */
+        write16(&rom, 0x12u, 0x003Cu);
+        write16(&rom, 0x14u, 0x4E75u);
+        write32(&rom, 0x200u, 0x00000100u);  /* data pointer, not code */
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.dispatcher_count = 1u;
+        config.dispatchers[0].kind = NG_GAME_CONFIG_DISPATCHER_OBJECT_STATE;
+        config.dispatchers[0].install_slot_count = 1u;
+        config.dispatchers[0].install_slots[0] = 0x3Cu;
+
+        uint32_t seed = 0x00u;
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    &seed,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(!ng_function_discovery_contains(&discovery, 0x100u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0xD0u);
         CHECK(rom.data != NULL);
 
@@ -2262,6 +2351,54 @@ int main(void) {
                                                     NULL,
                                                     &discovery));
         CHECK(ng_function_discovery_contains(&discovery, 0x1C0u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0x300u);
+        CHECK(rom.data != NULL);
+        ng_program_rom_set_address_map(&rom,
+                                       0x000000u,
+                                       0x100u,
+                                       0x200000u,
+                                       0x200u);
+
+        write16(&rom, 0x00u, 0x41F9u);       /* LEA $200000,A0 */
+        write32(&rom, 0x02u, 0x00200000u);
+        write16(&rom, 0x06u, 0x2070u);       /* MOVEA.L (0,A0,D0.W),A0 */
+        write16(&rom, 0x08u, 0x0000u);
+        write16(&rom, 0x0Au, 0x2F08u);       /* MOVE.L A0,-(SP) */
+        write16(&rom, 0x0Cu, 0x4EB9u);       /* JSR random/helper */
+        write32(&rom, 0x0Eu, 0x00000060u);
+        write16(&rom, 0x14u, 0x0240u);       /* ANDI.W #7,D0 */
+        write16(&rom, 0x16u, 0x0007u);
+        write16(&rom, 0x18u, 0xD040u);       /* ADD.W D0,D0 */
+        write16(&rom, 0x1Au, 0xD040u);       /* ADD.W D0,D0 */
+        write16(&rom, 0x1Cu, 0x205Fu);       /* MOVEA.L (SP)+,A0 */
+        write16(&rom, 0x1Eu, 0x2070u);       /* MOVEA.L (0,A0,D0.W),A0 */
+        write16(&rom, 0x20u, 0x0000u);
+        write16(&rom, 0x22u, 0x2C88u);       /* MOVE.L A0,(A6) */
+        write16(&rom, 0x24u, 0x4E75u);
+        write16(&rom, 0x60u, 0x4E75u);
+        write16(&rom, 0x80u, 0x4E75u);
+        write16(&rom, 0x90u, 0x4E75u);
+        write16(&rom, 0xA0u, 0x4E75u);
+        write16(&rom, 0xB0u, 0x4E75u);
+
+        write32(&rom, 0x100u, 0x00200080u);  /* top-level table */
+        write32(&rom, 0x104u, 0x002000A0u);
+        write32(&rom, 0x108u, 0xFFFFFFFFu);
+        write32(&rom, 0x180u, 0x00000080u);  /* subtables of state callbacks */
+        write32(&rom, 0x184u, 0x00000090u);
+        write32(&rom, 0x1A0u, 0x000000A0u);
+        write32(&rom, 0x1A4u, 0x000000B0u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x80u));
+        CHECK(ng_function_discovery_contains(&discovery, 0x90u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xA0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xB0u));
 
         ng_program_rom_free(&rom);
     }

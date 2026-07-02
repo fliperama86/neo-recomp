@@ -32,11 +32,10 @@ Latest checkpoint, 2026-07-02:
 - `scripts/check_mslug_discovery_golden.sh`: passed.
 - `./run.sh build`: passed with generated cart C sharding. After a recompiler
   source change that did not alter generated shard contents, the Metal Slug
-  build now revalidates discovery/audit/emission in about 1m28s and recompiles
+  build now revalidates discovery/audit/emission in about 1m30s and recompiles
   only stale cart shards because unchanged emitted files keep their mtimes.
   An immediate rebuild reused all cart/BIOS generated objects and completed in
-  about 2.6
-  seconds.
+  about 2.5 seconds.
 - Phase 0.6 ngdevkit symbol-oracle tooling landed and live-ran against all
   18 ngdevkit examples after installing `m68k-neogeo-elf-*`. Summary written to
   `build/ngdevkit_symbol_oracle/summary.tsv`: 597 ELF `FUNC` symbols, 441 exact
@@ -51,8 +50,8 @@ Latest checkpoint, 2026-07-02:
   stubs, routine tables, stage 2 object-vector callback expansion, and trace
   diagnostic tools are covered by tests.
 - Golden discovery set: 63,854 addresses.
-- Current discovery set: 83,575 addresses.
-- Current discovery additions over golden: 19,721 addresses.
+- Current discovery set: 84,077 addresses.
+- Current discovery additions over golden: 20,223 addresses.
 - Dispatch audit gaps: not worse (`missing_direct=0`, `computed=0`,
   `table_missing=0`).
 - Discovery candidate cap: 131,072 addresses.
@@ -105,7 +104,7 @@ Latest checkpoint, 2026-07-02:
   continuation roots, preserving the same discovery set while avoiding the old
   label-by-label sliding-window rescan cost. Sharded C emission writes through
   temporary files and only replaces outputs whose contents changed, so an
-  unchanged generator result no longer forces all 42 cart shards to recompile.
+  unchanged generator result no longer forces all generated cart shards to recompile.
   Spawn-result state stores are now recognized when a configured spawn helper
   or nested spawn wrapper returns an object pointer in `A0` and code stores an
   immediate state callback into an allowed object state slot, covering
@@ -128,6 +127,14 @@ Latest checkpoint, 2026-07-02:
   This covers the `$081808` miss through the `$2E3D68` stream-root table and
   `$079020` callback command handler, without adding `$081808` as a residual
   seed.
+  A-register value-set propagation now follows indexed ROM table loads through
+  stack save/restore around helper calls and recognizes the final
+  `MOVE.L An,(A6)` object-state install. This covers the two-level
+  `$2E3DC0` state table family, including `$080C08`, `$080BD6`, `$080CDC`,
+  `$081018`, and `$080B1A`, as a general table-driven state dispatch pattern
+  rather than one address per crash. Compare/BLS clamp recognition now bounds state-table indexes such as
+  `CMPI #n,Dn; BLS; MOVE #0,Dn; LSL #2,Dn`, and strict code-shape
+  validation keeps data-pointer tables from becoming generated functions.
   The `$07815A` family now lives in
   generated `games/mslug.mined_record_tables.toml` with precise
   `auto:bank:*:START-END` ranges instead of a broad hand-owned `auto:bank:*`

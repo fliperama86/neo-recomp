@@ -261,12 +261,29 @@ static void index_reg_bound_note_cmp(NgM68kIndexRegBoundState *state,
     state->pending_cmp_entries[reg] = bound;
 }
 
-static void index_reg_bound_promote_bcs_guard(
+static int cmp_branch_guard_max_entries(uint8_t condition,
+                                        uint32_t cmp_bound,
+                                        uint32_t *max_entries) {
+    if (!max_entries || cmp_bound == 0u) {
+        return 0;
+    }
+
+    if (condition == 5u) { /* BCS/BLO: Dn < immediate. */
+        *max_entries = cmp_bound;
+        return 1;
+    }
+    if (condition == 3u && cmp_bound < NG_M68K_INDEX_BOUND_MAX_ENTRIES) {
+        /* BLS: Dn <= immediate. */
+        *max_entries = cmp_bound + 1u;
+        return 1;
+    }
+    return 0;
+}
+
+static void index_reg_bound_promote_cmp_guard(
     NgM68kIndexRegBoundState *state,
     const NgM68kInstr *instr) {
-    if (!state || !instr ||
-        instr->mnemonic != NG_M68K_BCC ||
-        instr->condition != 5u) {
+    if (!state || !instr || instr->mnemonic != NG_M68K_BCC) {
         for (uint32_t reg = 0; reg < 8u; ++reg) {
             state->pending_cmp_valid[reg] = 0u;
             state->pending_cmp_entries[reg] = 0u;
@@ -275,14 +292,65 @@ static void index_reg_bound_promote_bcs_guard(
     }
 
     for (uint32_t reg = 0; reg < 8u; ++reg) {
-        if (state->pending_cmp_valid[reg]) {
+        uint32_t max_entries = 0u;
+        if (state->pending_cmp_valid[reg] &&
+            cmp_branch_guard_max_entries(instr->condition,
+                                         state->pending_cmp_entries[reg],
+                                         &max_entries)) {
             state->guarded_valid[reg] = 1u;
-            state->guarded_max_entries[reg] =
-                state->pending_cmp_entries[reg];
+            state->guarded_max_entries[reg] = max_entries;
         }
         state->pending_cmp_valid[reg] = 0u;
         state->pending_cmp_entries[reg] = 0u;
     }
+}
+
+static int instr_moves_immediate_to_dreg(const NgM68kInstr *instr,
+                                         uint8_t *reg,
+                                         uint32_t *value) {
+    if (!instr || !reg || !value ||
+        instr->dst.mode != NG_M68K_EA_DREG ||
+        instr->dst.reg >= 8u) {
+        return 0;
+    }
+
+    if (instr->mnemonic == NG_M68K_MOVEQ) {
+        *reg = instr->dst.reg;
+        *value = instr->immediate;
+        return 1;
+    }
+
+    if (instr->mnemonic == NG_M68K_MOVE &&
+        instr->src.mode == NG_M68K_EA_IMM) {
+        *reg = instr->dst.reg;
+        *value = instr->src.immediate;
+        return 1;
+    }
+
+    return 0;
+}
+
+static int index_reg_bound_apply_guarded_clamp(
+    NgM68kIndexRegBoundState *state,
+    const NgM68kInstr *instr) {
+    uint8_t reg = 0u;
+    uint32_t value = 0u;
+    if (!state ||
+        !instr_moves_immediate_to_dreg(instr, &reg, &value) ||
+        !state->guarded_valid[reg] ||
+        state->guarded_max_entries[reg] == 0u ||
+        value >= state->guarded_max_entries[reg]) {
+        return 0;
+    }
+
+    state->max_entries[reg] = state->guarded_max_entries[reg];
+    state->scale_bytes[reg] = 1u;
+    state->valid[reg] = 1u;
+    state->guarded_valid[reg] = 0u;
+    state->guarded_max_entries[reg] = 0u;
+    state->pending_cmp_valid[reg] = 0u;
+    state->pending_cmp_entries[reg] = 0u;
+    return 1;
 }
 
 void ng_m68k_index_reg_bound_update(NgM68kIndexRegBoundState *state,
@@ -304,7 +372,11 @@ void ng_m68k_index_reg_bound_update(NgM68kIndexRegBoundState *state,
         return;
     }
 
-    index_reg_bound_promote_bcs_guard(state, instr);
+    index_reg_bound_promote_cmp_guard(state, instr);
+
+    if (index_reg_bound_apply_guarded_clamp(state, instr)) {
+        return;
+    }
 
     if (instr->mnemonic == NG_M68K_ANDI &&
         instr->dst.mode == NG_M68K_EA_DREG &&
