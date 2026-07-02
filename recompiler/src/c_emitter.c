@@ -3041,6 +3041,71 @@ static int make_emit_path(char *out,
     return written > 0 && (size_t)written < out_size;
 }
 
+static int make_temp_emit_path(char *out, size_t out_size, const char *path) {
+    int written;
+    if (!out || out_size == 0u || !path) {
+        return 0;
+    }
+    written = snprintf(out, out_size, "%s.tmp", path);
+    return written > 0 && (size_t)written < out_size;
+}
+
+static int emit_files_equal(const char *left, const char *right, int *equal) {
+    FILE *a;
+    FILE *b;
+    unsigned char a_buf[8192];
+    unsigned char b_buf[8192];
+
+    if (!left || !right || !equal) {
+        return 0;
+    }
+    *equal = 0;
+
+    a = fopen(left, "rb");
+    if (!a) {
+        return errno == ENOENT ? 1 : 0;
+    }
+    b = fopen(right, "rb");
+    if (!b) {
+        fclose(a);
+        return 0;
+    }
+
+    for (;;) {
+        size_t a_read = fread(a_buf, 1u, sizeof(a_buf), a);
+        size_t b_read = fread(b_buf, 1u, sizeof(b_buf), b);
+        if (a_read != b_read || memcmp(a_buf, b_buf, a_read) != 0) {
+            break;
+        }
+        if (a_read != sizeof(a_buf)) {
+            if (ferror(a) || ferror(b)) {
+                fclose(a);
+                fclose(b);
+                return 0;
+            }
+            *equal = 1;
+            break;
+        }
+    }
+
+    fclose(a);
+    fclose(b);
+    return 1;
+}
+
+static int replace_emit_file_if_changed(const char *tmp_path,
+                                        const char *path) {
+    int equal = 0;
+    if (!emit_files_equal(path, tmp_path, &equal)) {
+        remove(tmp_path);
+        return 0;
+    }
+    if (equal) {
+        return remove(tmp_path) == 0;
+    }
+    return rename(tmp_path, path) == 0;
+}
+
 static int ensure_emit_dir(const char *dir) {
     if (!dir || dir[0] == 0) {
         return 0;
@@ -3055,8 +3120,14 @@ static int emit_sharded_dispatch_file(const char *path,
                                       const NgFunctionDiscovery *discovery,
                                       uint32_t functions_per_shard,
                                       uint32_t shard_count) {
-    FILE *out = fopen(path, "w");
+    char tmp_path[NG_EMIT_MAX_PATH];
+    FILE *out;
     int ok = 1;
+
+    if (!make_temp_emit_path(tmp_path, sizeof(tmp_path), path)) {
+        return 0;
+    }
+    out = fopen(tmp_path, "w");
     if (!out) {
         return 0;
     }
@@ -3072,7 +3143,11 @@ static int emit_sharded_dispatch_file(const char *path,
     if (fclose(out) != 0) {
         ok = 0;
     }
-    return ok;
+    if (!ok) {
+        remove(tmp_path);
+        return 0;
+    }
+    return replace_emit_file_if_changed(tmp_path, path);
 }
 
 static int emit_shard_file(const char *path,
@@ -3082,8 +3157,14 @@ static int emit_shard_file(const char *path,
                            uint32_t start_index,
                            uint32_t end_index,
                            NgEmitDiagnostics *diagnostics) {
-    FILE *out = fopen(path, "w");
+    char tmp_path[NG_EMIT_MAX_PATH];
+    FILE *out;
     int ok = 1;
+
+    if (!make_temp_emit_path(tmp_path, sizeof(tmp_path), path)) {
+        return 0;
+    }
+    out = fopen(tmp_path, "w");
     if (!out) {
         return 0;
     }
@@ -3103,7 +3184,11 @@ static int emit_shard_file(const char *path,
     if (fclose(out) != 0) {
         ok = 0;
     }
-    return ok;
+    if (!ok) {
+        remove(tmp_path);
+        return 0;
+    }
+    return replace_emit_file_if_changed(tmp_path, path);
 }
 
 int ng_emit_c_shards(const char *out_dir,
@@ -3117,6 +3202,7 @@ int ng_emit_c_shards(const char *out_dir,
     char dispatch_path[NG_EMIT_MAX_PATH];
     char manifest_path[NG_EMIT_MAX_PATH];
     uint32_t shard_count;
+    char manifest_tmp_path[NG_EMIT_MAX_PATH];
     FILE *manifest;
     int ok = 1;
 
@@ -3136,7 +3222,10 @@ int ng_emit_c_shards(const char *out_dir,
         !make_emit_path(manifest_path,
                         sizeof(manifest_path),
                         out_dir,
-                        "shards.list")) {
+                        "shards.list") ||
+        !make_temp_emit_path(manifest_tmp_path,
+                             sizeof(manifest_tmp_path),
+                             manifest_path)) {
         return 0;
     }
 
@@ -3151,7 +3240,7 @@ int ng_emit_c_shards(const char *out_dir,
         return 0;
     }
 
-    manifest = fopen(manifest_path, "w");
+    manifest = fopen(manifest_tmp_path, "w");
     if (!manifest) {
         return 0;
     }
@@ -3187,7 +3276,14 @@ int ng_emit_c_shards(const char *out_dir,
     if (fclose(manifest) != 0) {
         ok = 0;
     }
-    return ok && active_diagnostics->unsupported_count == 0u &&
+    if (!ok) {
+        remove(manifest_tmp_path);
+        return 0;
+    }
+    if (!replace_emit_file_if_changed(manifest_tmp_path, manifest_path)) {
+        return 0;
+    }
+    return active_diagnostics->unsupported_count == 0u &&
            active_diagnostics->decode_error_count == 0u;
 }
 

@@ -129,6 +129,7 @@ cmake --build "$BUILD_DIR" --target neo-recomp generate-bios-recomp -j4
 
 CART_SHARD_DIR="$BUILD_DIR/mslug_recomp_shards"
 CART_SHARD_LIST="$CART_SHARD_DIR/shards.list"
+CART_RECOMP_STAMP="$CART_SHARD_DIR/recomp.stamp"
 CART_AUDIT="$BUILD_DIR/mslug_dispatch_audit.txt"
 BIOS_C="$BUILD_DIR/bios_recomp_mslug_headless.c"
 BIOS_SEEDS_STAMP="$BUILD_DIR/bios_recomp_mslug_headless.seeds"
@@ -158,13 +159,13 @@ if [[ ! -f "$CART_SHARD_SIZE_STAMP" ]] || [[ "$(cat "$CART_SHARD_SIZE_STAMP")" !
 fi
 
 RECOMP_LOG="$BUILD_DIR/mslug_recomp.log"
-if is_fresh "$CART_SHARD_LIST" \
+if is_fresh "$CART_RECOMP_STAMP" \
   "$BUILD_DIR/neo-recomp" \
   "$ROOT/games/mslug.toml" \
   "$ROOT/games/mslug.residual.toml" \
   "$ROOT/games/mslug.mined_record_tables.toml" \
   "$CART_SHARD_SIZE_STAMP" \
-  "$NEO_PATH"; then
+  "$NEO_PATH" && [[ -f "$CART_SHARD_LIST" ]]; then
   log_step "Recompiling Metal Slug cart CPU code"
   log_note "cached shards: $CART_SHARD_LIST"
 else
@@ -180,6 +181,7 @@ else
     exit 1
   fi
   grep -E "game config functions|function candidates|generated C shards:|dispatch audit:" "$RECOMP_LOG" || true
+  touch "$CART_RECOMP_STAMP"
 fi
 
 BIOS_SEEDS="0xC00402,0xC00438,0xC00444,0xC0044A,0xC00468,0xC004C2,0xC004CE,0xC11142,0xC133BA,0xC187C4,0xC187CC,0xC187D4,0xC18814,0xC1881A,0xC187B6,0xC17F0E,0xC1868A,0xC18690,0xC18832,0xC18012,0xC18074,0xC18082,0xC180DC,0xC1811A,0xC18194,0xC181AE,0xC18208,0xC188DC,0xC182A6"

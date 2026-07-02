@@ -715,7 +715,18 @@ int ng_dispatch_audit_build_with_config(const NgProgramRom *rom,
         seen_banks[i] = NG_FUNCTION_DISCOVERY_BANK_NONE;
     }
 
+    int have_scan_roots = 0;
     for (uint32_t i = 0; i < discovery->count; ++i) {
+        if (discovery->scan_roots[i]) {
+            have_scan_roots = 1;
+            break;
+        }
+    }
+
+    for (uint32_t i = 0; i < discovery->count; ++i) {
+        if (have_scan_roots && !discovery->scan_roots[i]) {
+            continue;
+        }
         NgProgramRom view = *rom;
         uint32_t bank = ng_function_discovery_bank_at(discovery, i);
         if (bank != NG_FUNCTION_DISCOVERY_BANK_NONE) {

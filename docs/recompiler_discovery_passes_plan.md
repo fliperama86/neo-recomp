@@ -24,15 +24,18 @@ coverage checkpoint changes.
 | Pass 3, object dispatcher recognizer | **Done** | `[[dispatcher]]` parser/config landed for object-state install/spawn constants, and the audit derives `$0006C8`/`$000FDE`. Direct PC-index branch tables, PC-index JSR branch tables, self-overwriting static-index JSR tables, repeated inline-code PC-index tables, mixed branch/body PC-index tables, spawn-helper wrappers, repeated direct-dispatch stubs, and fixed-stride `[[routine_table]]` code slots with optional shared-tail fallthrough are now classified structurally, removing 252 table-slot `extra` seeds, 26 manual `[dispatch].runtime` entries, 4 exact callback-slot ranges, and 18 redundant `[[jump_table]]` declarations while keeping the golden set as a strict superset. |
 | Pass 4, bank-aware pointer discovery | **Done** | `scan = ["bank:*"]` iterates derived physical banks or explicit `[[bank]]` mappings, and `scan = ["bank:N"]` targets one bank for `[[record_format]]` and `[[state_table]]`. Bank identity is threaded through discovery de-duplication, worklist scanning, `--emit-discovery-set` (`bank:N 0xADDR` rows), dispatch audit checks, and generated symbol names (`ng_func_bNNN_ADDR`) for banked duplicates. Fixed-region behavior is unchanged. Runtime bank-register dispatch is future work outside this static discovery plan. |
 | Pass 5, diagnostics / residual split | **Done, miner added** | Manual residual seeds moved from `games/mslug.toml` into `games/mslug.residual.toml` via `[game].discovery_files`; golden discovery is unchanged. `--emit-dispatch-suggestions` emits generic TOML suggestions for audit gaps. `scripts/generate_residual_toml.py` regenerates residual TOML from set differences. Runtime dispatch misses can now be logged as JSONL via `ng_neogeo_set_dispatch_miss_log_path()` or `NG_NEO_DISPATCH_MISS_LOG` and converted to TOML suggestions with `scripts/runtime_miss_suggestions.py`. Execution PC traces can be captured with `scripts/mame_trace_capture.py`, diffed against discovery sets with `scripts/trace_pc_residual.py`, and covered by `test_trace_tools`. `scripts/mine_record_tables.py` now mines fixed-stride callback-record clusters from P-ROM data using discovery entry roots as anchors, emits precise `auto:START-END` and `auto:bank:*:START-END` TOML, and is covered by `test_record_table_miner`. |
-| Generated-C build scalability | **Done** | `neo-recomp --emit-c-shards <dir> --emit-c-shard-size <count>` now writes a lightweight dispatch TU with a route table plus shard TUs with local function bodies. The Metal Slug SDL build uses 42 cart shards by default (`NG_MSLUG_C_SHARD_SIZE=2048`) and compiles stale shards in parallel (`NG_MSLUG_C_SHARD_JOBS`). Cached rebuilds avoid the old monolithic 335 MB cart C compile. |
+| Generated-C build scalability | **Done** | `neo-recomp --emit-c-shards <dir> --emit-c-shard-size <count>` now writes a lightweight dispatch TU with a route table plus shard TUs with local function bodies. The Metal Slug SDL build uses 42 cart shards by default (`NG_MSLUG_C_SHARD_SIZE=2048`) and compiles stale shards in parallel (`NG_MSLUG_C_SHARD_JOBS`). Discovery/audit scans use explicit scan roots plus continuation roots instead of rescanning every instruction label, and shard emission preserves mtimes for unchanged files. Cached rebuilds avoid the old monolithic 335 MB cart C compile. |
 
 Latest checkpoint, 2026-07-01:
 
 - `ctest --test-dir build --output-on-failure`: 21/21 passed.
 - `scripts/check_mslug_discovery_golden.sh`: passed.
-- `./run.sh build`: passed with generated cart C sharding. First sharded cart
-  compile produced 42 objects; an immediate rebuild reused all cart/BIOS
-  generated objects and completed in about 2.4 seconds.
+- `./run.sh build`: passed with generated cart C sharding. After a recompiler
+  source change that did not alter generated shard contents, the Metal Slug
+  build now revalidates discovery/audit/emission in about 1m28s and recompiles
+  0 cart shards because unchanged emitted files keep their mtimes. An immediate
+  rebuild reused all cart/BIOS generated objects and completed in about 2.6
+  seconds.
 - Phase 0.6 ngdevkit symbol-oracle tooling landed and live-ran against all
   18 ngdevkit examples after installing `m68k-neogeo-elf-*`. Summary written to
   `build/ngdevkit_symbol_oracle/summary.tsv`: 597 ELF `FUNC` symbols, 441 exact
@@ -47,8 +50,8 @@ Latest checkpoint, 2026-07-01:
   stubs, routine tables, stage 2 object-vector callback expansion, and trace
   diagnostic tools are covered by tests.
 - Golden discovery set: 63,854 addresses.
-- Current discovery set: 83,403 addresses.
-- Current discovery additions over golden: 19,549 addresses.
+- Current discovery set: 83,474 addresses.
+- Current discovery additions over golden: 19,620 addresses.
 - Dispatch audit gaps: not worse (`missing_direct=0`, `computed=0`,
   `table_missing=0`).
 - Discovery candidate cap: 131,072 addresses.
@@ -96,6 +99,16 @@ Latest checkpoint, 2026-07-01:
   entry is loaded into `A1` and then passed to a configured helper such as
   `$0006FE`, covering `$0467F6`/`$046800` from the `$025CC6` table without
   residual seeds.
+  Discovery and dispatch-audit scans now distinguish true scan roots from
+  instruction labels. Long straight-line bodies continue through explicit
+  continuation roots, preserving the same discovery set while avoiding the old
+  label-by-label sliding-window rescan cost. Sharded C emission writes through
+  temporary files and only replaces outputs whose contents changed, so an
+  unchanged generator result no longer forces all 42 cart shards to recompile.
+  Spawn-result state stores are now recognized when a configured spawn helper
+  or nested spawn wrapper returns an object pointer in `A0` and code stores an
+  immediate state callback into an allowed object state slot, covering
+  `$09A8BE` from the `$09B8B2` store without a residual seed.
   The `$07815A` family now lives in
   generated `games/mslug.mined_record_tables.toml` with precise
   `auto:bank:*:START-END` ranges instead of a broad hand-owned `auto:bank:*`
@@ -758,7 +771,7 @@ check.
 | `[functions].extra` entries | ~700 | 0 in manifest, 434 in residual | ~0 in the manifest; irreducibles in `mslug.residual.toml` |
 | `[[jump_table]]` blocks | ~80 | 2 | a handful of structural descriptors |
 | `[dispatch].runtime` entries | 60 | 34 | `object_state` subset derived; table sites reclassified; small genuinely-computed residual stays declared |
-| Discovered function set | baseline | superset, 83,403 addresses (+19,549 over golden) | **superset** (0 regressions on golden diff) |
+| Discovered function set | baseline | superset, 83,474 addresses (+19,620 over golden) | **superset** (0 regressions on golden diff) |
 | Dispatch-audit gaps | baseline | not worse, all tracked gaps at 0 | <= baseline |
 | New unit tests | - | synthetic tests for landed passes, routine tables, diagnostics, and Phase 0.5/0.6 oracle validation | one synthetic-ROM suite per pass |
 | Oracle discovery checks (Phase 0.5) | n/a | done | function symbols subset of discovered; discovered within function extents; code relocs resolved; data relocs excluded; trace import reports zero missing oracle PCs |

@@ -65,6 +65,29 @@ int main(void) {
     }
 
     {
+        NgProgramRom rom = make_rom(0x240u);
+        CHECK(rom.data != NULL);
+
+        for (uint32_t i = 0;
+             i < NG_FUNCTION_DISCOVERY_MAX_INSTRUCTIONS + 12u;
+             ++i) {
+            write16(&rom, i * 2u, 0x4E71u); /* NOP */
+        }
+        uint32_t call_addr =
+            (NG_FUNCTION_DISCOVERY_MAX_INSTRUCTIONS + 12u) * 2u;
+        write16(&rom, call_addr, 0x4EB9u); /* JSR $000200 */
+        write32(&rom, call_addr + 2u, 0x00000200u);
+        write16(&rom, call_addr + 6u, 0x4E75u);
+        write16(&rom, 0x200u, 0x4E75u);
+
+        CHECK(ng_function_discover_from_entry(&rom, 0x00u, &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x200u));
+        CHECK(!discovery.truncated);
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
         NgProgramRom rom = make_rom(0x140u);
         CHECK(rom.data != NULL);
 
@@ -549,6 +572,45 @@ int main(void) {
         CHECK(ng_function_discovery_contains(&discovery, 0x90u));
         CHECK(ng_function_discovery_contains(&discovery, 0xA0u));
         CHECK(ng_function_discovery_contains(&discovery, 0xC0u));
+
+        ng_program_rom_free(&rom);
+    }
+
+    {
+        NgProgramRom rom = make_rom(0xF0u);
+        CHECK(rom.data != NULL);
+
+        write16(&rom, 0x00u, 0x4EB9u);       /* JSR spawn wrapper */
+        write32(&rom, 0x02u, 0x000000C0u);
+        write16(&rom, 0x06u, 0x2150u);       /* MOVE.L (A0),$5C(A0) */
+        write16(&rom, 0x08u, 0x005Cu);
+        write16(&rom, 0x0Au, 0x20BCu);       /* MOVE.L #$80,(A0) */
+        write32(&rom, 0x0Cu, 0x00000080u);
+        write16(&rom, 0x10u, 0x4E75u);
+        write16(&rom, 0x80u, 0x4E75u);
+        write16(&rom, 0xC0u, 0x4EB9u);       /* wrapper calls helper */
+        write32(&rom, 0xC2u, 0x000000E0u);
+        write16(&rom, 0xC6u, 0x4E75u);
+        write16(&rom, 0xE0u, 0x4E75u);
+
+        NgGameConfig config;
+        ng_game_config_init(&config);
+        config.dispatcher_count = 1u;
+        config.dispatchers[0].kind = NG_GAME_CONFIG_DISPATCHER_OBJECT_STATE;
+        config.dispatchers[0].install_slot_count = 1u;
+        config.dispatchers[0].install_slots[0] = 0u;
+        config.dispatchers[0].spawn_helper_count = 1u;
+        config.dispatchers[0].spawn_helpers[0] = 0x000000E0u;
+
+        const uint32_t seeds[] = {0x00000000u};
+        CHECK(ng_function_discover_from_game_config(&rom,
+                                                    seeds,
+                                                    1u,
+                                                    &config,
+                                                    &discovery));
+        CHECK(ng_function_discovery_contains(&discovery, 0x80u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xC0u));
+        CHECK(ng_function_discovery_contains(&discovery, 0xE0u));
 
         ng_program_rom_free(&rom);
     }

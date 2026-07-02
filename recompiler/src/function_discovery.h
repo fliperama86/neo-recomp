@@ -13,6 +13,7 @@ typedef struct NgFunctionDiscovery {
     uint32_t banks[NG_FUNCTION_DISCOVERY_MAX_CANDIDATES];
     uint8_t banked[NG_FUNCTION_DISCOVERY_MAX_CANDIDATES];
     uint8_t entries[NG_FUNCTION_DISCOVERY_MAX_CANDIDATES];
+    uint8_t scan_roots[NG_FUNCTION_DISCOVERY_MAX_CANDIDATES];
     uint32_t count;
     uint32_t max_candidates;
     int truncated;

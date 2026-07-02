@@ -123,11 +123,12 @@ int ng_function_discovery_entry_contains_bank(
     return 0;
 }
 
-static int ng_function_discovery_add_with_entry(
+static int ng_function_discovery_add_with_flags(
     NgFunctionDiscovery *discovery,
     const NgProgramRom *rom,
     uint32_t addr,
-    int is_entry) {
+    int is_entry,
+    int is_scan_root) {
     if (!discovery || !rom || !is_probable_function_target(rom, addr)) {
         return 0;
     }
@@ -138,6 +139,9 @@ static int ng_function_discovery_add_with_entry(
         if (discovery->addrs[i] == addr && entry_bank == bank) {
             if (is_entry) {
                 discovery->entries[i] = 1u;
+            }
+            if (is_scan_root) {
+                discovery->scan_roots[i] = 1u;
             }
             return 1;
         }
@@ -154,6 +158,7 @@ static int ng_function_discovery_add_with_entry(
 
     discovery->addrs[discovery->count] = addr;
     discovery->entries[discovery->count] = is_entry ? 1u : 0u;
+    discovery->scan_roots[discovery->count] = is_scan_root ? 1u : 0u;
     if (bank != NG_FUNCTION_DISCOVERY_BANK_NONE) {
         discovery->banks[discovery->count] = bank;
         discovery->banked[discovery->count] = 1u;
@@ -168,13 +173,20 @@ static int ng_function_discovery_add_with_entry(
 static int ng_function_discovery_add_label(NgFunctionDiscovery *discovery,
                                            const NgProgramRom *rom,
                                            uint32_t addr) {
-    return ng_function_discovery_add_with_entry(discovery, rom, addr, 0);
+    return ng_function_discovery_add_with_flags(discovery, rom, addr, 0, 0);
+}
+
+static int ng_function_discovery_add_scan_root(
+    NgFunctionDiscovery *discovery,
+    const NgProgramRom *rom,
+    uint32_t addr) {
+    return ng_function_discovery_add_with_flags(discovery, rom, addr, 0, 1);
 }
 
 int ng_function_discovery_add(NgFunctionDiscovery *discovery,
                               const NgProgramRom *rom,
                               uint32_t addr) {
-    return ng_function_discovery_add_with_entry(discovery, rom, addr, 1);
+    return ng_function_discovery_add_with_flags(discovery, rom, addr, 1, 1);
 }
 
 static void add_jump_table_targets(const NgProgramRom *rom,
@@ -1108,15 +1120,17 @@ static int instr_writes_areg_number(const NgM68kInstr *instr, uint8_t reg) {
            instr->dst.reg == reg;
 }
 
-static int dispatcher_task_spawn_wrapper_allowed(const NgProgramRom *rom,
-                                                 const NgGameConfig *config,
-                                                 uint32_t helper) {
+static int dispatcher_task_spawn_wrapper_allowed_depth(
+    const NgProgramRom *rom,
+    const NgGameConfig *config,
+    uint32_t helper,
+    uint32_t depth) {
     if (!rom || !ng_program_rom_addr_is_mapped(rom, helper)) {
         return 0;
     }
 
     uint32_t pc = helper;
-    for (uint32_t i = 0; i < 12u; ++i) {
+    for (uint32_t i = 0; i < 24u; ++i) {
         NgM68kInstr instr;
         if (!ng_m68k_decode(rom, pc, &instr) ||
             !ng_m68k_validate(&instr) ||
@@ -1126,12 +1140,19 @@ static int dispatcher_task_spawn_wrapper_allowed(const NgProgramRom *rom,
             return 0;
         }
 
-        if (instr.mnemonic == NG_M68K_JSR &&
-            instr.src.mode == NG_M68K_EA_ABS_L &&
-            dispatcher_task_spawn_helper_allowed(
-                config,
-                instr.target & 0x00FFFFFFu)) {
-            return 1;
+        if (instr.mnemonic == NG_M68K_JSR && is_direct_function_target(&instr)) {
+            uint32_t target = instr.target & 0x00FFFFFFu;
+            if (dispatcher_task_spawn_helper_allowed(config, target)) {
+                return 1;
+            }
+            if (depth != 0u &&
+                target != (helper & 0x00FFFFFFu) &&
+                dispatcher_task_spawn_wrapper_allowed_depth(rom,
+                                                            config,
+                                                            target,
+                                                            depth - 1u)) {
+                return 1;
+            }
         }
 
         if (instr_writes_areg_number(&instr, 1u)) {
@@ -1146,6 +1167,69 @@ static int dispatcher_task_spawn_wrapper_allowed(const NgProgramRom *rom,
         pc += instr.byte_length;
     }
     return 0;
+}
+
+static int dispatcher_task_spawn_wrapper_allowed(const NgProgramRom *rom,
+                                                 const NgGameConfig *config,
+                                                 uint32_t helper) {
+    return dispatcher_task_spawn_wrapper_allowed_depth(rom, config, helper, 2u);
+}
+
+static int dispatcher_task_spawn_result_wrapper_allowed_depth(
+    const NgProgramRom *rom,
+    const NgGameConfig *config,
+    uint32_t helper,
+    uint32_t depth) {
+    if (!rom || !ng_program_rom_addr_is_mapped(rom, helper)) {
+        return 0;
+    }
+
+    uint32_t pc = helper;
+    for (uint32_t i = 0; i < 24u; ++i) {
+        NgM68kInstr instr;
+        if (!ng_m68k_decode(rom, pc, &instr) ||
+            !ng_m68k_validate(&instr) ||
+            instr.byte_length == 0u ||
+            instr.mnemonic == NG_M68K_UNKNOWN ||
+            instr.mnemonic == NG_M68K_INVALID) {
+            return 0;
+        }
+
+        if (instr.mnemonic == NG_M68K_JSR && is_direct_function_target(&instr)) {
+            uint32_t target = instr.target & 0x00FFFFFFu;
+            if (dispatcher_task_spawn_helper_allowed(config, target)) {
+                return 1;
+            }
+            if (depth != 0u &&
+                target != (helper & 0x00FFFFFFu) &&
+                dispatcher_task_spawn_result_wrapper_allowed_depth(rom,
+                                                                   config,
+                                                                   target,
+                                                                   depth - 1u)) {
+                return 1;
+            }
+        }
+
+        if (instr.mnemonic == NG_M68K_RTS ||
+            instr.mnemonic == NG_M68K_RTE ||
+            instr.mnemonic == NG_M68K_RTR ||
+            instr.mnemonic == NG_M68K_JMP) {
+            return 0;
+        }
+        pc += instr.byte_length;
+    }
+    return 0;
+}
+
+static int dispatcher_task_spawn_result_call_allowed(
+    const NgProgramRom *rom,
+    const NgGameConfig *config,
+    uint32_t helper) {
+    return dispatcher_task_spawn_helper_allowed(config, helper) ||
+           dispatcher_task_spawn_result_wrapper_allowed_depth(rom,
+                                                              config,
+                                                              helper,
+                                                              2u);
 }
 
 static int is_task_state_store(const NgProgramRom *rom,
@@ -1187,6 +1271,37 @@ static int is_task_state_store(const NgProgramRom *rom,
     }
 
     *target = load->target;
+    return 1;
+}
+
+static int is_immediate_task_state_store(const NgProgramRom *rom,
+                                         const NgGameConfig *config,
+                                         const NgM68kInstr *store,
+                                         const uint8_t *spawn_result_areg_valid,
+                                         uint32_t *target) {
+    if (!rom || !store || !spawn_result_areg_valid || !target) {
+        return 0;
+    }
+    if (store->mnemonic != NG_M68K_MOVE ||
+        store->size != 4u ||
+        store->src.mode != NG_M68K_EA_IMM ||
+        store->dst.reg > 7u) {
+        return 0;
+    }
+    if (!spawn_result_areg_valid[store->dst.reg]) {
+        return 0;
+    }
+    if (!dispatcher_task_state_store_slot_allowed(config, store)) {
+        return 0;
+    }
+
+    uint32_t candidate = store->src.immediate & 0x00FFFFFFu;
+    if (!is_probable_heuristic_code_target(rom, candidate) &&
+        !config_state_table_contains_addr(config, candidate)) {
+        return 0;
+    }
+
+    *target = candidate;
     return 1;
 }
 
@@ -2055,10 +2170,12 @@ static void scan_function_candidate(const NgProgramRom *rom,
     NgM68kStaticAregState previous_areg;
     uint8_t dreg_valid[8];
     uint32_t dreg_target[8];
+    uint8_t spawn_result_areg_valid[8];
     ng_m68k_static_areg_reset(&areg);
     ng_m68k_static_areg_reset(&previous_areg);
     static_dreg_reset(dreg_valid);
     memset(dreg_target, 0, sizeof(dreg_target));
+    memset(spawn_result_areg_valid, 0, sizeof(spawn_result_areg_valid));
 
     for (uint32_t i = 0; i < NG_FUNCTION_DISCOVERY_MAX_INSTRUCTIONS; ++i) {
         NgM68kInstr instr;
@@ -2142,6 +2259,17 @@ static void scan_function_candidate(const NgProgramRom *rom,
         add_config_table_call_targets(rom, config, &instr, &areg, out);
         add_static_areg_indirect_target(rom, start_addr, &instr, &areg, out);
 
+        {
+            uint32_t target = 0;
+            if (is_immediate_task_state_store(rom,
+                                              config,
+                                              &instr,
+                                              spawn_result_areg_valid,
+                                              &target)) {
+                ng_function_discovery_add(out, rom, target);
+            }
+        }
+
         if (is_direct_function_target(&instr)) {
             ng_function_discovery_add(out, rom, instr.target);
         }
@@ -2181,9 +2309,33 @@ static void scan_function_candidate(const NgProgramRom *rom,
                                    &instr);
         static_dreg_update(dreg_valid, dreg_target, &instr);
 
+        if (instr.mnemonic == NG_M68K_JSR || instr.mnemonic == NG_M68K_BSR) {
+            memset(spawn_result_areg_valid,
+                   0,
+                   sizeof(spawn_result_areg_valid));
+            if (is_direct_function_target(&instr)) {
+                uint32_t helper = instr.target & 0x00FFFFFFu;
+                if (dispatcher_task_spawn_result_call_allowed(rom,
+                                                              config,
+                                                              helper)) {
+                    spawn_result_areg_valid[0] = 1u;
+                }
+            }
+        } else {
+            for (uint32_t reg = 0; reg < 8u; ++reg) {
+                if (instr_writes_areg_number(&instr, (uint8_t)reg)) {
+                    spawn_result_areg_valid[reg] = 0u;
+                }
+            }
+        }
+
         pc += instr.byte_length;
         previous = instr;
         have_previous = 1;
+    }
+
+    if (pc != start_addr) {
+        ng_function_discovery_add_scan_root(out, rom, pc);
     }
 }
 
@@ -2270,10 +2422,45 @@ int ng_function_discover_from_game_config_limited(
         return 0;
     }
 
-    for (uint32_t i = 0; i < out->count; ++i) {
-        NgProgramRom view;
-        discovery_entry_rom_view(rom, out, i, &view);
-        scan_function_candidate(&view, out->addrs[i], config, out);
+    uint32_t scan_capacity = out->max_candidates != 0u ?
+        out->max_candidates : NG_FUNCTION_DISCOVERY_MAX_CANDIDATES;
+    if (scan_capacity > NG_FUNCTION_DISCOVERY_MAX_CANDIDATES) {
+        scan_capacity = NG_FUNCTION_DISCOVERY_MAX_CANDIDATES;
     }
+    uint8_t *scanned = (uint8_t *)calloc(scan_capacity, sizeof(*scanned));
+    if (!scanned) {
+        return 0;
+    }
+
+    uint32_t cursor = 0u;
+    for (;;) {
+        uint32_t index = UINT32_MAX;
+        while (cursor < out->count) {
+            if (out->scan_roots[cursor] && !scanned[cursor]) {
+                index = cursor++;
+                break;
+            }
+            ++cursor;
+        }
+        if (index == UINT32_MAX) {
+            uint32_t limit = cursor < out->count ? cursor : out->count;
+            for (uint32_t i = 0; i < limit; ++i) {
+                if (out->scan_roots[i] && !scanned[i]) {
+                    index = i;
+                    break;
+                }
+            }
+        }
+        if (index == UINT32_MAX) {
+            break;
+        }
+
+        scanned[index] = 1u;
+        NgProgramRom view;
+        discovery_entry_rom_view(rom, out, index, &view);
+        scan_function_candidate(&view, out->addrs[index], config, out);
+    }
+
+    free(scanned);
     return 1;
 }
